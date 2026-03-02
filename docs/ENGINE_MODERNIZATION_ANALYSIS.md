@@ -24,7 +24,7 @@ around four recurring concerns:
 | **A** | Compatibility knobs, diagnostics, docs, CI | **Complete** |
 | **B** | Light leak fix, shader normalization, parser consolidation design | **Complete** |
 | **C** | Per-frame allocation reduction, light-data caching, simulation instrumentation | **Complete** |
-| **D** | Parser unification, server hardening, async asset pipeline | In Progress |
+| **D** | Parser unification, server hardening, async asset pipeline | **Complete** |
 | **E** | Full JASS/Lua scripting, map format support to 1.32, multiplayer hardening | Planned |
 | **F** | Community modding layer, asset-override system, mod manager API | Planned |
 
@@ -107,8 +107,8 @@ profiles can be introduced as a convenience layer in Phase D.
 
 - ~~Reduce per-frame allocations in render and simulation loops.~~ *(Phase C ✓ — see below)*
 - ~~Add cache stats and hit/miss telemetry for frequently loaded assets.~~ *(Done — Phase D)*
-- Move expensive map/asset preparation toward asynchronous loading with progress
-  feedback. *(Phase D)*
+- ~~Move expensive map/asset preparation toward asynchronous loading with progress
+  feedback.~~ *(Done — Phase D)*
 
 ### 3.3 Server performance hardening
 
@@ -290,7 +290,7 @@ to be dropped in around `CSimulation.step()` in Phase D.
 
 ---
 
-## Phase D — Implementation & Hardening (In Progress)
+## Phase D — Implementation & Hardening (Complete)
 
 **Duration:** 4–8 weeks
 
@@ -309,10 +309,9 @@ to be dropped in around `CSimulation.step()` in Phase D.
 | Launcher override polish | Explicit flags now reliably override profiles; `-help` exits before display probing; `-msaa 0` explicitly disables MSAA | ✓ Done |
 | 3D lightning batch accounting | Fixed short/byte mismatches in index-buffer sizing/upload and skip index-buffer rebuild when active lightning count is unchanged | ✓ Done |
 | 2D range/pathfinding polish | `CUnit.canReach(x,y,range)` moved to collision-aware squared-distance fast path; pathfinding goal-neighborhood bounds check fixed (`< length`) | ✓ Done |
-| Async asset pipeline | Move map/asset loading to background threads with progress feedback | Pending |
+| Async asset pipeline | `War3MapViewer.AsyncMapLoader` now runs a worker-thread prefetch stage (tileset datasource + map parse/object-data preload), then hands off to render-thread `MapLoader` steps with blended loading-bar progress | ✓ Done |
 
-At this point the asynchronous map/asset-loading pipeline is the primary
-remaining Phase D deliverable.
+All planned Phase D items are now complete.
 
 ---
 

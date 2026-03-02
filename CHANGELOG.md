@@ -15,6 +15,34 @@ Changes are grouped by category:
 
 ---
 
+## Phase D — Async Loading Pipeline Completion (2026-03-02)
+
+### perf
+- **Threaded map prefetch stage added**: `War3MapViewer` now exposes
+  `createAsyncMapLoader(...)`, which performs tileset data-source setup and map
+  parse/object-data preload (`w3e`, `wpm`, modifications) on a background
+  worker thread before handing off to the existing render-thread map loader.
+- **Blended loading progress**: loading completion ratio now reflects both the
+  async prefetch stage and the render-thread loading-task stage, yielding more
+  representative progress feedback on the loading screen.
+
+### fix
+- **Menu loading flow migrated to async loader**: `MenuUI` now uses
+  `War3MapViewer.AsyncMapLoader` for map startup and closes loader resources on
+  both success and failure paths to avoid lingering worker-thread resources.
+- **Synchronous compatibility preserved**: existing `MapLoader` creation remains
+  available (including the terrain editor flow), while optionally consuming
+  preloaded async results when present.
+
+### test
+- Added `AsyncLoadCoordinatorTest` (5 tests) covering weighted progress,
+  one-time prefetch→main-thread handoff, non-blocking behavior while prefetch
+  is pending, failure propagation, and cancellation/close semantics.
+
+### docs
+- README and modernization analysis updated to mark Phase D as complete and to
+  document the new async loading pipeline behavior.
+
 ## Performance/QoL/Docs Polish Pass (2026-03-02)
 
 ### perf

@@ -19,6 +19,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import javax.imageio.ImageIO;
@@ -61,6 +65,7 @@ import com.etheller.warsmash.units.StandardObjectData;
 import com.etheller.warsmash.units.custom.WTS;
 import com.etheller.warsmash.units.manager.MutableObjectData.WorldEditorDataType;
 import com.etheller.warsmash.util.MappedData;
+import com.etheller.warsmash.util.AsyncLoadCoordinator;
 import com.etheller.warsmash.util.Quadtree;
 import com.etheller.warsmash.util.SimulationBudgetTracker;
 import com.etheller.warsmash.util.QuadtreeIntersector;
@@ -164,6 +169,8 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	private static final List<String> ORIGIN_STRING_LIST = Arrays.asList("origin");
 
 	public static int DEBUG_DEPTH = 9999;
+	private static final float ASYNC_PREFETCH_WEIGHT = 0.35f;
+	private static final int ASYNC_PREFETCH_TOTAL_STEPS = 4;
 
 	private static final float DEFAULT_TEXT_TAG_HEIGHT = 0.024f;
 	private static final int BUILTIN_TEXT_TAG_REPORTED_HANDLE_ID = -1;
@@ -533,13 +540,92 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		}
 	}
 
-	public MapLoader createMapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex)
+	private DataSource createTilesetSource(final War3Map war3Map, final War3MapW3i w3iFile, final char tileset)
 			throws IOException {
+		int gameDataSet = w3iFile.getGameDataSet();
+		final DataSource compoundDataSource = war3Map.getCompoundDataSource();
+		final List<DataSource> dataSources = new ArrayList<>();
+		dataSources.add(compoundDataSource);
+		if (WarsmashConstants.FIX_FLAT_FILES_TILESET_LOADING) {
+			dataSources.add(new SubdirDataSource(compoundDataSource, tileset + ".mpq/"));
+		}
+		else {
+			try (InputStream mapStream = compoundDataSource.getResourceAsStream(tileset + ".mpq")) {
+				if (mapStream == null) {
+					dataSources.add(new SubdirDataSource(compoundDataSource, tileset + ".mpq/"));
+					dataSources.add(new SubdirDataSource(compoundDataSource, "_tilesets/" + tileset + ".w3mod/"));
+				}
+				else {
+					final byte[] mapData = IOUtils.toByteArray(mapStream);
+					final SeekableByteChannel sbc = new SeekableInMemoryByteChannel(mapData);
+					try {
+						final DataSource internalMpqContentsDataSource = new MpqDataSource(new MPQArchive(sbc), sbc);
+						dataSources.add(internalMpqContentsDataSource);
+					}
+					catch (final MPQException e) {
+						throw new IOException("Unable to parse tileset MPQ for " + tileset, e);
+					}
+				}
+			}
+			catch (final IOException exc) {
+				dataSources.add(new SubdirDataSource(compoundDataSource, tileset + ".mpq/"));
+				dataSources.add(new SubdirDataSource(compoundDataSource, "_tilesets/" + tileset + ".w3mod/"));
+			}
+		}
+		if (gameDataSet <= 0) {
+			gameDataSet = w3iFile.hasFlag(War3MapW3iFlags.MELEE_MAP) ? 2 : 1;
+		}
+		if (gameDataSet == 1) {
+			// Custom data
+			dataSources.add(new SubdirDataSource(compoundDataSource, "Custom_V" + WarsmashConstants.GAME_VERSION + "\\"));
+		}
+		else {
+			// Melee data
+			dataSources.add(new SubdirDataSource(compoundDataSource, "Melee_V" + WarsmashConstants.GAME_VERSION + "\\"));
+		}
+		return new CompoundDataSource(dataSources);
+	}
+
+	private AsyncPreloadResult preloadMapData(final War3Map war3Map, final War3MapW3i w3iFile, final WTS preloadedWts,
+			final AtomicInteger completedSteps) throws IOException {
+		final AsyncPreloadResult result = new AsyncPreloadResult();
+		result.tileset = w3iFile.getTileset();
+		result.tilesetSource = createTilesetSource(war3Map, w3iFile, result.tileset);
+		completedSteps.incrementAndGet();
+
+		result.terrainData = war3Map.readEnvironment();
+		completedSteps.incrementAndGet();
+
+		result.terrainPathing = war3Map.readPathing();
+		completedSteps.incrementAndGet();
+
+		if (preloadedWts != null) {
+			result.allObjectData = war3Map.readModifications(preloadedWts);
+		}
+		else {
+			result.allObjectData = war3Map.readModifications();
+		}
+		completedSteps.incrementAndGet();
+		return result;
+	}
+
+	private void initializeMapLoadContext(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex) {
 		this.localPlayerIndex = localPlayerIndex;
 		this.mapMpq = war3Map;
 		this.lastLoadedMapInformation = w3iFile;
+	}
+
+	public MapLoader createMapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex)
+			throws IOException {
+		initializeMapLoadContext(war3Map, w3iFile, localPlayerIndex);
 
 		return new MapLoader(war3Map, w3iFile, localPlayerIndex);
+	}
+
+	public AsyncMapLoader createAsyncMapLoader(final War3Map war3Map, final War3MapW3i w3iFile,
+			final int localPlayerIndex) throws IOException {
+		initializeMapLoadContext(war3Map, w3iFile, localPlayerIndex);
+		return new AsyncMapLoader(war3Map, w3iFile, localPlayerIndex);
 	}
 
 	public SimulationRenderComponentLightning createLightning(final War3ID lightningId,
@@ -2278,6 +2364,61 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		return (byte) ((prevValue + (appliedMagnitude * (delta < 0 ? -1 : 1))) & 0xFF);
 	}
 
+	private static final class AsyncPreloadResult {
+		private char tileset;
+		private DataSource tilesetSource;
+		private War3MapW3e terrainData;
+		private War3MapWpm terrainPathing;
+		private Warcraft3MapRuntimeObjectData allObjectData;
+	}
+
+	public final class AsyncMapLoader implements AutoCloseable {
+		private final AtomicInteger completedPrefetchSteps = new AtomicInteger(0);
+		private final ExecutorService prefetchExecutor;
+		private final AsyncLoadCoordinator<AsyncPreloadResult> coordinator;
+
+		private AsyncMapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex) {
+			final WTS preloadedWtsSnapshot = War3MapViewer.this.preloadedWTS;
+			this.prefetchExecutor = Executors.newSingleThreadExecutor(runnable -> {
+				final Thread thread = new Thread(runnable, "warsmash-map-prefetch");
+				thread.setDaemon(true);
+				return thread;
+			});
+			final Future<AsyncPreloadResult> prefetchFuture = this.prefetchExecutor
+					.submit(() -> preloadMapData(war3Map, w3iFile, preloadedWtsSnapshot, this.completedPrefetchSteps));
+			this.coordinator = new AsyncLoadCoordinator<>(prefetchFuture,
+					() -> this.completedPrefetchSteps.get() / (float) ASYNC_PREFETCH_TOTAL_STEPS, ASYNC_PREFETCH_WEIGHT,
+					prefetchResult -> {
+						final MapLoader mapLoader = new MapLoader(war3Map, w3iFile, localPlayerIndex, prefetchResult);
+						return new AsyncLoadCoordinator.MainThreadStage() {
+							@Override
+							public boolean process() throws IOException {
+								return mapLoader.process();
+							}
+
+							@Override
+							public float getCompletionRatio() {
+								return mapLoader.getCompletionRatio();
+							}
+						};
+					});
+		}
+
+		public boolean process() throws IOException {
+			return this.coordinator.process();
+		}
+
+		public float getCompletionRatio() {
+			return this.coordinator.getCompletionRatio();
+		}
+
+		@Override
+		public void close() throws IOException {
+			this.coordinator.close();
+			this.prefetchExecutor.shutdownNow();
+		}
+	}
+
 	public final class MapLoader {
 		private final LinkedList<LoadMapTask> loadMapTasks = new LinkedList<>();
 		private int startingTaskCount;
@@ -2290,63 +2431,21 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		private War3MapWpm terrainPathing;
 
 		private MapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex) {
+			this(war3Map, w3iFile, localPlayerIndex, null);
+		}
+
+		private MapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex,
+				final AsyncPreloadResult preloadedData) {
 			final PathSolver wc3PathSolver = War3MapViewer.this.wc3PathSolver;
 
 			this.loadMapTasks.add(() -> {
-				this.tileset = 'A';
-				this.tileset = w3iFile.getTileset();
-				int gameDataSet = w3iFile.getGameDataSet();
-
-				try {
-					// Slightly complex. Here's the theory:
-					// 1.) Copy map into RAM
-					// 2.) Setup a Data Source that will read assets
-					// from either the map or the game, giving the map priority.
-					SeekableByteChannel sbc;
-					final DataSource compoundDataSource = war3Map.getCompoundDataSource();
-					final List<DataSource> dataSources = new ArrayList<>();
-					dataSources.add(compoundDataSource);
-					if (WarsmashConstants.FIX_FLAT_FILES_TILESET_LOADING) {
-						dataSources.add(new SubdirDataSource(compoundDataSource, this.tileset + ".mpq/"));
-					}
-					else {
-						try (InputStream mapStream = compoundDataSource.getResourceAsStream(this.tileset + ".mpq")) {
-							if (mapStream == null) {
-								dataSources.add(new SubdirDataSource(compoundDataSource, this.tileset + ".mpq/"));
-								dataSources.add(new SubdirDataSource(compoundDataSource,
-										"_tilesets/" + this.tileset + ".w3mod/"));
-							}
-							else {
-								final byte[] mapData = IOUtils.toByteArray(mapStream);
-								sbc = new SeekableInMemoryByteChannel(mapData);
-								final DataSource internalMpqContentsDataSource = new MpqDataSource(new MPQArchive(sbc),
-										sbc);
-								dataSources.add(internalMpqContentsDataSource);
-							}
-						}
-						catch (final IOException exc) {
-							dataSources.add(new SubdirDataSource(compoundDataSource, this.tileset + ".mpq/"));
-							dataSources.add(
-									new SubdirDataSource(compoundDataSource, "_tilesets/" + this.tileset + ".w3mod/"));
-						}
-					}
-					if (gameDataSet <= 0) {
-						gameDataSet = w3iFile.hasFlag(War3MapW3iFlags.MELEE_MAP) ? 2 : 1;
-					}
-					if (gameDataSet == 1) {
-						// Custom data
-						dataSources.add(new SubdirDataSource(compoundDataSource,
-								"Custom_V" + WarsmashConstants.GAME_VERSION + "\\"));
-					}
-					else {
-						// Melee data
-						dataSources.add(new SubdirDataSource(compoundDataSource,
-								"Melee_V" + WarsmashConstants.GAME_VERSION + "\\"));
-					}
-					this.tilesetSource = new CompoundDataSource(dataSources);
+				if (preloadedData != null) {
+					this.tileset = preloadedData.tileset;
+					this.tilesetSource = preloadedData.tilesetSource;
 				}
-				catch (final MPQException e) {
-					throw new RuntimeException(e);
+				else {
+					this.tileset = w3iFile.getTileset();
+					this.tilesetSource = createTilesetSource(war3Map, w3iFile, this.tileset);
 				}
 			});
 
@@ -2366,11 +2465,21 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			});
 
 			this.loadMapTasks.add(() -> {
-				this.terrainData = War3MapViewer.this.mapMpq.readEnvironment();
+				if ((preloadedData != null) && (preloadedData.terrainData != null)) {
+					this.terrainData = preloadedData.terrainData;
+				}
+				else {
+					this.terrainData = War3MapViewer.this.mapMpq.readEnvironment();
+				}
 			});
 
 			this.loadMapTasks.add(() -> {
-				this.terrainPathing = War3MapViewer.this.mapMpq.readPathing();
+				if ((preloadedData != null) && (preloadedData.terrainPathing != null)) {
+					this.terrainPathing = preloadedData.terrainPathing;
+				}
+				else {
+					this.terrainPathing = War3MapViewer.this.mapMpq.readPathing();
+				}
 			});
 
 			this.loadMapTasks.add(() -> {
@@ -2403,7 +2512,10 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			});
 
 			this.loadMapTasks.add(() -> {
-				if (War3MapViewer.this.preloadedWTS != null) {
+				if ((preloadedData != null) && (preloadedData.allObjectData != null)) {
+					War3MapViewer.this.allObjectData = preloadedData.allObjectData;
+				}
+				else if (War3MapViewer.this.preloadedWTS != null) {
 					War3MapViewer.this.allObjectData = War3MapViewer.this.mapMpq
 							.readModifications(War3MapViewer.this.preloadedWTS);
 				}

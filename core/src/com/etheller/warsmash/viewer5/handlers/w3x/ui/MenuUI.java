@@ -69,7 +69,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.SequenceUtils;
 import com.etheller.warsmash.viewer5.handlers.w3x.UnitSound;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
-import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer.MapLoader;
+import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer.AsyncMapLoader;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.ai.AIDifficulty;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.CBasePlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig;
@@ -1916,6 +1916,8 @@ public class MenuUI {
 								// TODO not cast menu screen
 								MenuUI.this.screenManager.setScreen(new WarsmashGdxMapScreen(this.loadingMap.viewer,
 										this.screenManager, (WarsmashGdxMenuScreen) this.menuScreen, uiOrderListener));
+								this.loadingMap.activeMapLoader.close();
+								this.loadingMap.activeMapLoader = null;
 								this.loadingMap = null;
 								this.beginGameInformation = null;
 
@@ -1932,10 +1934,19 @@ public class MenuUI {
 						}
 						else {
 							this.loadingMap.activeMapLoader = this.loadingMap.viewer
-									.createMapLoader(this.loadingMap.map, this.loadingMap.mapInfo, localPlayerIndex);
+									.createAsyncMapLoader(this.loadingMap.map, this.loadingMap.mapInfo, localPlayerIndex);
 						}
 					}
 					catch (final IOException e) {
+						if ((this.loadingMap != null) && (this.loadingMap.activeMapLoader != null)) {
+							try {
+								this.loadingMap.activeMapLoader.close();
+							}
+							catch (final IOException closeException) {
+								closeException.printStackTrace();
+							}
+							this.loadingMap.activeMapLoader = null;
+						}
 						throw new RuntimeException(e);
 					}
 					return;
@@ -2558,7 +2569,7 @@ public class MenuUI {
 		private final War3Map map;
 		private final War3MapW3i mapInfo;
 
-		private MapLoader activeMapLoader = null;
+		private AsyncMapLoader activeMapLoader = null;
 
 		public LoadingMap(final War3MapViewer viewer, final War3Map map, final War3MapW3i mapInfo) {
 			this.viewer = viewer;

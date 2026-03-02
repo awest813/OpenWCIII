@@ -84,7 +84,7 @@ Modernization progress is tracked in:
 | **A** | Diagnostics, launcher QoL, CI, docs | **Complete** |
 | **B** | Light-system leak fix, GLSL normalization, parser consolidation design | **Complete** |
 | **C** | Render hot-path allocation/frame-time reductions | **Complete** |
-| **D** | Parser unification, server hardening, async asset pipeline | **In Progress** |
+| **D** | Parser unification, server hardening, async asset pipeline | **Complete** |
 | **E** | JASS/Lua coverage, map-format support to 1.32, multiplayer hardening | Planned |
 | **F** | Community modding layer (asset overrides, mod APIs/tooling) | Planned |
 
@@ -100,11 +100,14 @@ Modernization progress is tracked in:
   uploads and avoids unnecessary index-buffer rebuilds when count is unchanged.
 - Unit reach checks now use squared-distance fast paths where equivalent; a
   pathfinding bounds guard was hardened to avoid edge-case out-of-range access.
+- Map loading now uses a threaded async prefetch stage for map parsing/data-source
+  setup while preserving render-thread-only GPU upload steps; loading-screen
+  progress now reflects both stages.
 
 ### Current top priority
 
-The primary remaining Phase D deliverable is threaded async map/asset loading
-with progress feedback.
+Phase D hardening is now complete. The next major focus is Phase E:
+JASS/Lua coverage, broader map-format compatibility, and multiplayer hardening.
 
 ---
 

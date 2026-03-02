@@ -70,9 +70,10 @@ public class DesktopLauncher {
 	}
 
 	public static void main(final String[] arg) {
+		final String[] normalizedArgs = normalizeArguments(arg);
 		System.out.println("Warsmash engine is starting...");
-		if (Arrays.asList(arg).contains("-validate") || Arrays.asList(arg).contains("--validate")) {
-			final String iniPath = findIniPathArg(arg);
+		if (Arrays.asList(normalizedArgs).contains("-validate") || Arrays.asList(normalizedArgs).contains("--validate")) {
+			final String iniPath = findIniPathArg(normalizedArgs);
 			final DataTable warsmashIni = loadWarsmashIni(iniPath);
 			validateAndExit(warsmashIni, iniPath);
 		}
@@ -109,12 +110,12 @@ public class DesktopLauncher {
 			}
 			else if ((arg.length > (argIndex + 1)) && ("-profile".equals(arg[argIndex]) || "--profile".equals(arg[argIndex]))) {
 				argIndex++;
-				profile = LaunchProfile.parse(arg[argIndex]);
+				profile = LaunchProfile.parse(normalizedArgs[argIndex]);
 			}
 			else if ("-window".equals(arg[argIndex]) || "-windowed".equals(arg[argIndex])
 					|| "--windowed".equals(arg[argIndex])) {
 				windowedMode = Boolean.TRUE;
-				if ((arg.length > (argIndex + 2)) && isInteger(arg[argIndex + 1]) && isInteger(arg[argIndex + 2])) {
+				if ((normalizedArgs.length > (argIndex + 2)) && isInteger(normalizedArgs[argIndex + 1]) && isInteger(normalizedArgs[argIndex + 2])) {
 					argIndex++;
 					windowedWidth = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
 					argIndex++;
@@ -157,7 +158,7 @@ public class DesktopLauncher {
 			else if ("-vsync".equals(arg[argIndex])) {
 				vSyncEnabled = Boolean.TRUE;
 			}
-			else if ("-novsync".equals(arg[argIndex])) {
+			else if ("-novsync".equals(normalizedArgs[argIndex])) {
 				vSyncEnabled = Boolean.FALSE;
 			}
 			else if ((arg.length > (argIndex + 1)) && ("-fps".equals(arg[argIndex]) || "--fps".equals(arg[argIndex]))) {
@@ -172,15 +173,25 @@ public class DesktopLauncher {
 			else if ((arg.length > (argIndex + 1))
 					&& ("-loadfile".equals(arg[argIndex]) || "--loadfile".equals(arg[argIndex]))) {
 				argIndex++;
-				fileToLoad = arg[argIndex];
+				fileToLoad = normalizedArgs[argIndex];
 			}
 			else if ((arg.length > (argIndex + 1)) && ("-ini".equals(arg[argIndex]) || "--ini".equals(arg[argIndex]))) {
 				argIndex++;
-				iniPath = arg[argIndex];
+				iniPath = normalizedArgs[argIndex];
+			}
+			else if (isOptionRequiringValue(normalizedArgs[argIndex])) {
+				System.err.println("Missing value for launcher option: " + normalizedArgs[argIndex]);
+			}
+			else {
+				unknownArgs.add(normalizedArgs[argIndex]);
 			}
 			else {
 				unknownArgs.add(arg[argIndex]);
 			}
+		}
+		if (!unknownArgs.isEmpty()) {
+			System.err.println("Warning: unknown launcher option(s): " + String.join(", ", unknownArgs));
+			System.err.println("Use -help to see available options.");
 		}
 		if (!unknownArgs.isEmpty()) {
 			System.err.println("Warning: unknown launcher option(s): " + String.join(", ", unknownArgs));

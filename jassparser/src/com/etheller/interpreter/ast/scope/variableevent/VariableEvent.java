@@ -5,6 +5,8 @@ import com.etheller.interpreter.ast.scope.TriggerExecutionScope;
 import com.etheller.interpreter.ast.scope.trigger.Trigger;
 
 public class VariableEvent {
+	private static final double REAL_COMPARISON_EPSILON = 1e-9;
+
 	private final Trigger trigger;
 	private final CLimitOp limitOp;
 	private final double doubleValue;
@@ -28,20 +30,21 @@ public class VariableEvent {
 	}
 
 	public boolean isMatching(final double realValue) {
+		final double difference = Math.abs(realValue - this.doubleValue);
+		final boolean approximatelyEqual = difference <= REAL_COMPARISON_EPSILON;
 		switch (this.limitOp) {
 		case EQUAL:
-			return this.doubleValue == realValue; // TODO probably bad, probably needs epsilon comparison, but what's
-													// our default epsilon for this case?
+			return approximatelyEqual;
 		case GREATER_THAN:
-			return realValue > this.doubleValue;
+			return (realValue > this.doubleValue) && !approximatelyEqual;
 		case GREATER_THAN_OR_EQUAL:
-			return realValue >= this.doubleValue;
+			return (realValue > this.doubleValue) || approximatelyEqual;
 		case LESS_THAN:
-			return realValue < this.doubleValue;
+			return (realValue < this.doubleValue) && !approximatelyEqual;
 		case LESS_THAN_OR_EQUAL:
-			return realValue <= this.doubleValue;
+			return (realValue < this.doubleValue) || approximatelyEqual;
 		case NOT_EQUAL:
-			return realValue != this.doubleValue;
+			return !approximatelyEqual;
 		}
 		throw new IllegalStateException();
 	}

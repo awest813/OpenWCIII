@@ -44,7 +44,7 @@ and [`CHANGELOG.md`](CHANGELOG.md).
 | **A** | Diagnostics, launcher QoL, CI, docs | **Complete** |
 | **B** | Light-system leak fix, GLSL shader normalization, parser consolidation design | **Complete** |
 | **C** | Per-frame allocation reduction, light-data caching, simulation budget tracking | **Complete** |
-| **D** | Parser unification, async asset pipeline, server hardening | Next |
+| **D** | Parser unification, async asset pipeline, server hardening | **In Progress** |
 | **E** | Full JASS/Lua scripting coverage, map-format support to 1.32, networking | Planned |
 | **F** | Community modding layer (custom assets, asset overrides, mod manager) | Planned |
 
@@ -88,10 +88,14 @@ Phase C targeted the render hot path to reduce per-frame CPU cost:
 6. **`SimulationBudgetTracker`** — measures simulation-tick wall time and reports
    budget overruns to stdout, giving a per-session view of simulation cost.
 
-### Phase D (Next)
+### Phase D (In Progress)
 
 Phase D implements the Phase B parser-consolidation design and hardens the server
-and asset pipeline. See the [full roadmap](docs/ENGINE_MODERNIZATION_ANALYSIS.md).
+and asset pipeline. Parser migration is now wired through the canonical
+`DataTable` backend for runtime `MappedData` callers, and `ObjectPool<T>` is now
+used in simulation allocation hotspots. The remaining major Phase D item is
+threaded async asset/map loading with progress feedback. See the
+[full roadmap](docs/ENGINE_MODERNIZATION_ANALYSIS.md).
 
 ---
 

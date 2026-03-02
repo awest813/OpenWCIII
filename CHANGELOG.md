@@ -15,6 +15,47 @@ Changes are grouped by category:
 
 ---
 
+## Phase D — Finalization Pass (2026-03-02)
+
+### fix
+- **Canonical parser path for runtime mapped tables**: `MappedData.load(String)`
+  no longer routes through legacy `SlkFile` / `IniFile`. It now parses with
+  `DataTable.readSLK/readTXT` and ingests through `DataTableSource`, completing
+  parser unification for terrain/splat/anim-sound table loads that flow through
+  `MappedData`.
+- **MappedData SLK type compatibility preserved**: when loading SLK buffers,
+  `MappedData` now coerces canonical string cells back to legacy-compatible
+  primitive types (`Float` and `Boolean`) so existing `MappedDataRow` numeric
+  consumers continue to behave as before.
+- **Event-object numeric parsing hardened**: `EventObjectEmitterObject` no longer
+  blindly casts SLK fields to `Float`/`Number`; it now accepts both numeric and
+  string-backed values, preventing `ClassCastException` risk if data source
+  formats differ.
+- **Destructable metadata SLK load fix**: `War3MapViewer.loadSLKs()` now applies
+  `Units\\DestructableMetaData.slk` to `destructableMetaData` (previously it
+  accidentally reloaded `DestructableData.slk` into that table).
+
+### perf
+- **ObjectPool wired into simulation allocations**:
+  - `CWorldCollision.enumUnitsInRect`, `enumCorpsesInRect`, and
+    `enumUnitsOrCorpsesInRect` now reuse pooled scratch `Set<CUnit>` instances
+    instead of allocating a new `HashSet` on every call.
+  - `CSimulation.update()` now uses a pooled scratch `Set<CTimer>` for duplicate
+    timer validation instead of per-tick allocation.
+  All pooled paths use `try/finally` acquire/release for exception-safe reuse.
+
+### test
+- `TableDataSourceTest` extended with
+  `slkBooleansAndIntegersRemainTypedInMappedData`, asserting canonical-parser
+  `MappedData` still exposes typed `Boolean` and numeric values for SLK cells.
+
+### docs
+- Updated README and modernization roadmap status for Phase D:
+  parser remaining-caller migration and ObjectPool wiring now marked complete;
+  async asset pipeline remains the primary pending Phase D item.
+
+---
+
 ## Phase D — Implementation & Hardening (2026-03-02)
 
 ### perf

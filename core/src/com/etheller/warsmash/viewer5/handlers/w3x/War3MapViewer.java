@@ -325,7 +325,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		this.doodadsData.load(doodads.data.toString());
 		this.doodadMetaData.load(doodadMetaData.data.toString());
 		this.doodadsData.load(destructableData.data.toString());
-		this.destructableMetaData.load(destructableData.data.toString());
+		this.destructableMetaData.load(destructableMetaData.data.toString());
 		// emit doodads loaded
 
 		final GenericResource unitData = loadMapGeneric("Units\\UnitData.slk", FetchDataTypeName.SLK,
@@ -1607,27 +1607,6 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			}
 		}
 		return entity;
-	}
-
-	private static final class MappedDataCallbackImplementation implements LoadGenericCallback {
-		@Override
-		public Object call(final InputStream data) {
-			final StringBuilder stringBuilder = new StringBuilder();
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(data, "utf-8"))) {
-				String line;
-				while ((line = reader.readLine()) != null) {
-					stringBuilder.append(line);
-					stringBuilder.append("\n");
-				}
-			}
-			catch (final UnsupportedEncodingException e) {
-				throw new RuntimeException(e);
-			}
-			catch (final IOException e) {
-				throw new RuntimeException(e);
-			}
-			return new MappedData(stringBuilder.toString());
-		}
 	}
 
 	private static final class StringDataCallbackImplementation implements LoadGenericCallback {

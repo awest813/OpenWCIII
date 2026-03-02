@@ -301,9 +301,12 @@ to be dropped in around `CSimulation.step()` in Phase D.
 | Asset cache telemetry | `AssetCacheTelemetry` instruments `ModelViewer.load()` and `loadGeneric()` | ✓ Done |
 | Package ownership boundaries | `package-info.java` for `render`, `simulation`, `net`, `assets` layers | ✓ Done |
 | Smoke / unit tests | `ObjectPoolTest`, `SimulationBudgetTrackerTest`, `StartupDiagnosticsTest`, `AssetCacheTelemetryTest` | ✓ Done |
-| Parser unification — remaining SLK/INI callers | Migrate splat, anim-sound, terrain readers to `TableDataSource` | Pending |
-| Wire ObjectPool | Apply `ObjectPool<T>` to particle emitters and simulation allocations | Pending |
+| Parser unification — remaining runtime SLK/INI callers | `MappedData.load(String)` now parses through `DataTable`/`DataTableSource`; terrain, splat, and anim-sound table loads now use the canonical backend | ✓ Done |
+| Wire ObjectPool | Pool-backed scratch-set reuse in `CWorldCollision` rect enumeration and `CSimulation` timer dedupe validation | ✓ Done |
 | Async asset pipeline | Move map/asset loading to background threads with progress feedback | Pending |
+
+At this point the asynchronous map/asset-loading pipeline is the primary
+remaining Phase D deliverable.
 
 ---
 

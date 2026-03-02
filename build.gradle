@@ -7,7 +7,6 @@ buildscript {
         mavenCentral()
         gradlePluginPortal()
         maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
-        maven { url "https://maven.nikr.net/" }
         google()
     }
 }
@@ -31,7 +30,6 @@ allprojects {
         gradlePluginPortal()
         maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
         maven { url "https://oss.sonatype.org/content/repositories/releases/" }
-        maven { url "https://maven.nikr.net/" }
         maven { url "https://jitpack.io" }
     }
 }
@@ -58,7 +56,6 @@ project(":desktop") {
         api "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
         api "com.google.guava:guava:23.5-jre"
         api "org.apache.commons:commons-compress:1.20"
-        api "net.nikr:dds:1.0.0"
     }
 }
 
@@ -74,7 +71,6 @@ project(":core") {
         api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
         api "com.google.guava:guava:23.5-jre"
         api "org.apache.commons:commons-compress:1.20"
-        api "net.nikr:dds:1.0.0"
         api files(fileTree(dir:'../jars', includes: ['*.jar']))
 
         testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"

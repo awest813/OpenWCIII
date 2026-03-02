@@ -15,6 +15,51 @@ Changes are grouped by category:
 
 ---
 
+## Phase C — Render Hot-Path Performance (2026-03-02)
+
+### perf
+- **Light-data per-frame cache**: `LightInstance` now caches its packed 16-float
+  GPU block in a `float[] cache` field guarded by a static generation counter.
+  `LightInstance.advanceGeneration()` is called once per frame by
+  `W3xSceneWorldLightManager.update()`. Subsequent `bind()` calls within the
+  same frame bulk-copy from the cache via `FloatBuffer.put(float[], 0, 16)`
+  instead of re-evaluating all keyframe tracks. Halves the number of keyframe
+  sampler calls for every active point light regardless of how many GPU textures
+  it is written into.
+- **Separate unit/terrain light buffers**: `W3xSceneWorldLightManager` now owns
+  a dedicated `unitLightBuffer` and `terrainLightBuffer`. Both are populated in
+  a single loop over `this.lights`, eliminating the shared-buffer `clear()`/reuse
+  pattern that forced sequential uploads and obscured buffer ownership.
+- **Bone texture bulk copy**: `MdxComplexInstance.updateBoneTexture()` replaced
+  16 absolute-indexed `FloatBuffer.put(int, float)` calls per bone with a single
+  `FloatBuffer.put(float[], 0, 16)` bulk copy (JVM maps this to native `memcpy`).
+  A trailing `flip()` correctly positions the buffer for `DataTexture.bindAndUpdate`.
+  For a model with 80 bones this reduces per-frame JNI scalar writes from 1,280
+  to 80 bulk copies.
+- **Frame-pacing p95/p99**: `FramePacingTracker.report()` now sorts a copy of
+  its ring buffer and includes the 95th- and 99th-percentile frame times in the
+  60-second summary line. A spike-detection warning fires when p99 exceeds 3×
+  the window average. Zero per-frame overhead — sorting happens only during the
+  periodic report.
+- **`ObjectPool<T>`**: New `com.etheller.warsmash.util.ObjectPool<T>` — a
+  fixed-capacity stack-backed pool with `acquire()`/`release()` semantics and a
+  `hitRate()` diagnostic. Provides the infrastructure for reducing GC pressure in
+  particle-emission and simulation-allocation hot paths in Phase D.
+- **`SimulationBudgetTracker`**: New `com.etheller.warsmash.util.SimulationBudgetTracker`
+  measures wall time around any simulation block via `beginTick()`/`endTick()`.
+  Reports avg/max per-tick cost, configured budget (default 8 ms), and overrun
+  count every ~60 s. Ready to be wired around `CSimulation.step()` in Phase D.
+
+### docs
+- **OpenMW-equivalent vision**: README rewritten to open with Warsmash's long-term
+  goal of being the OpenMW for Warcraft III. Roadmap table extended to include
+  Phases C–F.
+- **ENGINE_MODERNIZATION_ANALYSIS.md** updated: Phase C deliverables documented
+  in detail; Phases D (parser unification, async pipeline, server hardening),
+  E (scripting, map format), and F (modding layer) added with item lists.
+
+---
+
 ## User-Testing Readiness (2026-03-02)
 
 ### fix

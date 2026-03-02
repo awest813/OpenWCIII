@@ -11,7 +11,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.openal.AL;
@@ -47,6 +49,7 @@ import com.etheller.warsmash.viewer5.gl.WireframeExtension;
 public class DesktopLauncher {
 	private static final int DEFAULT_WINDOWED_WIDTH = 1280;
 	private static final int DEFAULT_WINDOWED_HEIGHT = 720;
+	private static final String DEFAULT_LOG_DIRECTORY = "Logs";
 
 	private enum LaunchProfile {
 		SAFE, BALANCED, HIGH;
@@ -90,6 +93,7 @@ public class DesktopLauncher {
 		config.fullscreen = true;
 		String fileToLoad = null;
 		String iniPath = null;
+		String logDirectory = DEFAULT_LOG_DIRECTORY;
 		boolean noLogs = false;
 		Boolean windowedMode = null;
 		Integer windowedWidth = null;
@@ -98,29 +102,57 @@ public class DesktopLauncher {
 		Integer msaaSamples = null;
 		Boolean vSyncEnabled = null;
 		LaunchProfile profile = null;
+		final List<String> unknownArgs = new ArrayList<>();
 		for (int argIndex = 0; argIndex < arg.length; argIndex++) {
 			if ("-help".equals(arg[argIndex]) || "--help".equals(arg[argIndex]) || "-h".equals(arg[argIndex])) {
 				printHelpAndExit();
 			}
-			else if ((arg.length > (argIndex + 1)) && "-profile".equals(arg[argIndex])) {
+			else if ((arg.length > (argIndex + 1)) && ("-profile".equals(arg[argIndex]) || "--profile".equals(arg[argIndex]))) {
 				argIndex++;
 				profile = LaunchProfile.parse(arg[argIndex]);
 			}
-			else if ("-window".equals(arg[argIndex]) || "-windowed".equals(arg[argIndex])) {
+			else if ("-window".equals(arg[argIndex]) || "-windowed".equals(arg[argIndex])
+					|| "--windowed".equals(arg[argIndex])) {
 				windowedMode = Boolean.TRUE;
 				if ((arg.length > (argIndex + 2)) && isInteger(arg[argIndex + 1]) && isInteger(arg[argIndex + 2])) {
 					argIndex++;
-					windowedWidth = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_WIDTH, "window width");
+					windowedWidth = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
 					argIndex++;
-					windowedHeight = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height");
+					windowedHeight = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height", 1);
 				}
 				else {
 					windowedWidth = DEFAULT_WINDOWED_WIDTH;
 					windowedHeight = DEFAULT_WINDOWED_HEIGHT;
 				}
 			}
+			else if ((arg.length > (argIndex + 1)) && ("-width".equals(arg[argIndex]) || "--width".equals(arg[argIndex]))) {
+				argIndex++;
+				windowedWidth = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
+				if (windowedMode == null) {
+					windowedMode = Boolean.TRUE;
+				}
+			}
+			else if ((arg.length > (argIndex + 1))
+					&& ("-height".equals(arg[argIndex]) || "--height".equals(arg[argIndex]))) {
+				argIndex++;
+				windowedHeight = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height", 1);
+				if (windowedMode == null) {
+					windowedMode = Boolean.TRUE;
+				}
+			}
+			else if ("-fullscreen".equals(arg[argIndex]) || "--fullscreen".equals(arg[argIndex])) {
+				windowedMode = Boolean.FALSE;
+			}
 			else if ("-nolog".equals(arg[argIndex])) {
 				noLogs = true;
+			}
+			else if ("-log".equals(arg[argIndex]) || "--log".equals(arg[argIndex])) {
+				noLogs = false;
+			}
+			else if ((arg.length > (argIndex + 1))
+					&& ("-logdir".equals(arg[argIndex]) || "--logdir".equals(arg[argIndex]))) {
+				argIndex++;
+				logDirectory = arg[argIndex];
 			}
 			else if ("-vsync".equals(arg[argIndex])) {
 				vSyncEnabled = Boolean.TRUE;
@@ -128,22 +160,31 @@ public class DesktopLauncher {
 			else if ("-novsync".equals(arg[argIndex])) {
 				vSyncEnabled = Boolean.FALSE;
 			}
-			else if ((arg.length > (argIndex + 1)) && "-fps".equals(arg[argIndex])) {
+			else if ((arg.length > (argIndex + 1)) && ("-fps".equals(arg[argIndex]) || "--fps".equals(arg[argIndex]))) {
 				argIndex++;
-				targetFps = parseIntWithFallback(arg[argIndex], 0, "target FPS");
+				targetFps = parseIntWithFallback(arg[argIndex], 0, "target FPS", 0);
 			}
-			else if ((arg.length > (argIndex + 1)) && "-msaa".equals(arg[argIndex])) {
+			else if ((arg.length > (argIndex + 1))
+					&& ("-msaa".equals(arg[argIndex]) || "--msaa".equals(arg[argIndex]))) {
 				argIndex++;
-				msaaSamples = parseIntWithFallback(arg[argIndex], 0, "MSAA samples");
+				msaaSamples = parseIntWithFallback(arg[argIndex], 0, "MSAA samples", 0);
 			}
-			else if ((arg.length > (argIndex + 1)) && "-loadfile".equals(arg[argIndex])) {
+			else if ((arg.length > (argIndex + 1))
+					&& ("-loadfile".equals(arg[argIndex]) || "--loadfile".equals(arg[argIndex]))) {
 				argIndex++;
 				fileToLoad = arg[argIndex];
 			}
-			else if ((arg.length > (argIndex + 1)) && "-ini".equals(arg[argIndex])) {
+			else if ((arg.length > (argIndex + 1)) && ("-ini".equals(arg[argIndex]) || "--ini".equals(arg[argIndex]))) {
 				argIndex++;
 				iniPath = arg[argIndex];
 			}
+			else {
+				unknownArgs.add(arg[argIndex]);
+			}
+		}
+		if (!unknownArgs.isEmpty()) {
+			System.err.println("Warning: unknown launcher option(s): " + String.join(", ", unknownArgs));
+			System.err.println("Use -help to see available options.");
 		}
 		if (profile != null) {
 			applyProfile(profile, config);
@@ -153,6 +194,9 @@ public class DesktopLauncher {
 			config.fullscreen = false;
 			config.width = (windowedWidth != null) ? windowedWidth : DEFAULT_WINDOWED_WIDTH;
 			config.height = (windowedHeight != null) ? windowedHeight : DEFAULT_WINDOWED_HEIGHT;
+		}
+		else if (Boolean.FALSE.equals(windowedMode)) {
+			config.fullscreen = true;
 		}
 		if (vSyncEnabled != null) {
 			config.vSyncEnabled = vSyncEnabled;
@@ -169,19 +213,20 @@ public class DesktopLauncher {
 			config.width = desktopDisplayMode.width;
 			config.height = desktopDisplayMode.height;
 		}
+		printLaunchSummary(config, profile, iniPath, fileToLoad, noLogs, logDirectory);
 		if (!noLogs) {
-			new File("Logs").mkdir();
+			new File(logDirectory).mkdirs();
 			final long logTimestamp = System.currentTimeMillis();
 			try {
 				System.setOut(new PrintStream(
-						new FileOutputStream(new File("Logs/" + logTimestamp + ".out.log"))));
+						new FileOutputStream(new File(logDirectory + "/" + logTimestamp + ".out.log"))));
 			}
 			catch (final FileNotFoundException e) {
 				e.printStackTrace();
 			}
 			try {
 				System.setErr(new PrintStream(
-						new FileOutputStream(new File("Logs/" + logTimestamp + ".err.log"))));
+						new FileOutputStream(new File(logDirectory + "/" + logTimestamp + ".err.log"))));
 			}
 			catch (final FileNotFoundException e) {
 				e.printStackTrace();
@@ -256,12 +301,16 @@ public class DesktopLauncher {
 		System.out.println("  -help | --help | -h          Show this help message");
 		System.out.println("  -profile <name>              Apply a preset: safe | balanced | high");
 		System.out.println("  -window | -windowed [w h]    Run in windowed mode (defaults to 1280x720)");
+		System.out.println("  -width <pixels>              Set window width (implies windowed mode)");
+		System.out.println("  -height <pixels>             Set window height (implies windowed mode)");
+		System.out.println("  -fullscreen                  Force fullscreen mode");
 		System.out.println("  -vsync | -novsync            Force VSync on or off");
 		System.out.println("  -fps <value>                 Limit foreground/background FPS (0 = uncapped)");
 		System.out.println("  -msaa <samples>              Set MSAA sample count (example: 4)");
 		System.out.println("  -ini <path>                  Use a custom warsmash ini file");
 		System.out.println("  -loadfile <path>             Auto-load a map or toc file");
 		System.out.println("  -nolog                       Keep stdout/stderr in console");
+		System.out.println("  -logdir <path>               Store .out/.err logs in a custom directory");
 		System.out.println("  -validate | --validate       Check warsmash.ini asset paths and exit");
 		System.exit(0);
 	}
@@ -276,9 +325,16 @@ public class DesktopLauncher {
 		}
 	}
 
-	private static int parseIntWithFallback(final String value, final int fallback, final String optionName) {
+	private static int parseIntWithFallback(final String value, final int fallback, final String optionName,
+			final int minimumValue) {
 		try {
-			return Integer.parseInt(value);
+			final int parsedValue = Integer.parseInt(value);
+			if (parsedValue < minimumValue) {
+				System.err.println("Invalid value for " + optionName + ": '" + value + "'. Minimum is "
+						+ minimumValue + ". Using " + fallback + '.');
+				return fallback;
+			}
+			return parsedValue;
 		}
 		catch (final NumberFormatException exc) {
 			System.err.println("Invalid value for " + optionName + ": '" + value + "'. Using " + fallback + '.');
@@ -286,9 +342,22 @@ public class DesktopLauncher {
 		}
 	}
 
+	private static void printLaunchSummary(final LwjglApplicationConfiguration config, final LaunchProfile profile,
+			final String iniPath, final String fileToLoad, final boolean noLogs, final String logDirectory) {
+		System.out.println("Launch configuration:");
+		System.out.println("  Profile: " + ((profile == null) ? "custom/default" : profile.name().toLowerCase(java.util.Locale.ROOT)));
+		System.out.println("  Display: " + (config.fullscreen ? "fullscreen" : ("windowed " + config.width + "x" + config.height)));
+		System.out.println("  VSync: " + (config.vSyncEnabled ? "enabled" : "disabled"));
+		System.out.println("  FPS cap: fg=" + config.foregroundFPS + ", bg=" + config.backgroundFPS);
+		System.out.println("  MSAA samples: " + config.samples);
+		System.out.println("  INI: " + ((iniPath == null) ? "warsmash.ini" : iniPath));
+		System.out.println("  Auto-load: " + ((fileToLoad == null) ? "none" : fileToLoad));
+		System.out.println("  Logging: " + (noLogs ? "stdout/stderr console" : ("files in " + logDirectory)));
+	}
+
 	private static String findIniPathArg(final String[] arg) {
 		for (int i = 0; i < arg.length - 1; i++) {
-			if ("-ini".equals(arg[i])) {
+			if ("-ini".equals(arg[i]) || "--ini".equals(arg[i])) {
 				return arg[i + 1];
 			}
 		}

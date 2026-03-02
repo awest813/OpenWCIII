@@ -25,6 +25,9 @@ class TableDataSourceTest {
 
 	private static final String SAMPLE_INI = String.join("\n", "// sample", "[Footman]", "Name=Footman", "HP=420",
 			"", "[Knight]", "Name=Knight", "HP=800", "");
+	private static final String SAMPLE_TYPED_SLK = String.join("\n", "ID;PWXL;N;E", "B;Y2;X3;D0", "C;Y1;X1;K\"ID\"",
+			"C;X2;K\"Enabled\"", "C;X3;K\"Speed\"", "C;Y2;X1;K\"A001\"", "C;X2;KTRUE", "C;X3;K270",
+			"E", "");
 
 	private static Set<String> lowerCaseSet(final Set<String> input) {
 		final Set<String> output = new HashSet<>();
@@ -92,5 +95,14 @@ class TableDataSourceTest {
 		assertEquals(1.5f, ((Number) scale).floatValue(), 0.0001f);
 		assertEquals("Footman", mappedData.getProperty("A001", "Name"));
 		assertNull(mappedData.getProperty("A001", "MissingColumn"));
+	}
+
+	@Test
+	void slkBooleansAndIntegersRemainTypedInMappedData() {
+		final MappedData mappedData = new MappedData(SAMPLE_TYPED_SLK);
+		assertInstanceOf(Boolean.class, mappedData.getProperty("A001", "Enabled"));
+		assertEquals(Boolean.TRUE, mappedData.getProperty("A001", "Enabled"));
+		assertInstanceOf(Number.class, mappedData.getProperty("A001", "Speed"));
+		assertEquals(270f, ((Number) mappedData.getProperty("A001", "Speed")).floatValue(), 0.0001f);
 	}
 }

@@ -11,6 +11,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.FloatBuffer;
+import java.util.Arrays;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.openal.AL;
@@ -49,6 +50,11 @@ public class DesktopLauncher {
 
 	public static void main(final String[] arg) {
 		System.out.println("Warsmash engine is starting...");
+		if (Arrays.asList(arg).contains("-validate") || Arrays.asList(arg).contains("--validate")) {
+			final String iniPath = findIniPathArg(arg);
+			final DataTable warsmashIni = loadWarsmashIni(iniPath);
+			validateAndExit(warsmashIni, iniPath);
+		}
 		final LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
 		config.useGL30 = true;
 		config.gles30ContextMajorVersion = 3;
@@ -181,6 +187,7 @@ public class DesktopLauncher {
 		System.out.println("  -ini <path>                  Use a custom warsmash ini file");
 		System.out.println("  -loadfile <path>             Auto-load a map or toc file");
 		System.out.println("  -nolog                       Keep stdout/stderr in console");
+		System.out.println("  -validate | --validate       Check warsmash.ini asset paths and exit");
 		System.exit(0);
 	}
 
@@ -202,6 +209,45 @@ public class DesktopLauncher {
 			System.err.println("Invalid value for " + optionName + ": '" + value + "'. Using " + fallback + '.');
 			return fallback;
 		}
+	}
+
+	private static String findIniPathArg(final String[] arg) {
+		for (int i = 0; i < arg.length - 1; i++) {
+			if ("-ini".equals(arg[i])) {
+				return arg[i + 1];
+			}
+		}
+		return null;
+	}
+
+	private static void validateAndExit(final DataTable warsmashIni, final String iniPath) {
+		final String resolvedIni = iniPath != null ? iniPath : "warsmash.ini";
+		System.out.println("Validating data sources from: " + resolvedIni);
+		final com.etheller.warsmash.units.Element dataSourcesConfig = warsmashIni.get("DataSources");
+		if (dataSourcesConfig == null) {
+			System.out.println("ERROR: [DataSources] section not found in INI.");
+			System.exit(1);
+		}
+		int total = 0;
+		int failures = 0;
+		for (int i = 0; i < dataSourcesConfig.size(); i++) {
+			final String indexStr = (i < 10 ? "0" : "") + i;
+			final String type = dataSourcesConfig.getField("Type" + indexStr);
+			final String path = dataSourcesConfig.getField("Path" + indexStr);
+			if ((type == null) || type.isEmpty()) {
+				continue;
+			}
+			total++;
+			final File f = new File(path);
+			final boolean exists = f.exists();
+			final String status = exists ? "OK  " : "FAIL";
+			System.out.println("  [" + status + "] " + type + ": " + path);
+			if (!exists) {
+				failures++;
+			}
+		}
+		System.out.println("Result: " + (total - failures) + "/" + total + " data source(s) found.");
+		System.exit(failures > 0 ? 1 : 0);
 	}
 
 	public static DataTable loadWarsmashIni(final String iniPath) {

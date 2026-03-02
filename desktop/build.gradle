@@ -1,5 +1,5 @@
 plugins {
-    id 'org.beryx.runtime' version '1.12.5'
+    id 'org.beryx.runtime' version '1.13.1'
 }
 
 sourceCompatibility = 1.17

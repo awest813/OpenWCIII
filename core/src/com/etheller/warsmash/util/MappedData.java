@@ -1,12 +1,14 @@
 package com.etheller.warsmash.util;
 
+import java.io.ByteArrayInputStream;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.nio.charset.StandardCharsets;
 
-import com.etheller.warsmash.util.table.IniFileDataSource;
-import com.etheller.warsmash.util.table.SlkFileDataSource;
+import com.etheller.warsmash.units.DataTable;
+import com.etheller.warsmash.util.table.DataTableSource;
 import com.etheller.warsmash.util.table.TableDataSource;
 
 /**
@@ -37,12 +39,20 @@ public class MappedData implements Iterable<Map.Entry<String, MappedDataRow>> {
 		if (buffer == null) {
 			return;
 		}
-		if (buffer.startsWith("ID;")) {
-			load(new SlkFileDataSource(new SlkFile(buffer)));
+		final boolean slkLike = buffer.startsWith("ID;");
+		final DataTable table = new DataTable(StringBundle.EMPTY);
+		try (ByteArrayInputStream stream = new ByteArrayInputStream(buffer.getBytes(StandardCharsets.UTF_8))) {
+			if (slkLike) {
+				table.readSLK(stream);
+			}
+			else {
+				table.readTXT(stream, true);
+			}
 		}
-		else {
-			load(new IniFileDataSource(new IniFile(buffer)));
+		catch (final Exception e) {
+			throw new RuntimeException("Failed to parse mapped data buffer", e);
 		}
+		load(new DataTableSource(table), slkLike);
 	}
 
 	/**
@@ -51,6 +61,10 @@ public class MappedData implements Iterable<Map.Entry<String, MappedDataRow>> {
 	 * Note that this may override previous properties!
 	 */
 	public void load(final TableDataSource dataSource) {
+		load(dataSource, false);
+	}
+
+	private void load(final TableDataSource dataSource, final boolean coerceSlkTypes) {
 		if (dataSource == null) {
 			return;
 		}
@@ -68,8 +82,28 @@ public class MappedData implements Iterable<Map.Entry<String, MappedDataRow>> {
 				if (column == null) {
 					continue;
 				}
-				mapped.put(column, dataSource.getRaw(row, column));
+				final Object rawValue = dataSource.getRaw(row, column);
+				mapped.put(column, coerceSlkTypes ? coerceSlkValue(rawValue) : rawValue);
 			}
+		}
+	}
+
+	private static Object coerceSlkValue(final Object rawValue) {
+		if (!(rawValue instanceof String)) {
+			return rawValue;
+		}
+		final String stringValue = (String) rawValue;
+		if ("TRUE".equalsIgnoreCase(stringValue)) {
+			return Boolean.TRUE;
+		}
+		if ("FALSE".equalsIgnoreCase(stringValue)) {
+			return Boolean.FALSE;
+		}
+		try {
+			return Float.parseFloat(stringValue);
+		}
+		catch (final NumberFormatException ignored) {
+			return stringValue;
 		}
 	}
 

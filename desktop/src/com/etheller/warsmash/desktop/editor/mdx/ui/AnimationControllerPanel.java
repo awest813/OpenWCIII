@@ -90,6 +90,7 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 			}
 		});
 		this.speedSlider = new JSlider(0, 100, 50);
+		this.speedSlider.setToolTipText("Adjust the playback speed of the animation.");
 		this.speedSliderLabel = new JLabel("Speed: 100%");
 		this.speedSlider.addChangeListener(new ChangeListener() {
 			@Override
@@ -99,6 +100,7 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		});
 
 		final JButton playAnimationButton = new JButton("Play Animation");
+		playAnimationButton.setToolTipText("Replay the currently selected animation sequence.");
 		final ActionListener playAnimationActionListener = new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {
@@ -108,8 +110,11 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		playAnimationButton.addActionListener(playAnimationActionListener);
 
 		this.defaultLoopButton = new JRadioButton("Default Loop");
+		this.defaultLoopButton.setToolTipText("Use the animation's default looping behavior.");
 		this.alwaysLoopButton = new JRadioButton("Always Loop");
+		this.alwaysLoopButton.setToolTipText("Continuously loop the animation.");
 		this.neverLoopButton = new JRadioButton("Never Loop");
+		this.neverLoopButton.setToolTipText("Play the animation once and stop.");
 
 		final ButtonGroup buttonGroup = new ButtonGroup();
 		buttonGroup.add(this.defaultLoopButton);

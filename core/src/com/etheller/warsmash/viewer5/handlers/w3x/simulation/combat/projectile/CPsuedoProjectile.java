@@ -15,7 +15,12 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CEffectType;
 
-public class CPsuedoProjectile extends CProjectile {
+/**
+ * ⚡ Bolt: Reduced memory allocation by implementing CUnitEnumFunction and CDestructableEnumFunction
+ * directly on the CPsuedoProjectile instance, tracking mode internally.
+ * This saves 4 nested object allocations per active projectile during spatial queries.
+ */
+public class CPsuedoProjectile extends CProjectile implements CUnitEnumFunction, CDestructableEnumFunction {
 
 	private static final Rectangle recycleRect = new Rectangle();
 
@@ -55,32 +60,16 @@ public class CPsuedoProjectile extends CProjectile {
 	private final AbilityPointTarget updateLoc = new AbilityPointTarget(0, 0);
 	private int updateDestCount;
 	private int updateUnitCount;
+	private boolean countMode;
 
-	private final CDestructableEnumFunction countDestructablesFunction = new CDestructableEnumFunction() {
-		@Override
-		public boolean call(CDestructable enumDestructable) {
+	@Override
+	public boolean call(CDestructable enumDestructable) {
+		if (this.countMode) {
 			if (hits < maxHits && collisions.get(enumDestructable.getHandleId(), 0) < maxHitsPerTarget
 					&& enumDestructable.distance(updateLoc.getX(), updateLoc.getY()) < collisionRadius && canHitTarget(updateGame, enumDestructable)) {
 				updateDestCount++;
 			}
-			return false;
-		}
-	};
-
-	private final CUnitEnumFunction countUnitsFunction = new CUnitEnumFunction() {
-		@Override
-		public boolean call(final CUnit enumUnit) {
-			if (hits < maxHits && collisions.get(enumUnit.getHandleId(), 0) < maxHitsPerTarget
-					&& enumUnit.canReach(updateLoc, collisionRadius) && canHitTarget(updateGame, enumUnit)) {
-				updateUnitCount++;
-			}
-			return false;
-		}
-	};
-
-	private final CDestructableEnumFunction hitDestructablesFunction = new CDestructableEnumFunction() {
-		@Override
-		public boolean call(CDestructable enumDestructable) {
+		} else {
 			if (hits < maxHits && collisions.get(enumDestructable.getHandleId(), 0) < maxHitsPerTarget
 					&& enumDestructable.distance(updateLoc.getX(), updateLoc.getY()) < collisionRadius && canHitTarget(updateGame, enumDestructable)) {
 				onHitTarget(updateGame, enumDestructable);
@@ -89,13 +78,18 @@ public class CPsuedoProjectile extends CProjectile {
 				}
 				collisions.put(enumDestructable.getHandleId(), collisions.get(enumDestructable.getHandleId(), 0) + 1);
 			}
-			return false;
 		}
-	};
+		return false;
+	}
 
-	private final CUnitEnumFunction hitUnitsFunction = new CUnitEnumFunction() {
-		@Override
-		public boolean call(final CUnit enumUnit) {
+	@Override
+	public boolean call(final CUnit enumUnit) {
+		if (this.countMode) {
+			if (hits < maxHits && collisions.get(enumUnit.getHandleId(), 0) < maxHitsPerTarget
+					&& enumUnit.canReach(updateLoc, collisionRadius) && canHitTarget(updateGame, enumUnit)) {
+				updateUnitCount++;
+			}
+		} else {
 			if (hits < maxHits && collisions.get(enumUnit.getHandleId(), 0) < maxHitsPerTarget
 					&& enumUnit.canReach(updateLoc, collisionRadius) && canHitTarget(updateGame, enumUnit)) {
 				onHitTarget(updateGame, enumUnit);
@@ -104,9 +98,9 @@ public class CPsuedoProjectile extends CProjectile {
 				}
 				collisions.put(enumUnit.getHandleId(), collisions.get(enumUnit.getHandleId(), 0) + 1);
 			}
-			return false;
 		}
-	};
+		return false;
+	}
 
 	public CPsuedoProjectile(final float x, final float y, final float speed, final float projectileStepInterval, final int projectileArtSkip,
 			final AbilityTarget target, boolean homingEnabled, final CUnit source, final War3ID alias,
@@ -194,8 +188,9 @@ public class CPsuedoProjectile extends CProjectile {
 			if (provideCounts ) {
 				this.updateDestCount = 0;
 				this.updateUnitCount = 0;
-				game.getWorldCollision().enumDestructablesInRect(recycleRect, this.countDestructablesFunction);
-				game.getWorldCollision().enumUnitsInRect(recycleRect, this.countUnitsFunction);
+				this.countMode = true;
+				game.getWorldCollision().enumDestructablesInRect(recycleRect, this);
+				game.getWorldCollision().enumUnitsInRect(recycleRect, this);
 
 				this.projectileListener.setUnitTargets(this.updateUnitCount);
 				this.projectileListener.setDestructableTargets(this.updateDestCount);
@@ -204,8 +199,9 @@ public class CPsuedoProjectile extends CProjectile {
 			
 			this.projectileListener.onPreHits(game, this, this.updateLoc);
 			
-			game.getWorldCollision().enumDestructablesInRect(recycleRect, this.hitDestructablesFunction);
-			game.getWorldCollision().enumUnitsInRect(recycleRect, this.hitUnitsFunction);
+			this.countMode = false;
+			game.getWorldCollision().enumDestructablesInRect(recycleRect, this);
+			game.getWorldCollision().enumUnitsInRect(recycleRect, this);
 
 			this.x = this.x + this.dx;
 			this.y = this.y + this.dy;

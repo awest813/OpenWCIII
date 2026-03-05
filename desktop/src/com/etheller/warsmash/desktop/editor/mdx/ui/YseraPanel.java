@@ -16,7 +16,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.InputProcessor;
+import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.backends.lwjgl.LwjglApplicationConfiguration;
 import com.badlogic.gdx.backends.lwjgl.LwjglCanvas;
 import com.badlogic.gdx.math.Quaternion;
@@ -110,7 +110,7 @@ public class YseraPanel extends JPanel {
 		return jMenuBar;
 	}
 
-	private static final class CameraMouseHandler implements InputProcessor {
+	private static final class CameraMouseHandler extends InputAdapter {
 		private int lastX, lastY;
 		private final Vector3 screenDimension = new Vector3();
 		private int button;
@@ -121,34 +121,10 @@ public class YseraPanel extends JPanel {
 		}
 
 		@Override
-		public boolean keyDown(final int keycode) {
-			// TODO Auto-generated method stub
-			return false;
-		}
-
-		@Override
-		public boolean keyUp(final int keycode) {
-			// TODO Auto-generated method stub
-			return false;
-		}
-
-		@Override
-		public boolean keyTyped(final char character) {
-			// TODO Auto-generated method stub
-			return false;
-		}
-
-		@Override
 		public boolean touchDown(final int screenX, final int screenY, final int pointer, final int button) {
 			this.lastX = screenX;
 			this.lastY = screenY;
 			this.button = button;
-			return false;
-		}
-
-		@Override
-		public boolean touchUp(final int screenX, final int screenY, final int pointer, final int button) {
-			// TODO Auto-generated method stub
 			return false;
 		}
 
@@ -177,21 +153,11 @@ public class YseraPanel extends JPanel {
 		}
 
 		@Override
-		public boolean mouseMoved(final int screenX, final int screenY) {
-			// TODO Auto-generated method stub
-			return false;
-		}
-
-		@Override
 		public boolean scrolled(final float amountX, final float amountY) {
 			final PortraitCameraManager cameraManager = this.warsmashPreviewApplication.getCameraManager();
 			cameraManager.distance += amountY * 100;
 			return false;
 		}
 
-		@Override
-		public boolean touchCancelled(final int screenX, final int screenY, final int pointer, final int button) {
-			return false;
-		}
 	}
 }

@@ -47,6 +47,8 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		this.animations = new DefaultComboBoxModel<>();
 		repopulateSequenceList();
 		this.animationBox = new JComboBox<>(this.animations);
+		this.animationBox.setToolTipText("Select an animation sequence to preview");
+		this.animationBox.getAccessibleContext().setAccessibleName("Animation Sequence Selector");
 		this.animationBox.setRenderer(new BasicComboBoxRenderer() {
 			@Override
 			public Component getListCellRendererComponent(final JList list, final Object value, final int index,
@@ -90,6 +92,8 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 			}
 		});
 		this.speedSlider = new JSlider(0, 100, 50);
+		this.speedSlider.setToolTipText("Adjust the playback speed of the animation");
+		this.speedSlider.getAccessibleContext().setAccessibleName("Animation Playback Speed");
 		this.speedSliderLabel = new JLabel("Speed: 100%");
 		this.speedSlider.addChangeListener(new ChangeListener() {
 			@Override
@@ -99,6 +103,8 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		});
 
 		final JButton playAnimationButton = new JButton("Play Animation");
+		playAnimationButton.setToolTipText("Play the currently selected animation sequence");
+		playAnimationButton.getAccessibleContext().setAccessibleName("Play Animation");
 		final ActionListener playAnimationActionListener = new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {
@@ -108,8 +114,16 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		playAnimationButton.addActionListener(playAnimationActionListener);
 
 		this.defaultLoopButton = new JRadioButton("Default Loop");
+		this.defaultLoopButton.setToolTipText("Loop the animation based on its default settings");
+		this.defaultLoopButton.getAccessibleContext().setAccessibleName("Default Loop Mode");
+
 		this.alwaysLoopButton = new JRadioButton("Always Loop");
+		this.alwaysLoopButton.setToolTipText("Force the animation to loop continuously");
+		this.alwaysLoopButton.getAccessibleContext().setAccessibleName("Always Loop Mode");
+
 		this.neverLoopButton = new JRadioButton("Never Loop");
+		this.neverLoopButton.setToolTipText("Play the animation once without looping");
+		this.neverLoopButton.getAccessibleContext().setAccessibleName("Never Loop Mode");
 
 		final ButtonGroup buttonGroup = new ButtonGroup();
 		buttonGroup.add(this.defaultLoopButton);

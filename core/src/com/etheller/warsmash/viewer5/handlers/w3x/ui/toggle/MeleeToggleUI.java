@@ -264,4 +264,14 @@ public class MeleeToggleUI implements WarsmashUI {
 	public void forceCinematicSubtitles(boolean value) {
 		this.meleeUI.forceCinematicSubtitles(value);
 	}
+
+	@Override
+	public void customVictory(final boolean enableScoreScreen) {
+		this.meleeUI.customVictory(enableScoreScreen);
+	}
+
+	@Override
+	public void customDefeat(final boolean enableScoreScreen) {
+		this.meleeUI.customDefeat(enableScoreScreen);
+	}
 }

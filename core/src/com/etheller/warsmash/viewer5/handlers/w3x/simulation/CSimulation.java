@@ -1080,12 +1080,12 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 
 	public RemovableTriggerEvent registerEventPlayerDefeat(final GlobalScope globalScope, final Trigger whichTrigger,
 			final CPlayerJass whichPlayer) {
-		throw new UnsupportedOperationException("registerEventPlayerDefeat is NYI");
+		return whichPlayer.addEvent(globalScope, whichTrigger, JassGameEventsWar3.EVENT_PLAYER_DEFEAT);
 	}
 
 	public RemovableTriggerEvent registerEventPlayerVictory(final GlobalScope globalScope, final Trigger whichTrigger,
 			final CPlayerJass whichPlayer) {
-		throw new UnsupportedOperationException("registerEventPlayerVictory is NYI");
+		return whichPlayer.addEvent(globalScope, whichTrigger, JassGameEventsWar3.EVENT_PLAYER_VICTORY);
 	}
 
 	public void setAllItemTypeSlots(final int slots) {

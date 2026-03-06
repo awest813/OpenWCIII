@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.io.File;
 
 import javax.swing.JFileChooser;
@@ -59,7 +60,9 @@ public class YseraPanel extends JPanel {
 		final JMenuBar jMenuBar = new JMenuBar();
 
 		final JMenu fileMenu = new JMenu("File");
+		fileMenu.setMnemonic(KeyEvent.VK_F);
 		final JMenuItem openItem = new JMenuItem("Open");
+		openItem.setMnemonic(KeyEvent.VK_O);
 		openItem.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {
@@ -81,14 +84,25 @@ public class YseraPanel extends JPanel {
 		});
 		fileMenu.add(openItem);
 		jMenuBar.add(fileMenu);
-		jMenuBar.add(new JMenu("Recent Files"));
-		jMenuBar.add(new JMenu("Edit"));
-		jMenuBar.add(new JMenu("View"));
-		jMenuBar.add(new JMenu("Team Color"));
+		final JMenu recentFilesMenu = new JMenu("Recent Files");
+		recentFilesMenu.setMnemonic(KeyEvent.VK_R);
+		jMenuBar.add(recentFilesMenu);
+		final JMenu editMenu = new JMenu("Edit");
+		editMenu.setMnemonic(KeyEvent.VK_E);
+		jMenuBar.add(editMenu);
+		final JMenu viewMenu = new JMenu("View");
+		viewMenu.setMnemonic(KeyEvent.VK_V);
+		jMenuBar.add(viewMenu);
+		final JMenu teamColorMenu = new JMenu("Team Color");
+		teamColorMenu.setMnemonic(KeyEvent.VK_T);
+		jMenuBar.add(teamColorMenu);
 		final JMenu windowMenu = new JMenu("Windows");
+		windowMenu.setMnemonic(KeyEvent.VK_W);
 		final JMenuItem modelEditorItem = new JMenuItem("Model Editor");
+		modelEditorItem.setMnemonic(KeyEvent.VK_M);
 		windowMenu.add(modelEditorItem);
 		final JMenuItem animationControllerItem = new JMenuItem("Animation Controller");
+		animationControllerItem.setMnemonic(KeyEvent.VK_A);
 		animationControllerItem.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {
@@ -104,8 +118,12 @@ public class YseraPanel extends JPanel {
 		});
 		windowMenu.add(animationControllerItem);
 		jMenuBar.add(windowMenu);
-		jMenuBar.add(new JMenu("Extras"));
-		jMenuBar.add(new JMenu("Help"));
+		final JMenu extrasMenu = new JMenu("Extras");
+		extrasMenu.setMnemonic(KeyEvent.VK_X);
+		jMenuBar.add(extrasMenu);
+		final JMenu helpMenu = new JMenu("Help");
+		helpMenu.setMnemonic(KeyEvent.VK_H);
+		jMenuBar.add(helpMenu);
 
 		return jMenuBar;
 	}

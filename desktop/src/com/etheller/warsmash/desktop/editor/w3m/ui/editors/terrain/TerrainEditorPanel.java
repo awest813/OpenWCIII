@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 
@@ -80,7 +81,9 @@ public class TerrainEditorPanel extends AbstractWorldEditorPanel {
 		final JMenuBar jMenuBar = new JMenuBar();
 
 		final JMenu fileMenu = new JMenu("File");
+		fileMenu.setMnemonic(KeyEvent.VK_F);
 		final JMenuItem openItem = new JMenuItem("Open");
+		openItem.setMnemonic(KeyEvent.VK_O);
 		openItem.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent e) {

@@ -5364,4 +5364,16 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			this.mouseOverUnit = null;
 		}
 	}
+
+	@Override
+	public void customVictory(final boolean enableScoreScreen) {
+		// Campaign mission complete: return to menu (score screen not yet implemented)
+		this.exitGameRunnable.run();
+	}
+
+	@Override
+	public void customDefeat(final boolean enableScoreScreen) {
+		// Campaign mission failed: return to menu (score screen not yet implemented)
+		this.exitGameRunnable.run();
+	}
 }

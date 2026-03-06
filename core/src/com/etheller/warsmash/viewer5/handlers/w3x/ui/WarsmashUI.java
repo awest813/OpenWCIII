@@ -64,4 +64,18 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 
 	void forceCinematicSubtitles(boolean value);
 
+	/**
+	 * Trigger a custom victory for the local player (campaign mission complete).
+	 * When {@code enableScoreScreen} is true the score/victory screen should be
+	 * shown; when false the game silently transitions back to the menu.
+	 */
+	void customVictory(boolean enableScoreScreen);
+
+	/**
+	 * Trigger a custom defeat for the local player (campaign mission failed).
+	 * When {@code enableScoreScreen} is true the score/defeat screen should be
+	 * shown; when false the game silently transitions back to the menu.
+	 */
+	void customDefeat(boolean enableScoreScreen);
+
 }

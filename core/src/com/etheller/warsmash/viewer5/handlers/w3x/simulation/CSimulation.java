@@ -1204,12 +1204,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		switch (state) {
 		case MASKED:
 			if (this.fogMaskEnabled) {
-				if (this.fogEnabled) {
-					return CFogState.MASKED.getMask();
-				}
-				else {
-					return CFogState.MASKED.getMask();
-				}
+				return CFogState.MASKED.getMask();
 			}
 			else if (this.fogEnabled) {
 				return CFogState.FOGGED.getMask();

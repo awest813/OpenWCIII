@@ -3671,12 +3671,25 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SuspendHeroXP",
 					(arguments, globalScope, triggerScope) -> {
-						// XP suspension is not yet fully implemented; log and ignore
-						System.err.println("SuspendHeroXP called but not yet fully implemented");
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final boolean suspend = arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+						if (whichUnit != null) {
+							final CAbilityHero heroData = whichUnit.getHeroData();
+							if (heroData != null) {
+								heroData.setXpSuspended(suspend);
+							}
+						}
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("IsSuspendedXP",
 					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						if (whichUnit != null) {
+							final CAbilityHero heroData = whichUnit.getHeroData();
+							if (heroData != null) {
+								return BooleanJassValue.of(heroData.isXpSuspended());
+							}
+						}
 						return BooleanJassValue.FALSE;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("IsUnitType",

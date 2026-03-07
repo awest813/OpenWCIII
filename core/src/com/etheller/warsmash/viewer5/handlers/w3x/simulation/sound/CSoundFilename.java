@@ -63,11 +63,13 @@ public class CSoundFilename implements CSound {
 
 	@Override
 	public void stop() {
-		if (this.sound != null && this.lastSoundInstanceId != -1) {
-			this.sound.stop(this.lastSoundInstanceId);
-		}
-		else if (this.sound != null) {
-			this.sound.stop();
+		if (this.sound != null) {
+			if (this.lastSoundInstanceId != -1) {
+				this.sound.stop(this.lastSoundInstanceId);
+			}
+			else {
+				this.sound.stop();
+			}
 		}
 		this.playing = false;
 		this.lastSoundInstanceId = -1;

@@ -1,5 +1,8 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.ui;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Minimal multiboard implementation. Full rendering is not yet implemented;
  * the object exists so that scripts that create and manipulate multiboards do
@@ -11,6 +14,8 @@ public class CMultiboard {
 	private int rows = 0;
 	private boolean displayed = false;
 	private boolean minimized = false;
+	/** Persistent item cells indexed by row * MAX_COLS + col. */
+	private final Map<Integer, CMultiboardItem> items = new HashMap<>();
 
 	public String getTitle() {
 		return this.title;
@@ -52,7 +57,19 @@ public class CMultiboard {
 		this.minimized = minimized;
 	}
 
+	/**
+	 * Returns (or lazily creates) the persistent item cell for the given row and
+	 * column. Row and column are 0-based internally; JASS passes 1-based values so
+	 * callers must subtract 1 before calling this method if they want 0-based
+	 * storage.
+	 */
 	public CMultiboardItem getItem(final int row, final int column) {
-		return new CMultiboardItem();
+		final int key = row * 1000 + column;
+		CMultiboardItem item = this.items.get(key);
+		if (item == null) {
+			item = new CMultiboardItem();
+			this.items.put(key, item);
+		}
+		return item;
 	}
 }

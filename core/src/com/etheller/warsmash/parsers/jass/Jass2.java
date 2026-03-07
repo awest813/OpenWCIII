@@ -4296,6 +4296,32 @@ public class Jass2 {
 						final int layerHeight = war3MapViewer.terrain.getCorner(x, y).getLayerHeight();
 						return IntegerJassValue.of(layerHeight);
 					});
+			jassProgramVisitor.getJassNativeManager().createNative("IsTerrainPathable",
+					(arguments, globalScope, triggerScope) -> {
+						// Detailed pathing-type queries are not yet implemented; always return false
+						// (passable)
+						return BooleanJassValue.FALSE;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetTerrainPathable",
+					(arguments, globalScope, triggerScope) -> {
+						// Dynamic terrain pathability changes are not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("GetTerrainType",
+					(arguments, globalScope, triggerScope) -> {
+						// Tile-type queries are not yet implemented; return 0
+						return IntegerJassValue.of(0);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("GetTerrainVariance",
+					(arguments, globalScope, triggerScope) -> {
+						// Tile-variant queries are not yet implemented; return 0
+						return IntegerJassValue.of(0);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetTerrainType",
+					(arguments, globalScope, triggerScope) -> {
+						// Dynamic tile changes are not yet implemented
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetWaterBaseColor",
 					(arguments, globalScope, triggerScope) -> {
 						final int red = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
@@ -5028,6 +5054,68 @@ public class Jass2 {
 							return new HandleJassValue(itemType, inventoryData.getItemInSlot(whichSlot));
 						}
 						return new HandleJassValue(itemType, null);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("UnitInventorySize",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						if (whichUnit != null) {
+							final CAbilityInventory inv = whichUnit.getInventoryData();
+							if (inv != null) {
+								return IntegerJassValue.of(inv.getCapacity());
+							}
+						}
+						return IntegerJassValue.of(0);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("UnitDropItemPoint",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CItem whichItem = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						final float x = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float y = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
+						if ((whichUnit != null) && (whichItem != null)) {
+							final CAbilityInventory inv = whichUnit.getInventoryData();
+							if (inv != null) {
+								inv.dropItem(CommonEnvironment.this.simulation, whichUnit, whichItem, x, y, true);
+							}
+						}
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("UnitDropItemSlot",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CItem whichItem = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						// target slot is cosmetic in our implementation; treat as DropItemPoint at unit's location
+						if ((whichUnit != null) && (whichItem != null)) {
+							final CAbilityInventory inv = whichUnit.getInventoryData();
+							if (inv != null) {
+								inv.dropItem(CommonEnvironment.this.simulation, whichUnit, whichItem, whichUnit.getX(),
+										whichUnit.getY(), true);
+							}
+						}
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("UnitDropItemTarget",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CItem whichItem = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						final CWidget target = nullable(arguments, 2, ObjectJassValueVisitor.getInstance());
+						if ((whichUnit != null) && (whichItem != null)) {
+							final CAbilityInventory inv = whichUnit.getInventoryData();
+							if (inv != null) {
+								final float x = target != null ? target.getX() : whichUnit.getX();
+								final float y = target != null ? target.getY() : whichUnit.getY();
+								inv.dropItem(CommonEnvironment.this.simulation, whichUnit, whichItem, x, y, true);
+							}
+						}
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("IsItemOwned",
+					(arguments, globalScope, triggerScope) -> {
+						final CItem item = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						if (item == null) {
+							return BooleanJassValue.FALSE;
+						}
+						return BooleanJassValue.of(item.getContainedUnit() != null);
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetCameraTargetController",
 					(arguments, globalScope, triggerScope) -> {
@@ -6179,7 +6267,7 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("GetSoldItem",
 					(arguments, globalScope, triggerScope) -> {
-						return new HandleJassValue(unitType,
+						return new HandleJassValue(itemType,
 								((CommonTriggerExecutionScope) triggerScope).getSoldItem());
 					});
 			// Spell target getters

@@ -483,56 +483,36 @@ public class CUnit extends CWidget {
 		if (buff.getBuffType() == NonStackingStatBuffType.ALLATK) {
 			Map<String, List<NonStackingStatBuff>> buffKeyMap = this.nonStackingBuffs
 					.get(NonStackingStatBuffType.MELEEATK);
-			try {
-				buffKeyMap.get(buff.getStackingKey()).remove(buff);
-			}
-			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+			List<NonStackingStatBuff> meleeList = buffKeyMap != null ? buffKeyMap.get(buff.getStackingKey()) : null;
+			if (meleeList != null) {
+				meleeList.remove(buff);
 			}
 
 			buffKeyMap = this.nonStackingBuffs.get(NonStackingStatBuffType.RNGDATK);
-			try {
-				buffKeyMap.get(buff.getStackingKey()).remove(buff);
-			}
-			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+			List<NonStackingStatBuff> rangedList = buffKeyMap != null ? buffKeyMap.get(buff.getStackingKey()) : null;
+			if (rangedList != null) {
+				rangedList.remove(buff);
 			}
 		}
 		else if (buff.getBuffType() == NonStackingStatBuffType.ALLATKPCT) {
 			Map<String, List<NonStackingStatBuff>> buffKeyMap = this.nonStackingBuffs
 					.get(NonStackingStatBuffType.MELEEATKPCT);
-			try {
-				buffKeyMap.get(buff.getStackingKey()).remove(buff);
-			}
-			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+			List<NonStackingStatBuff> meleeList = buffKeyMap != null ? buffKeyMap.get(buff.getStackingKey()) : null;
+			if (meleeList != null) {
+				meleeList.remove(buff);
 			}
 
 			buffKeyMap = this.nonStackingBuffs.get(NonStackingStatBuffType.RNGDATKPCT);
-			try {
-				buffKeyMap.get(buff.getStackingKey()).remove(buff);
-			}
-			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+			List<NonStackingStatBuff> rangedList = buffKeyMap != null ? buffKeyMap.get(buff.getStackingKey()) : null;
+			if (rangedList != null) {
+				rangedList.remove(buff);
 			}
 		}
 		else {
 			final Map<String, List<NonStackingStatBuff>> buffKeyMap = this.nonStackingBuffs.get(buff.getBuffType());
-			try {
-				buffKeyMap.get(buff.getStackingKey()).remove(buff);
-			}
-			catch (final Exception e) {
-				System.err.println(e.getLocalizedMessage());
-				System.err.println(e.getStackTrace().toString());
-				System.err.println("From: " + getTypeId().asStringValue());
+			final List<NonStackingStatBuff> list = buffKeyMap != null ? buffKeyMap.get(buff.getStackingKey()) : null;
+			if (list != null) {
+				list.remove(buff);
 			}
 		}
 		computeDerivedFields(buff.getBuffType());

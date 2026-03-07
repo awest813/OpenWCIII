@@ -39,6 +39,7 @@ public class CAbilityHero extends AbstractCAbility {
 	private String properName;
 	private boolean awaitingRevive;
 	private boolean reviving;
+	private boolean xpSuspended;
 
 	public CAbilityHero(final int handleId, final List<War3ID> skillsAvailable) {
 		super(handleId, War3ID.fromString("AHer"));
@@ -255,6 +256,14 @@ public class CAbilityHero extends AbstractCAbility {
 		return this.reviving;
 	}
 
+	public void setXpSuspended(final boolean xpSuspended) {
+		this.xpSuspended = xpSuspended;
+	}
+
+	public boolean isXpSuspended() {
+		return this.xpSuspended;
+	}
+
 	private void levelUpHero(final CSimulation simulation, final CUnit unit, boolean showEffect) {
 		final CGameplayConstants gameplayConstants = simulation.getGameplayConstants();
 		while ((this.heroLevel < gameplayConstants.getMaxHeroLevel())
@@ -267,7 +276,10 @@ public class CAbilityHero extends AbstractCAbility {
 	}
 
 	public void addXp(final CSimulation simulation, final CUnit unit, final int xp, boolean showEffect) {
-		this.xp += xp * simulation.getPlayer(unit.getPlayerIndex()).getHandicapXP();
+		if (this.xpSuspended) {
+			return;
+		}
+		this.xp += Math.round(xp * simulation.getPlayer(unit.getPlayerIndex()).getHandicapXP());
 		levelUpHero(simulation, unit, showEffect);
 		unit.internalPublishHeroStatsChanged();
 	}
@@ -276,9 +288,12 @@ public class CAbilityHero extends AbstractCAbility {
 	// hero's current xp.
 	// setXp cannot be used to decrease the hero's xp or level.
 	public void setXp(final CSimulation simulation, final CUnit unit, final int xp, boolean showEyeCandy) {
-		final int newXpVal = xp * Math.round(simulation.getPlayer(unit.getPlayerIndex()).getHandicapXP());
-		if (newXpVal > this.xp) {
-			addXp(simulation, unit, newXpVal - this.xp, showEyeCandy);
+		// SetHeroXP sets the XP to an absolute value without applying the XP handicap.
+		// (Handicap applies only when gaining XP through kills; direct XP sets bypass it.)
+		if (xp > this.xp) {
+			this.xp = xp;
+			levelUpHero(simulation, unit, showEyeCandy);
+			unit.internalPublishHeroStatsChanged();
 		}
 	}
 
@@ -386,7 +401,7 @@ public class CAbilityHero extends AbstractCAbility {
 		final int oldMaximumLife = unit.getMaximumLife();
 		final float oldLife = unit.getLife();
 		final int newMaximumLife = Math.round(oldMaximumLife + hitPointIncrease);
-		final float newLife = (oldLife * (newMaximumLife)) / oldMaximumLife;
+		final float newLife = oldMaximumLife > 0 ? (oldLife * newMaximumLife) / oldMaximumLife : oldLife;
 		unit.setMaximumLife(newMaximumLife);
 		unit.setLife(game, newLife);
 
@@ -394,7 +409,7 @@ public class CAbilityHero extends AbstractCAbility {
 		final int oldMaximumMana = unit.getMaximumMana();
 		final float oldMana = unit.getMana();
 		final int newMaximumMana = Math.round(oldMaximumMana + manaPointIncrease);
-		final float newMana = (oldMana * (newMaximumMana)) / oldMaximumMana;
+		final float newMana = oldMaximumMana > 0 ? (oldMana * newMaximumMana) / oldMaximumMana : oldMana;
 		unit.setMaximumMana(newMaximumMana);
 		unit.setMana(newMana);
 
@@ -433,7 +448,7 @@ public class CAbilityHero extends AbstractCAbility {
 		final int oldMaximumLife = unit.getMaximumLife();
 		final float oldLife = unit.getLife();
 		final int newMaximumLife = Math.round(oldMaximumLife + hitPointIncrease);
-		final float newLife = (oldLife * (newMaximumLife)) / oldMaximumLife;
+		final float newLife = oldMaximumLife > 0 ? (oldLife * newMaximumLife) / oldMaximumLife : oldLife;
 		unit.setMaximumLife(newMaximumLife);
 		unit.setLife(game, newLife);
 
@@ -441,7 +456,7 @@ public class CAbilityHero extends AbstractCAbility {
 		final int oldMaximumMana = unit.getMaximumMana();
 		final float oldMana = unit.getMana();
 		final int newMaximumMana = Math.round(oldMaximumMana + manaPointIncrease);
-		final float newMana = (oldMana * (newMaximumMana)) / oldMaximumMana;
+		final float newMana = oldMaximumMana > 0 ? (oldMana * newMaximumMana) / oldMaximumMana : oldMana;
 		unit.setMaximumMana(newMaximumMana);
 		unit.setMana(newMana);
 

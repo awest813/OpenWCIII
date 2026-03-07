@@ -1067,6 +1067,42 @@ public class Jass2 {
 			// TODO if BuildOrderById is actually different from PointOrderById then this
 			// needs to be fixed:
 			jassProgramVisitor.getJassNativeManager().createNative("IssueBuildOrderById", issuePointOrderById);
+			// IssuePointOrder: string-name version of IssuePointOrderById
+			jassProgramVisitor.getJassNativeManager().createNative("IssuePointOrder",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+						if (whichUnit == null) {
+							return BooleanJassValue.FALSE;
+						}
+						final String orderString = arguments.get(1).visit(StringJassValueVisitor.getInstance());
+						final double whichLocationX = arguments.get(2).visit(RealJassValueVisitor.getInstance());
+						final double whichLocationY = arguments.get(3).visit(RealJassValueVisitor.getInstance());
+						final int orderId = OrderIdUtils.getOrderId(orderString);
+						final CPlayerUnitOrderExecutor defaultPlayerUnitOrderExecutor = CommonEnvironment.this.simulation
+								.getDefaultPlayerUnitOrderExecutor(whichUnit.getPlayerIndex());
+						final BooleanAbilityActivationReceiver activationReceiver = BooleanAbilityActivationReceiver.INSTANCE;
+						int abilityHandleId = 0;
+						AbilityPointTarget targetAsPoint = new AbilityPointTarget((float) whichLocationX,
+								(float) whichLocationY);
+						for (final CAbility ability : whichUnit.getAbilities()) {
+							ability.checkCanUse(CommonEnvironment.this.simulation, whichUnit, orderId,
+									activationReceiver);
+							if (activationReceiver.isOk()) {
+								final PointAbilityTargetCheckReceiver targetReceiver = PointAbilityTargetCheckReceiver.INSTANCE;
+								ability.checkCanTarget(CommonEnvironment.this.simulation, whichUnit, orderId,
+										targetAsPoint, targetReceiver.reset());
+								if (targetReceiver.getTarget() != null) {
+									targetAsPoint = targetReceiver.getTarget();
+									abilityHandleId = ability.getHandleId();
+								}
+							}
+						}
+						if (abilityHandleId != 0) {
+							defaultPlayerUnitOrderExecutor.issuePointOrder(whichUnit.getHandleId(), abilityHandleId,
+									orderId, targetAsPoint.x, targetAsPoint.y, false);
+						}
+						return BooleanJassValue.of(abilityHandleId != 0);
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("IssueTargetOrder",
 					(arguments, globalScope, triggerScope) -> {
 						final CUnit whichUnit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
@@ -6175,6 +6211,16 @@ public class Jass2 {
 						meleeUI.forceCinematicSubtitles(value);
 						return null;
 					});
+			jassProgramVisitor.getJassNativeManager().createNative("PlayCinematic",
+					(arguments, globalScope, triggerScope) -> {
+						// Cinematic movie playback is not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("CinematicSkipButton",
+					(arguments, globalScope, triggerScope) -> {
+						// Skip-button visibility not yet implemented; accepted as no-op
+						return null;
+					});
 			// Transmission natives route through SetCinematicScene so that portrait/subtitle
 			// behaviour is visible even without full cinematic queue support.
 			jassProgramVisitor.getJassNativeManager().createNative("TransmissionFromUnit",
@@ -6804,6 +6850,57 @@ public class Jass2 {
 							cache.storeString(missionKey, key, value != null ? value : "");
 						}
 						return BooleanJassValue.TRUE;
+					});
+			// ============================================================================
+			// Set/store gamecache values (missing counterparts to GetStored*)
+			//
+			jassProgramVisitor.getJassNativeManager().createNative("StoreInteger",
+					(arguments, globalScope, triggerScope) -> {
+						final CGameCache cache = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final String missionKey = nullable(arguments, 1, StringJassValueVisitor.getInstance());
+						final String key = nullable(arguments, 2, StringJassValueVisitor.getInstance());
+						final int value = arguments.get(3).visit(IntegerJassValueVisitor.getInstance());
+						if (cache != null && missionKey != null && key != null) {
+							cache.storeInteger(missionKey, key, value);
+							return BooleanJassValue.TRUE;
+						}
+						return BooleanJassValue.FALSE;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("StoreReal",
+					(arguments, globalScope, triggerScope) -> {
+						final CGameCache cache = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final String missionKey = nullable(arguments, 1, StringJassValueVisitor.getInstance());
+						final String key = nullable(arguments, 2, StringJassValueVisitor.getInstance());
+						final float value = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
+						if (cache != null && missionKey != null && key != null) {
+							cache.storeReal(missionKey, key, value);
+							return BooleanJassValue.TRUE;
+						}
+						return BooleanJassValue.FALSE;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("StoreBoolean",
+					(arguments, globalScope, triggerScope) -> {
+						final CGameCache cache = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final String missionKey = nullable(arguments, 1, StringJassValueVisitor.getInstance());
+						final String key = nullable(arguments, 2, StringJassValueVisitor.getInstance());
+						final boolean value = arguments.get(3).visit(BooleanJassValueVisitor.getInstance());
+						if (cache != null && missionKey != null && key != null) {
+							cache.storeBoolean(missionKey, key, value);
+							return BooleanJassValue.TRUE;
+						}
+						return BooleanJassValue.FALSE;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("StoreString",
+					(arguments, globalScope, triggerScope) -> {
+						final CGameCache cache = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final String missionKey = nullable(arguments, 1, StringJassValueVisitor.getInstance());
+						final String key = nullable(arguments, 2, StringJassValueVisitor.getInstance());
+						final String value = nullable(arguments, 3, StringJassValueVisitor.getInstance());
+						if (cache != null && missionKey != null && key != null && value != null) {
+							cache.storeString(missionKey, key, value);
+							return BooleanJassValue.TRUE;
+						}
+						return BooleanJassValue.FALSE;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("GetStoredInteger",
 					(arguments, globalScope, triggerScope) -> {
@@ -11831,6 +11928,17 @@ public class Jass2 {
 					final CPlayerJass player = arguments.get(0)
 							.visit(ObjectJassValueVisitor.<CPlayerJass>getInstance());
 					return new HandleJassValue(mapcontrolType, player.getController());
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("IsPlayerType",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayerJass player = nullable(arguments, 0,
+							ObjectJassValueVisitor.<CPlayerJass>getInstance());
+					final CMapControl whichType = nullable(arguments, 1,
+							ObjectJassValueVisitor.<CMapControl>getInstance());
+					if (player == null || whichType == null) {
+						return BooleanJassValue.FALSE;
+					}
+					return BooleanJassValue.of(player.getController() == whichType);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetPlayerSlotState",
 				(arguments, globalScope, triggerScope) -> {

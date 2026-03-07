@@ -5309,6 +5309,32 @@ public class Jass2 {
 						meleeUI.getCameraManager().resetToGameCamera(forceDuration);
 						return null;
 					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetCameraField",
+					(arguments, globalScope, triggerScope) -> {
+						final CCameraField field = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final float value = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+						// duration-based interpolation not yet implemented; changes are immediate
+						if (field == null) {
+							return null;
+						}
+						switch (field) {
+						case TARGET_DISTANCE:
+							meleeUI.getCameraManager().distance = value;
+							break;
+						case ANGLE_OF_ATTACK:
+							meleeUI.getCameraManager().verticalAngle = value;
+							break;
+						case ROTATION:
+							meleeUI.getCameraManager().horizontalAngle = value;
+							break;
+						case ZOFFSET:
+							meleeUI.getCameraManager().setTargetZOffset(value);
+							break;
+						default:
+							break;
+						}
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("GetCameraField",
 					(arguments, globalScope, triggerScope) -> {
 						final CCameraField field = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
@@ -5963,6 +5989,78 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("EndCinematicScene",
 					(arguments, globalScope, triggerScope) -> {
 						meleeUI.endCinematicScene();
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetCinematicAudio",
+					(arguments, globalScope, triggerScope) -> {
+						// Cinematic audio (ambient occlusion etc.) not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("UseTimeOfDayZOffset",
+					(arguments, globalScope, triggerScope) -> {
+						// Time-of-day Z offset not yet implemented; accepted as no-op
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("PauseGame",
+					(arguments, globalScope, triggerScope) -> {
+						// Game pause not yet implemented; accepted as no-op in single-player
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("PlayThematic",
+					(arguments, globalScope, triggerScope) -> {
+						// Thematic music playback not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("EndThematic",
+					(arguments, globalScope, triggerScope) -> {
+						// Thematic music stop not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetSkyModel",
+					(arguments, globalScope, triggerScope) -> {
+						// Sky model changes not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetIntegerGameState",
+					(arguments, globalScope, triggerScope) -> {
+						// Integer game-state not yet implemented; accepted as no-op
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("HideInterface",
+					(arguments, globalScope, triggerScope) -> {
+						// Interface hiding is managed via ShowInterface; accepted as no-op
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("CinematicMode",
+					(arguments, globalScope, triggerScope) -> {
+						// Full cinematic-mode integration not yet implemented; accepted as no-op
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetCinematicCamera",
+					(arguments, globalScope, triggerScope) -> {
+						// Predefined cinematic camera positions not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("ForceUIKey",
+					(arguments, globalScope, triggerScope) -> {
+						// Forcing UI key presses not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("ForceUICancel",
+					(arguments, globalScope, triggerScope) -> {
+						// Forcing UI cancel not yet implemented
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("EnablePreSelect",
+					(arguments, globalScope, triggerScope) -> {
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("EnableDragSelect",
+					(arguments, globalScope, triggerScope) -> {
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("EnableSelect",
+					(arguments, globalScope, triggerScope) -> {
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("ForceCinematicSubtitles",

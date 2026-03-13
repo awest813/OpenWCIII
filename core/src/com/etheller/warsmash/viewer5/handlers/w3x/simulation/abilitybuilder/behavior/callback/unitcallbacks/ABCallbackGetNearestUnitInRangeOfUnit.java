@@ -9,6 +9,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitEnumFunction;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.behavior.callback.floatcallbacks.ABFloatCallback;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.core.ABCondition;
+import com.badlogic.gdx.utils.Pool;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.core.ABLocalStoreKeys;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.iterstructs.UnitAndRange;
 
@@ -19,42 +20,95 @@ public class ABCallbackGetNearestUnitInRangeOfUnit extends ABUnitCallback {
 	private ABFloatCallback range;
 	private List<ABCondition> conditions;
 	
+	// ⚡ Bolt Optimization: Pool the enum function to avoid allocation while supporting re-entrancy
+	private final Pool<NearestUnitEnum> enumFunctionPool = new Pool<NearestUnitEnum>() {
+		@Override
+		protected NearestUnitEnum newObject() {
+			return new NearestUnitEnum();
+		}
+	};
+
 	@Override
 	public CUnit callback(CSimulation game, CUnit caster, Map<String, Object> localStore, final int castId) {
 		CUnit originUnitTarget = originUnit.callback(game, caster, localStore, castId);
 		Float rangeVal = range.callback(game, caster, localStore, castId);
 		
-		final UnitAndRange ur = new UnitAndRange();
-		
 		recycleRect.set(originUnitTarget.getX() - rangeVal, originUnitTarget.getY() - rangeVal, rangeVal * 2,
 				rangeVal * 2);
-		game.getWorldCollision().enumUnitsInRect(recycleRect, new CUnitEnumFunction() {
-			@Override
-			public boolean call(final CUnit enumUnit) {
-				if (originUnitTarget.canReach(enumUnit, rangeVal)) {
-					double dist = originUnitTarget.distance(enumUnit);
-					if (ur.getUnit() == null || ur.getRange() > dist) {
-						if (conditions != null) {
-							boolean result = true;
-							localStore.put(ABLocalStoreKeys.MATCHINGUNIT+castId, enumUnit);
-							for (ABCondition condition : conditions) {
-								result = result && condition.evaluate(game, caster, localStore, castId);
-							}
-							localStore.remove(ABLocalStoreKeys.MATCHINGUNIT+castId);
-							if (result) {
-								ur.setRange(dist);
-								ur.setUnit(enumUnit);
-							}
-						} else {
-							ur.setRange(dist);
-							ur.setUnit(enumUnit);
+
+		NearestUnitEnum enumFunction = this.enumFunctionPool.obtain();
+		try {
+			game.getWorldCollision().enumUnitsInRect(recycleRect,
+					enumFunction.reset(game, caster, localStore, castId, originUnitTarget, rangeVal, conditions));
+			return enumFunction.getUnitAndRange().getUnit();
+		} finally {
+			enumFunction.clear();
+			this.enumFunctionPool.free(enumFunction);
+		}
+	}
+
+	private static final class NearestUnitEnum implements CUnitEnumFunction {
+		private CSimulation game;
+		private CUnit caster;
+		private Map<String, Object> localStore;
+		private int castId;
+		private CUnit originUnitTarget;
+		private float rangeVal;
+		private List<ABCondition> conditions;
+
+		private final UnitAndRange ur = new UnitAndRange();
+
+		public NearestUnitEnum reset(final CSimulation game, final CUnit caster, final Map<String, Object> localStore,
+				final int castId, final CUnit originUnitTarget, final float rangeVal, final List<ABCondition> conditions) {
+			this.game = game;
+			this.caster = caster;
+			this.localStore = localStore;
+			this.castId = castId;
+			this.originUnitTarget = originUnitTarget;
+			this.rangeVal = rangeVal;
+			this.conditions = conditions;
+			this.ur.setUnit(null);
+			this.ur.setRange(0);
+			return this;
+		}
+
+		public void clear() {
+			this.game = null;
+			this.caster = null;
+			this.localStore = null;
+			this.originUnitTarget = null;
+			this.conditions = null;
+			this.ur.setUnit(null);
+		}
+
+		public UnitAndRange getUnitAndRange() {
+			return this.ur;
+		}
+
+		@Override
+		public boolean call(final CUnit enumUnit) {
+			if (this.originUnitTarget.canReach(enumUnit, this.rangeVal)) {
+				double dist = this.originUnitTarget.distance(enumUnit);
+				if (this.ur.getUnit() == null || this.ur.getRange() > dist) {
+					if (this.conditions != null) {
+						boolean result = true;
+						this.localStore.put(ABLocalStoreKeys.MATCHINGUNIT + this.castId, enumUnit);
+						for (ABCondition condition : this.conditions) {
+							result = result && condition.evaluate(this.game, this.caster, this.localStore, this.castId);
 						}
+						this.localStore.remove(ABLocalStoreKeys.MATCHINGUNIT + this.castId);
+						if (result) {
+							this.ur.setRange(dist);
+							this.ur.setUnit(enumUnit);
+						}
+					} else {
+						this.ur.setRange(dist);
+						this.ur.setUnit(enumUnit);
 					}
 				}
-				return false;
 			}
-		});
-		return ur.getUnit();
+			return false;
+		}
 	}
 
 }

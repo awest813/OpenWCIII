@@ -23,7 +23,7 @@ public class ExceptionPopup {
 					doc.insertString(doc.getLength(), s, null);
 				}
 				catch (final BadLocationException e) {
-					JOptionPane.showMessageDialog(null, "MDL open error popup failed to create info popup.");
+					JOptionPane.showMessageDialog(null, "MDL open error popup failed to create info popup.", "Error", JOptionPane.ERROR_MESSAGE);
 					e.printStackTrace();
 				}
 			}
@@ -63,7 +63,7 @@ public class ExceptionPopup {
 					doc.insertString(doc.getLength(), s, null);
 				}
 				catch (final BadLocationException e) {
-					JOptionPane.showMessageDialog(null, "MDL open error popup failed to create info popup.");
+					JOptionPane.showMessageDialog(null, "MDL open error popup failed to create info popup.", "Error", JOptionPane.ERROR_MESSAGE);
 					e.printStackTrace();
 				}
 			}

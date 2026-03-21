@@ -20,16 +20,31 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetC
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.SimulationRenderComponent;
 
 public class CAbilityNeutralBuilding extends AbstractGenericAliasedAbility {
+	// ⚡ Bolt Optimization: Use pooled enum function to prevent per-tick garbage collection overhead
+	private final com.badlogic.gdx.utils.Pool<CUnitEnumFunctionImplementation> enumFunctionPool = new com.badlogic.gdx.utils.Pool<CUnitEnumFunctionImplementation>() {
+		@Override
+		protected CUnitEnumFunctionImplementation newObject() {
+			return new CUnitEnumFunctionImplementation();
+		}
+	};
+
 	private final class CUnitEnumFunctionImplementation implements CUnitEnumFunction {
-		private final int maxMapPlayers;
-		private final CSimulation game;
-		private final CUnit unit;
+		private int maxMapPlayers;
+		private CSimulation game;
+		private CUnit unit;
 		private boolean updated = false;
 
-		private CUnitEnumFunctionImplementation(final int maxMapPlayers, final CSimulation game, final CUnit unit) {
+		public CUnitEnumFunctionImplementation reset(final int maxMapPlayers, final CSimulation game, final CUnit unit) {
 			this.maxMapPlayers = maxMapPlayers;
 			this.game = game;
 			this.unit = unit;
+			this.updated = false;
+			return this;
+		}
+
+		public void clear() {
+			this.game = null;
+			this.unit = null;
 		}
 
 		@Override
@@ -102,11 +117,16 @@ public class CAbilityNeutralBuilding extends AbstractGenericAliasedAbility {
 				}
 			}
 			if (searchUnits) {
-				final CUnitEnumFunctionImplementation perUnitCallback = new CUnitEnumFunctionImplementation(
-						maxMapPlayers, game, unit);
-				game.getWorldCollision().enumUnitsInRect(recycleRect.set(unit.getX() - activationRadius,
-						unit.getY() - activationRadius, activationRadius * 2, activationRadius * 2), perUnitCallback);
-				unit.notifyOrdersChanged();
+				CUnitEnumFunctionImplementation perUnitCallback = enumFunctionPool.obtain();
+				try {
+					perUnitCallback.reset(maxMapPlayers, game, unit);
+					game.getWorldCollision().enumUnitsInRect(recycleRect.set(unit.getX() - activationRadius,
+							unit.getY() - activationRadius, activationRadius * 2, activationRadius * 2), perUnitCallback);
+					unit.notifyOrdersChanged();
+				} finally {
+					perUnitCallback.clear();
+					enumFunctionPool.free(perUnitCallback);
+				}
 			}
 			nextUpdateTick = gameTurnTick + UNIT_CHECK_DELAY;
 		}

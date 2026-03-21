@@ -93,20 +93,35 @@ public class CAbilityCoupleInstant extends AbstractGenericSingleIconNoSmartActiv
 		return caster.pollNextOrderBehavior(game);
 	}
 
+	// ⚡ Bolt Optimization: Cache enum function to prevent per-cast garbage collection overhead
+	private final com.badlogic.gdx.utils.Pool<PossiblePairFinderEnum> possiblePairFinderPool = new com.badlogic.gdx.utils.Pool<PossiblePairFinderEnum>() {
+		@Override
+		protected PossiblePairFinderEnum newObject() {
+			return new PossiblePairFinderEnum();
+		}
+	};
+	private final Rectangle recycleRect = new Rectangle();
+
 	@Override
 	public CBehavior beginNoTarget(final CSimulation game, final CUnit caster, final int orderId) {
-		final PossiblePairFinderEnum possiblePairFinder = new PossiblePairFinderEnum(caster);
-		game.getWorldCollision().enumUnitsInRect(
-				new Rectangle(caster.getX() - this.area, caster.getY() - this.area, this.area * 2, this.area * 2),
-				possiblePairFinder);
-		final CUnit coupleTarget = possiblePairFinder.pairMatchFound;
-		if (coupleTarget == null) {
-			game.getCommandErrorListener().showInterfaceError(caster.getPlayerIndex(), CommandStringErrorKeys.UNABLE_TO_FIND_COUPLE_TARGET);
-			return caster.pollNextOrderBehavior(game);
+		PossiblePairFinderEnum possiblePairFinder = possiblePairFinderPool.obtain();
+		try {
+			possiblePairFinder.reset(caster);
+			game.getWorldCollision().enumUnitsInRect(
+					recycleRect.set(caster.getX() - this.area, caster.getY() - this.area, this.area * 2, this.area * 2),
+					possiblePairFinder);
+			final CUnit coupleTarget = possiblePairFinder.pairMatchFound;
+			if (coupleTarget == null) {
+				game.getCommandErrorListener().showInterfaceError(caster.getPlayerIndex(), CommandStringErrorKeys.UNABLE_TO_FIND_COUPLE_TARGET);
+				return caster.pollNextOrderBehavior(game);
+			}
+			coupleTarget.order(game, new COrderTargetWidget(possiblePairFinder.pairMatchAbility.getHandleId(),
+					possiblePairFinder.pairMatchAbility.getBaseOrderId(), caster.getHandleId(), false), false);
+			return this.behaviorCoupleInstant.reset(game, coupleTarget);
+		} finally {
+			possiblePairFinder.clear();
+			possiblePairFinderPool.free(possiblePairFinder);
 		}
-		coupleTarget.order(game, new COrderTargetWidget(possiblePairFinder.pairMatchAbility.getHandleId(),
-				possiblePairFinder.pairMatchAbility.getBaseOrderId(), caster.getHandleId(), false), false);
-		return this.behaviorCoupleInstant.reset(game, coupleTarget);
 	}
 
 	@Override
@@ -169,12 +184,21 @@ public class CAbilityCoupleInstant extends AbstractGenericSingleIconNoSmartActiv
 	}
 
 	private final class PossiblePairFinderEnum implements CUnitEnumFunction {
-		private final CUnit unit;
+		private CUnit unit;
 		private CUnit pairMatchFound = null;
 		private CAbilityCoupleInstant pairMatchAbility;
 
-		private PossiblePairFinderEnum(final CUnit unit) {
+		public PossiblePairFinderEnum reset(final CUnit unit) {
 			this.unit = unit;
+			this.pairMatchFound = null;
+			this.pairMatchAbility = null;
+			return this;
+		}
+
+		public void clear() {
+			this.unit = null;
+			this.pairMatchFound = null;
+			this.pairMatchAbility = null;
 		}
 
 		@Override

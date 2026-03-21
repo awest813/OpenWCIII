@@ -359,6 +359,49 @@ public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderG
 		return false;
 	}
 
+	// ⚡ Bolt Optimization: Cache enum function to prevent per-cast garbage collection overhead
+	private final com.badlogic.gdx.utils.Pool<FindPairEnum> findPairEnumPool = new com.badlogic.gdx.utils.Pool<FindPairEnum>() {
+		@Override
+		protected FindPairEnum newObject() {
+			return new FindPairEnum();
+		}
+	};
+
+	private final class FindPairEnum implements CUnitEnumFunction {
+		private CSimulation game;
+		private CUnit caster;
+		private float rangeVal;
+		private UnitAndRange ur;
+
+		public FindPairEnum reset(CSimulation game, CUnit caster, float rangeVal, UnitAndRange ur) {
+			this.game = game;
+			this.caster = caster;
+			this.rangeVal = rangeVal;
+			this.ur = ur;
+			return this;
+		}
+
+		public void clear() {
+			this.game = null;
+			this.caster = null;
+			this.ur = null;
+		}
+
+		@Override
+		public boolean call(final CUnit enumUnit) {
+			if (caster.canReach(enumUnit, rangeVal)) {
+				double dist = caster.distance(enumUnit);
+				if (ur.getUnit() == null || ur.getRange() > dist) {
+					if ((enumUnit != caster) && canPairWith(game, caster, enumUnit)) {
+						ur.setRange(dist);
+						ur.setUnit(enumUnit);
+					}
+				}
+			}
+			return false;
+		}
+	}
+
 	@Override
 	public Set<CUnit> findPairUnits(CSimulation game, CUnit caster) {
 		if (this.getPairAbilityCode(game, caster) != null || this.getPairUnitID(game, caster) != null) {
@@ -377,21 +420,16 @@ public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderG
 				float rangeVal = this.getPairSearchRadius(game, caster);
 
 				rect.set(caster.getX() - rangeVal, caster.getY() - rangeVal, rangeVal * 2, rangeVal * 2);
-				game.getWorldCollision().enumUnitsInRect(rect, new CUnitEnumFunction() {
-					@Override
-					public boolean call(final CUnit enumUnit) {
-						if (caster.canReach(enumUnit, rangeVal)) {
-							double dist = caster.distance(enumUnit);
-							if (ur.getUnit() == null || ur.getRange() > dist) {
-								if ((enumUnit != caster) && canPairWith(game, caster, enumUnit)) {
-									ur.setRange(dist);
-									ur.setUnit(enumUnit);
-								}
-							}
-						}
-						return false;
-					}
-				});
+
+				FindPairEnum enumFunction = findPairEnumPool.obtain();
+				try {
+					game.getWorldCollision().enumUnitsInRect(rect,
+							enumFunction.reset(game, caster, rangeVal, ur));
+				} finally {
+					enumFunction.clear();
+					findPairEnumPool.free(enumFunction);
+				}
+
 				if (ur.getUnit() != null) {
 					retSet.add(ur.getUnit());
 				}

@@ -26,6 +26,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetCheckReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringErrorKeys;
+import com.badlogic.gdx.utils.Pool;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringErrorKeysEnum;
 
 public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderGenericActive
@@ -46,6 +47,24 @@ public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderG
 
 	private int internalOffOrderId = -1;
 	private int orderPairedUnitOffOrderId = -1;
+
+	private static final Rectangle recycleRect = new Rectangle();
+
+	// ⚡ Bolt Optimization: Use an object pool for the CUnitEnumFunction to prevent allocating an anonymous class
+	// on every tick during spatial queries, while avoiding re-entrancy bugs. This reduces GC pressure safely.
+	private final Pool<PairUnitsEnum> pairUnitsEnumPool = new Pool<PairUnitsEnum>() {
+		@Override
+		protected PairUnitsEnum newObject() {
+			return new PairUnitsEnum();
+		}
+	};
+
+	private final Pool<MaxPartnersEnum> maxPartnersEnumPool = new Pool<MaxPartnersEnum>() {
+		@Override
+		protected MaxPartnersEnum newObject() {
+			return new MaxPartnersEnum();
+		}
+	};
 
 	public CAbilityAbilityBuilderActivePairing(int handleId, War3ID code, War3ID alias,
 			List<CAbilityTypeAbilityBuilderLevelData> levelData, AbilityBuilderConfiguration config,
@@ -364,34 +383,26 @@ public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderG
 		if (this.getPairAbilityCode(game, caster) != null || this.getPairUnitID(game, caster) != null) {
 			final Set<CUnit> retSet = new HashSet<>();
 			if (this.maxPartners(game, caster) != 1) {
-				game.getWorldCollision().enumUnitsInRange(caster.getX(), caster.getY(),
-						this.getPairSearchRadius(game, caster), (enumUnit) -> {
-							if ((enumUnit != caster) && canPairWith(game, caster, enumUnit)) {
-								retSet.add(enumUnit);
-							}
-							return maxPartners(game, caster) != 0 && retSet.size() >= maxPartners(game, caster);
-						});
+				MaxPartnersEnum maxPartnersEnum = this.maxPartnersEnumPool.obtain();
+				try {
+					game.getWorldCollision().enumUnitsInRange(caster.getX(), caster.getY(),
+							this.getPairSearchRadius(game, caster), maxPartnersEnum.reset(game, caster, retSet));
+				} finally {
+					maxPartnersEnum.clear();
+					this.maxPartnersEnumPool.free(maxPartnersEnum);
+				}
 			} else {
 				final UnitAndRange ur = new UnitAndRange();
-				Rectangle rect = new Rectangle();
 				float rangeVal = this.getPairSearchRadius(game, caster);
 
-				rect.set(caster.getX() - rangeVal, caster.getY() - rangeVal, rangeVal * 2, rangeVal * 2);
-				game.getWorldCollision().enumUnitsInRect(rect, new CUnitEnumFunction() {
-					@Override
-					public boolean call(final CUnit enumUnit) {
-						if (caster.canReach(enumUnit, rangeVal)) {
-							double dist = caster.distance(enumUnit);
-							if (ur.getUnit() == null || ur.getRange() > dist) {
-								if ((enumUnit != caster) && canPairWith(game, caster, enumUnit)) {
-									ur.setRange(dist);
-									ur.setUnit(enumUnit);
-								}
-							}
-						}
-						return false;
-					}
-				});
+				recycleRect.set(caster.getX() - rangeVal, caster.getY() - rangeVal, rangeVal * 2, rangeVal * 2);
+				PairUnitsEnum pairUnitsEnum = this.pairUnitsEnumPool.obtain();
+				try {
+					game.getWorldCollision().enumUnitsInRect(recycleRect, pairUnitsEnum.reset(game, caster, rangeVal, ur));
+				} finally {
+					pairUnitsEnum.clear();
+					this.pairUnitsEnumPool.free(pairUnitsEnum);
+				}
 				if (ur.getUnit() != null) {
 					retSet.add(ur.getUnit());
 				}
@@ -401,6 +412,68 @@ public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderG
 			}
 		}
 		return null;
+	}
+
+	private final class MaxPartnersEnum implements CUnitEnumFunction {
+		private CSimulation game;
+		private CUnit caster;
+		private Set<CUnit> retSet;
+
+		public MaxPartnersEnum reset(final CSimulation game, final CUnit caster, final Set<CUnit> retSet) {
+			this.game = game;
+			this.caster = caster;
+			this.retSet = retSet;
+			return this;
+		}
+
+		public void clear() {
+			this.game = null;
+			this.caster = null;
+			this.retSet = null;
+		}
+
+		@Override
+		public boolean call(final CUnit enumUnit) {
+			if ((enumUnit != caster) && canPairWith(this.game, this.caster, enumUnit)) {
+				this.retSet.add(enumUnit);
+			}
+			return maxPartners(this.game, this.caster) != 0 && this.retSet.size() >= maxPartners(this.game, this.caster);
+		}
+	}
+
+	private final class PairUnitsEnum implements CUnitEnumFunction {
+		private CSimulation game;
+		private CUnit caster;
+		private float rangeVal;
+		private UnitAndRange ur;
+
+		public PairUnitsEnum reset(final CSimulation game, final CUnit caster, final float rangeVal, final UnitAndRange ur) {
+			this.game = game;
+			this.caster = caster;
+			this.rangeVal = rangeVal;
+			this.ur = ur;
+			return this;
+		}
+
+		public void clear() {
+			this.game = null;
+			this.caster = null;
+			this.ur = null;
+		}
+
+		@Override
+		public boolean call(final CUnit enumUnit) {
+			if (this.caster.canReach(enumUnit, this.rangeVal)) {
+				double dist = this.caster.distance(enumUnit);
+				if (this.ur.getUnit() == null || this.ur.getRange() > dist) {
+					if ((enumUnit != this.caster) && canPairWith(this.game, this.caster, enumUnit)) {
+						this.ur.setRange(dist);
+						this.ur.setUnit(enumUnit);
+					}
+				}
+			}
+			return false;
+		}
 	}
 
 	// Methods to identify partner unit(s)

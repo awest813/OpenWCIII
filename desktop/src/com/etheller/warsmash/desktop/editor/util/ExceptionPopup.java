@@ -17,6 +17,7 @@ public class ExceptionPopup {
 		final JTextPane pane = new JTextPane();
 		pane.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
 		pane.setEditable(false);
+		pane.getAccessibleContext().setAccessibleName("Error details stack trace");
 		final OutputStream stream = new OutputStream() {
 			public void updateStreamWith(final String s) {
 				final Document doc = pane.getDocument();
@@ -58,6 +59,7 @@ public class ExceptionPopup {
 		final JTextPane pane = new JTextPane();
 		pane.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
 		pane.setEditable(false);
+		pane.getAccessibleContext().setAccessibleName("Error details stack trace");
 		final OutputStream stream = new OutputStream() {
 			public void updateStreamWith(final String s) {
 				final Document doc = pane.getDocument();

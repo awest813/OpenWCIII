@@ -101,7 +101,7 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		this.speedSlider.getAccessibleContext().setAccessibleName("Animation Playback Speed");
 		this.speedSliderLabel = new JLabel("Speed: 100%");
 		this.speedSliderLabel.setLabelFor(this.speedSlider);
-		this.speedSliderLabel.setDisplayedMnemonic(KeyEvent.VK_S);
+		this.speedSliderLabel.setDisplayedMnemonic(KeyEvent.VK_E);
 		this.speedSlider.addChangeListener(new ChangeListener() {
 			@Override
 			public void stateChanged(final ChangeEvent e) {

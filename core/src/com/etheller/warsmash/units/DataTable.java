@@ -56,8 +56,8 @@ public class DataTable implements ObjectData {
 	}
 
 	public void readTXT(final File f, final boolean canProduce) {
-		try {
-			readTXT(new FileInputStream(f), canProduce);
+		try (FileInputStream fis = new FileInputStream(f)) {
+			readTXT(fis, canProduce);
 		}
 		catch (final IOException e) {
 			throw new RuntimeException(e);
@@ -65,8 +65,8 @@ public class DataTable implements ObjectData {
 	}
 
 	public void readSLK(final File f) {
-		try {
-			readSLK(new FileInputStream(f));
+		try (FileInputStream fis = new FileInputStream(f)) {
+			readSLK(fis);
 		}
 		catch (final IOException e) {
 			throw new RuntimeException(e);
@@ -136,10 +136,11 @@ public class DataTable implements ObjectData {
 					wasSlash = isSlash;
 				}
 				if (builder.length() > 0) {
-					if (currentUnit == null) {
-						System.out.println("null for " + input);
-					}
 					values.add(builder.toString().trim());
+				}
+				if (currentUnit == null) {
+					System.err.println("DataTable: field before any section header, skipping: " + input);
+					continue;
 				}
 				currentUnit.setField(fieldName, values);
 			}
@@ -308,6 +309,10 @@ public class DataTable implements ObjectData {
 				if (dataNames[fieldId - 1] != null) {
 					if ((fieldValue.length() > 1) && fieldValue.startsWith("\"") && fieldValue.endsWith("\"")) {
 						fieldValue = fieldValue.substring(1, fieldValue.length() - 1);
+					}
+					if (currentUnit == null) {
+						System.err.println("DataTable: SLK data cell before any unit row, skipping: " + kInput);
+						continue;
 					}
 					final int indexOfComma = fieldValue.indexOf(",");
 					if (indexOfComma != -1) {

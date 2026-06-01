@@ -2,7 +2,7 @@ package com.etheller.warsmash.units;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -93,6 +93,6 @@ class StringKeyTest {
 
 	@Test
 	void getStringNullRoundTrip() {
-		assertEquals(null, new StringKey(null).getString());
+		assertNull(new StringKey(null).getString());
 	}
 }

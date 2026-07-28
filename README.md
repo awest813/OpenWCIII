@@ -109,6 +109,9 @@ Modernization progress is tracked in:
 Phase D hardening is now complete. The next major focus is Phase E:
 JASS/Lua coverage, broader map-format compatibility, and multiplayer hardening.
 
+For a concrete checklist of what remains before RoC/TFT campaigns match
+retail WC3, see [`docs/WC3_CAMPAIGN_PARITY_AUDIT.md`](docs/WC3_CAMPAIGN_PARITY_AUDIT.md).
+
 ---
 
 ## Before you Begin: INI File

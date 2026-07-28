@@ -323,7 +323,7 @@ All planned Phase D items are now complete.
 | Lua/JASS 2 support | Foundation for map scripts targeting post-1.31 Lua APIs |
 | Map format to 1.32.10 | Reliable loading of all map chunks on supported patches |
 | Multiplayer hardening | Authoritative server, deterministic simulation, lag compensation |
-| Campaign support | Chain map loading, persistent hero carry-over, campaign screen UI |
+| Campaign support | Chain map loading, persistent hero carry-over, campaign screen UI — see detailed gap list in [`docs/WC3_CAMPAIGN_PARITY_AUDIT.md`](WC3_CAMPAIGN_PARITY_AUDIT.md) |
 
 ---
 

@@ -197,6 +197,12 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 						WarsmashGdxMapScreen.this.screenManager.setScreen(WarsmashGdxMapScreen.this.menuScreen);
 					}
 				});
+		baseMeleeUI.setChangeLevelHandler((newLevel, doScoreScreen) -> {
+			// Score screen (when requested) is handled inside MeleeUI before this runs.
+			WarsmashGdxMapScreen.this.menuScreen.setPendingChangeLevel(newLevel);
+			WarsmashGdxMapScreen.this.menuScreen.onReturnFromGame();
+			WarsmashGdxMapScreen.this.screenManager.setScreen(WarsmashGdxMapScreen.this.menuScreen);
+		});
 		final MeleeToggleUI toggleUI = new MeleeToggleUI(baseMeleeUI, Arrays.asList(baseMeleeUI));
 		this.meleeUI = toggleUI;
 		this.viewer.getCommandErrorListener().setDelegate(this.meleeUI);

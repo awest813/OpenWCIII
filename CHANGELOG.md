@@ -24,6 +24,100 @@ Changes are grouped by category:
   Warcraft III** first, with **quality-of-life** upgrades on top
   ([docs/MISSION.md](docs/MISSION.md)).
 
+## Campaign Parity P0 Spine (2026-07-28)
+
+### fix
+- **`DialogAddButton`**: returns the created `button` handle so scripts can
+  register `TriggerRegisterDialogButtonEvent`.
+- **Selection natives**: `SelectUnit`, `ClearSelection`, `SelectGroup`, and
+  `GroupEnumUnitsSelected` now drive local `MeleeUI` selection (including
+  selection circles via `War3MapViewer.doSelectUnit`).
+- **`ChangeLevel`**: implemented; unloads the current map and starts the next
+  via `MenuUI` pending-change-level path; honors `doScoreScreen` Continue dialog.
+- **Campaign chrome restore**: `MenuUI.onReturnFromGame()` re-shows mission
+  select UI after leaving a mission (was commented out).
+- **Hero carry-over**: `StoreUnit`/`RestoreUnit` now snapshot and restore
+  learned hero abilities plus proper name; gamecache disk format bumped to v2
+  (v1 files still load).
+- **Campaign availability natives**: `SetMissionAvailable` /
+  `GetMissionAvailable`, `SetCampaignAvailable`, cinematic availability,
+  `SetTutorialCleared`, `ForceCampaignSelectScreen`,
+  `CustomCampaignButtonSetVisible`, and campaign menu race natives backed by
+  `CampaignProgressStore`.
+- **`PlayCinematic` MVP**: fullscreen cinematic overlay + 5s JASS thread sleep
+  (ESC skip via `CinematicSkipButton`); `PlayModelCinematic` / intro-shot
+  natives stubbed so scripts bind.
+- **`PauseGame`**: freezes unit/combat simulation while still advancing timers
+  and JASS/AI threads (so cinematic sleeps keep working).
+- **`EndGame`**: exits via the existing custom-victory menu path.
+- **Campaign AI bootstrap**: `StartCampaignAI` / `StartMeleeAI` load
+  `common.ai` + race script into `JassAIEnvironment` with working
+  `StartThread`/`Sleep`/`GetAiPlayer`; AI scopes ticked from `CSimulation`.
+- **Quest dialog**: quests button enabled; `CreateQuest` registers into a
+  simple in-game quest log panel; flash/force-update natives wired.
+- **Score screen MVP**: `CustomVictory`/`CustomDefeat`/`EndGame` with
+  `enableScoreScreen=true` show a Continue dialog before exiting.
+- **Multiboard overlay**: displayed boards render as a top-right text table;
+  bulk `MultiboardSetItems*` and `MultiboardClear` implemented.
+- **Leaderboard natives + overlay**: Create/Display/AddItem/etc. with a
+  top-left text overlay.
+- **Campaign menu gating**: mission/campaign buttons honor
+  `CampaignProgressStore` and refresh on return from a mission.
+- **`PolledWait`**, **`SaveGameExists`**, **`SetUnitPathing`**,
+  **`CachePlayerHeroData`** implemented.
+- **Transmission VO**: `TransmissionFrom*` plays `soundLabel` via UISounds;
+  `ClearTransmissionQueue` / `EnableTransmission` wired.
+- **Cine-filter MVP**: `SetCineFilter*` / `DisplayCineFilter` /
+  `IsCineFilterDisplayed` drive a fullscreen tint overlay with color/UV lerp.
+- **Volume groups**: `VolumeGroupSetVolume` / `VolumeGroupReset` (MUSIC applies
+  to the music player).
+- **Hero script natives**: `SetHeroProperName` / `BlzSetHeroProperName`,
+  `UnitModifySkillPoints`, `UnitStripHeroLevel`, `DecUnitAbilityLevel`,
+  `SetReservedLocalHeroButtons`; non-permanent `SetHeroStr`/`Agi`/`Int`.
+- **AI unit counts + captain home**: `GetUnitCount` / `GetEnemyUnitCount` /
+  `GetPlayerUnitTypeCount`; `SetCaptainHome` / `CaptainGoHome` /
+  `CaptainAttack` / `GetCaptainX/Y` / `CaptainIsHome`.
+- **Dialog hotkeys**: `DialogAddButton` hotkeys invoke the button from
+  keyboard while the dialog is visible.
+- **Save ops**: `CopySaveGame`, `RemoveSaveDirectory`, `RenameSaveDirectory`,
+  `GetSaveBasicFilename`, `ReloadGame` (reloads last save globals).
+- **`ClearMapMusic`**, camera **`StopCamera`** / noise natives, **`SetBlight`**,
+  **`SetCinematicCamera`** baseline, **`CreateImage`/`ShowImage`/`SetImagePosition`**
+  MVP, **`HaveStoredMission`**, basic **`Cheat`** strings.
+- **Trackables**: `CreateTrackable` + hit/track events with mouse proximity.
+- **Ubersplats**: `CreateUbersplat` / show / destroy MVP via terrain splat.
+- **DefeatCondition** real type + quest-log listing.
+- **`UnitAddAbility` soft-fail**: unknown rawcodes attach `CAbilityGenericDoNothing`
+  instead of returning FALSE and aborting campaign scripts.
+- **`ChangeLevel` score screen**: `doScoreScreen=true` shows Continue before
+  chaining the next map.
+- **`isDefaultOpen` gating**: campaign menu seeds availability from DefaultOpen
+  (non-default campaigns stay locked until unlocked).
+- **Named transmission anims**: `TransmissionFrom*WithNamedAnimation` selects
+  portrait sequence by name.
+- **`SetCinematicAudio`**: ducks MUSIC/AMBIENT while active.
+- **`UnitShareVision`**: shares unit sight via fog modifiers.
+- **AI assault MVP**: `AddAssault`/`AddDefenders` roster, `CaptainIsEmpty`/
+  `CaptainGroupSize`, `CaptainAttack`/`CaptainGoHome` issue orders,
+  `SuicidePlayer*` attack-moves combat units.
+- **Chat events**: `TriggerRegisterPlayerChatEvent` registers+fires; Enter/chat
+  button prompts; `GetEventPlayerChatString*` populated.
+- **Terrain queries**: `IsTerrainPathable`, `GetTerrainType`,
+  `GetTerrainVariance`; null-safe `GetTerrainCliffLevel`.
+- **`PingMinimap` / `PingMinimapEx`**: timed colored minimap pings.
+- **`EnableUserUI`**: maps to `enableUserControl` + `showInterface`.
+- **Cleanup**: removed duplicate void `Store*` and early `SetSoundParamsFromLabel`
+  registrations.
+- **TimerDialog** title/time color + speed multiplier.
+- **EnableSelect** / **EnableDragSelect** / **EnablePreSelect**, **ForceUIKey** /
+  **ForceUICancel**.
+- **Esc-menu Save/Load** QuickSave MVP; **SyncStored*** SP no-ops.
+
+### test
+- Extended `CGameCacheTest` for ability persistence.
+- Added `CampaignProgressStoreTest`.
+- Added `CPlayerEventChatMatchTest`.
+
 ---
 
 ## Campaign Reliability Pass (2026-03-07)

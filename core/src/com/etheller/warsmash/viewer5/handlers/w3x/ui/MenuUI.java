@@ -93,10 +93,12 @@ import com.etheller.warsmash.viewer5.handlers.w3x.ui.mapsetup.PlayerSlotPaneList
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.mapsetup.TeamSetupPane;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.BattleNetUI;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.BattleNetUIActionListener;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignButtonUI;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMenuData;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMenuUI;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMission;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.sound.KeyedSounds;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore;
 
 import net.warsmash.map.NetMapDownloader;
 import net.warsmash.uberserver.AccountCreationFailureReason;
@@ -201,6 +203,8 @@ public class MenuUI {
 	private CampaignMenuData currentCampaign;
 	private String[] campaignList;
 	private CampaignMenuData[] campaignDatas;
+	/** When set, {@link #onReturnFromGame()} loads this map instead of restoring menu chrome. */
+	private String pendingChangeLevel;
 
 	// BattleNet
 	private BattleNetUI battleNetUI;
@@ -214,6 +218,10 @@ public class MenuUI {
 	private UIFrame confirmDialog;
 	private CampaignMenuUI campaignRootMenuUI;
 	private CampaignMenuUI currentMissionSelectMenuUI;
+	/** Parallel to campaignDatas: mission-select UIs for availability refresh. */
+	private CampaignMenuUI[] campaignMissionSelectUIs;
+	/** Parallel to campaignDatas: root campaign buttons. */
+	private CampaignButtonUI[] campaignRootButtons;
 	private UIFrame loadingFrame;
 	private UIFrame loadingCustomPanel;
 	private UIFrame loadingMeleePanel;
@@ -1300,8 +1308,15 @@ public class MenuUI {
 
 				}
 			}
-			for (final CampaignMenuData campaign : this.campaignDatas) {
+			this.campaignMissionSelectUIs = new CampaignMenuUI[this.campaignDatas.length];
+			this.campaignRootButtons = new CampaignButtonUI[this.campaignDatas.length];
+			for (int cIdx = 0; cIdx < this.campaignDatas.length; cIdx++) {
+				final CampaignMenuData campaign = this.campaignDatas[cIdx];
+				final int campaignIdx = cIdx;
 				if (campaign != null) {
+					// Seed availability from DefaultOpen so non-default campaigns stay locked
+					// until SetCampaignAvailable / progress natives unlock them.
+					CampaignProgressStore.get().setCampaignAvailable(campaignIdx, campaign.isDefaultOpen());
 					final CampaignMenuUI missionSelectMenuUI = new CampaignMenuUI(null, this.campaignMenu,
 							this.rootFrame, this.uiViewport);
 					missionSelectMenuUI.setVisible(false);
@@ -1311,11 +1326,18 @@ public class MenuUI {
 					missionSelectMenuUI.setWidth(GameUI.convertX(this.uiViewport, 0.30f));
 					missionSelectMenuUI.setHeight(GameUI.convertY(this.uiViewport, 0.42f));
 					this.rootFrame.add(missionSelectMenuUI);
+					this.campaignMissionSelectUIs[campaignIdx] = missionSelectMenuUI;
 
+					int missionIndex = 0;
 					for (final CampaignMission mission : campaign.getMissions()) {
-						missionSelectMenuUI.addButton(mission.getHeader(), mission.getMissionName(), new Runnable() {
+						final int missionIdx = missionIndex;
+						final CampaignButtonUI missionButton = missionSelectMenuUI.addButtonReturning(
+								mission.getHeader(), mission.getMissionName(), new Runnable() {
 							@Override
 							public void run() {
+								if (!CampaignProgressStore.get().isMissionAvailable(campaignIdx, missionIdx)) {
+									return;
+								}
 								if (!tryLoadAndCacheMapConfigs(mission.getMapFilename())) {
 									return;
 								}
@@ -1344,11 +1366,18 @@ public class MenuUI {
 								MenuUI.this.beginGameInformation.localPlayerIndex = localPlayerIndex;
 							}
 						});
+						missionButton.setEnabled(
+								CampaignProgressStore.get().isMissionAvailable(campaignIdx, missionIdx));
+						missionIndex++;
 					}
 
-					this.campaignRootMenuUI.addButton(campaign.getHeader(), campaign.getName(), new Runnable() {
+					final CampaignButtonUI campaignButton = this.campaignRootMenuUI.addButtonReturning(
+							campaign.getHeader(), campaign.getName(), new Runnable() {
 						@Override
 						public void run() {
+							if (!CampaignProgressStore.get().isCampaignAvailable(campaignIdx)) {
+								return;
+							}
 							if (campaign != MenuUI.this.currentCampaign) {
 								MenuUI.this.campaignMenu.setVisible(false);
 								MenuUI.this.campaignBackButton.setVisible(false);
@@ -1372,11 +1401,14 @@ public class MenuUI {
 							MenuUI.this.rootFrame.setDecoratedText(missionNameHeader, campaign.getHeader());
 						}
 					});
+					this.campaignRootButtons[campaignIdx] = campaignButton;
+					campaignButton.setEnabled(CampaignProgressStore.get().isCampaignAvailable(campaignIdx));
 					if (campaign == MenuUI.this.currentCampaign) {
 						MenuUI.this.currentMissionSelectMenuUI = missionSelectMenuUI;
 					}
 				}
 			}
+			refreshCampaignAvailability();
 		}
 		else {
 			this.campaignButton.setEnabled(false);
@@ -2504,13 +2536,13 @@ public class MenuUI {
 	}
 
 	public void onReturnFromGame() {
-//		MenuUI.this.campaignMenu.setVisible(true);
-//		MenuUI.this.campaignBackButton.setVisible(true);
-//		MenuUI.this.missionSelectFrame.setVisible(true);
-//		MenuUI.this.campaignSelectFrame.setVisible(false);
-//		MenuUI.this.campaignWarcraftIIILogo.setVisible(true);
-//		MenuUI.this.campaignRootMenuUI.setVisible(false);
-//		MenuUI.this.currentMissionSelectMenuUI.setVisible(true);
+		if (this.pendingChangeLevel != null) {
+			final String nextMap = this.pendingChangeLevel;
+			this.pendingChangeLevel = null;
+			startMap(nextMap);
+			return;
+		}
+		refreshCampaignAvailability();
 		switch (this.menuState) {
 		default:
 		case GOING_TO_MAIN_MENU:
@@ -2523,16 +2555,37 @@ public class MenuUI {
 			break;
 		case CAMPAIGN:
 		case MISSION_SELECT:
-			final String currentCampaignBackgroundModel = getCurrentBackgroundModel();
-			final String currentCampaignAmbientSound = this.rootFrame
-					.trySkinField(this.currentCampaign.getAmbientSound());
-			this.menuScreen.setModel(currentCampaignBackgroundModel, this.currentCampaign.getBackgroundFogSettings());
-			this.glueScreenLoop.stop();
-			this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-			this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
-			final DataTable skinData = this.rootFrame.getSkinData();
-			final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
-			this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
+		case GOING_TO_CAMPAIGN:
+		case GOING_TO_CAMPAIGN_PART2:
+		case GOING_TO_MISSION_SELECT:
+		case GOING_TO_MAP:
+			if (this.currentCampaign != null) {
+				final String currentCampaignBackgroundModel = getCurrentBackgroundModel();
+				final String currentCampaignAmbientSound = this.rootFrame
+						.trySkinField(this.currentCampaign.getAmbientSound());
+				this.menuScreen.setModel(currentCampaignBackgroundModel, this.currentCampaign.getBackgroundFogSettings());
+				this.glueScreenLoop.stop();
+				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
+				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				final DataTable skinData = this.rootFrame.getSkinData();
+				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
+				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
+			}
+			// Restore campaign mission-select chrome after leaving a mission
+			this.campaignMenu.setVisible(true);
+			this.campaignBackButton.setVisible(true);
+			this.missionSelectFrame.setVisible(true);
+			this.campaignSelectFrame.setVisible(false);
+			this.campaignWarcraftIIILogo.setVisible(true);
+			this.campaignRootMenuUI.setVisible(false);
+			if (this.currentMissionSelectMenuUI != null) {
+				this.currentMissionSelectMenuUI.setVisible(true);
+			}
+			if (this.campaignFade != null) {
+				this.campaignFade.setVisible(true);
+				this.campaignFade.setSequence("Death");
+			}
+			this.menuState = MenuState.MISSION_SELECT;
 			break;
 		case BATTLE_NET_CUSTOM_GAME_LOBBY: {
 			this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"), this.menuFogSettings);
@@ -2542,9 +2595,35 @@ public class MenuUI {
 			break;
 		}
 		}
-//		MenuUI.this.campaignFade.setSequence("Death");
-//		this.campaignFade.setVisible(true);
-//		this.menuState = MenuState.MISSION_SELECT;
+	}
+
+	public void setPendingChangeLevel(final String mapPath) {
+		this.pendingChangeLevel = mapPath;
+	}
+
+	private void refreshCampaignAvailability() {
+		if ((this.campaignDatas == null) || (this.campaignMissionSelectUIs == null)) {
+			return;
+		}
+		final CampaignProgressStore store = CampaignProgressStore.get();
+		for (int campaignIdx = 0; campaignIdx < this.campaignDatas.length; campaignIdx++) {
+			final CampaignMenuData campaign = this.campaignDatas[campaignIdx];
+			if (campaign == null) {
+				continue;
+			}
+			if ((this.campaignRootButtons != null) && (this.campaignRootButtons[campaignIdx] != null)) {
+				this.campaignRootButtons[campaignIdx].setEnabled(store.isCampaignAvailable(campaignIdx));
+			}
+			final CampaignMenuUI missionUI = this.campaignMissionSelectUIs[campaignIdx];
+			if (missionUI == null) {
+				continue;
+			}
+			final List<CampaignButtonUI> buttons = missionUI.getButtonUIs();
+			final List<CampaignMission> missions = campaign.getMissions();
+			for (int missionIdx = 0; (missionIdx < buttons.size()) && (missionIdx < missions.size()); missionIdx++) {
+				buttons.get(missionIdx).setEnabled(store.isMissionAvailable(campaignIdx, missionIdx));
+			}
+		}
 	}
 
 	private String getRaceNameByCursorID(final int cursorId) {

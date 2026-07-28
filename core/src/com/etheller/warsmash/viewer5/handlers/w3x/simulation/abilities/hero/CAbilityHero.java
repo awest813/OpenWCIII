@@ -244,6 +244,10 @@ public class CAbilityHero extends AbstractCAbility {
 		return this.properName;
 	}
 
+	public void setProperName(final String properName) {
+		this.properName = properName != null ? properName : WarsmashConstants.DEFAULT_STRING;
+	}
+
 	public void setAwaitingRevive(final boolean awaitingRevive) {
 		this.awaitingRevive = awaitingRevive;
 	}
@@ -304,16 +308,48 @@ public class CAbilityHero extends AbstractCAbility {
 	public void setHeroLevel(final CSimulation simulation, final CUnit unit, final int level,
 			final boolean showEffect) {
 		final CGameplayConstants gameplayConstants = simulation.getGameplayConstants();
-		final int neededTotalXp = gameplayConstants.getNeedHeroXPSum(level - 1);
+		final int clampedLevel = Math.max(1, Math.min(level, gameplayConstants.getMaxHeroLevel()));
+		final int neededTotalXp = gameplayConstants.getNeedHeroXPSum(clampedLevel - 1);
 		if (this.xp < neededTotalXp) {
 			addXp(simulation, unit,
 					(int) Math.ceil(
 							(neededTotalXp - this.xp) / simulation.getPlayer(unit.getPlayerIndex()).getHandicapXP()),
 					showEffect);
 		}
-		else {
-			// remove xp TODO
+		else if (clampedLevel < this.heroLevel) {
+			stripHeroLevel(simulation, unit, this.heroLevel - clampedLevel);
 		}
+	}
+
+	/**
+	 * Reduces hero level by {@code howManyLevels} (floors at 1). Negative values
+	 * strip down to level 1. Skill points decrease by levels stripped (min 0).
+	 * Ability unlearning is not yet mirrored.
+	 */
+	public boolean stripHeroLevel(final CSimulation simulation, final CUnit unit, final int howManyLevels) {
+		if (this.heroLevel <= 1) {
+			return false;
+		}
+		final int targetLevel;
+		if (howManyLevels < 0) {
+			targetLevel = 1;
+		}
+		else if (howManyLevels == 0) {
+			return false;
+		}
+		else {
+			targetLevel = Math.max(1, this.heroLevel - howManyLevels);
+		}
+		if (targetLevel >= this.heroLevel) {
+			return false;
+		}
+		final int levelsStripped = this.heroLevel - targetLevel;
+		this.heroLevel = targetLevel;
+		this.xp = simulation.getGameplayConstants().getNeedHeroXPSum(targetLevel - 1);
+		this.skillPoints = Math.max(0, this.skillPoints - levelsStripped);
+		calculateDerivatedFields(simulation, unit);
+		unit.internalPublishHeroStatsChanged();
+		return true;
 	}
 
 	public void setStrengthBase(final CSimulation game, final CUnit unit, final int strengthBase) {
@@ -328,6 +364,36 @@ public class CAbilityHero extends AbstractCAbility {
 
 	public void setIntelligenceBase(final CSimulation game, final CUnit unit, final int intelligenceBase) {
 		this.intelligence.setBase(intelligenceBase);
+		calculateDerivatedFields(game, unit);
+	}
+
+	/**
+	 * Sets non-permanent (bonus) strength so the hero's current strength equals
+	 * {@code strength}.
+	 */
+	public void setStrengthCurrent(final CSimulation game, final CUnit unit, final int strength) {
+		this.strength.calculate(this.heroLevel);
+		this.strength.setBonus(strength - this.strength.getCurrentBase());
+		calculateDerivatedFields(game, unit);
+	}
+
+	/**
+	 * Sets non-permanent (bonus) agility so the hero's current agility equals
+	 * {@code agility}.
+	 */
+	public void setAgilityCurrent(final CSimulation game, final CUnit unit, final int agility) {
+		this.agility.calculate(this.heroLevel);
+		this.agility.setBonus(agility - this.agility.getCurrentBase());
+		calculateDerivatedFields(game, unit);
+	}
+
+	/**
+	 * Sets non-permanent (bonus) intelligence so the hero's current intelligence
+	 * equals {@code intelligence}.
+	 */
+	public void setIntelligenceCurrent(final CSimulation game, final CUnit unit, final int intelligence) {
+		this.intelligence.calculate(this.heroLevel);
+		this.intelligence.setBonus(intelligence - this.intelligence.getCurrentBase());
 		calculateDerivatedFields(game, unit);
 	}
 

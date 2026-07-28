@@ -127,11 +127,13 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	private final EnumMap<JassGameEventsWar3, List<CGlobalEvent>> eventTypeToEvents = new EnumMap<>(
 			JassGameEventsWar3.class);
 	private boolean timeOfDaySuspended;
+	private boolean gamePaused;
 	private Float nextGameTime = null;
 	private FalseTimeOfDay falseTimeOfDay = null;
 	private boolean daytime;
 	private final Set<CDestructable> ownedTreeSet = new HashSet<>();
 	private GlobalScope globalScope;
+	private final List<GlobalScope> aiGlobalScopes = new ArrayList<>();
 	private boolean fogMaskEnabled = true;
 	private boolean fogEnabled = true;
 	private final List<Runnable> postUpdateCallbacks = new ArrayList<>();
@@ -512,6 +514,27 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	}
 
 	public void update() {
+		if (this.gamePaused) {
+			this.gameTurnTick++;
+			for (final CTimer timer : this.addedTimers) {
+				internalRegisterTimer(timer);
+			}
+			this.addedTimers.clear();
+			for (final CTimer timer : this.removedTimers) {
+				internalUnregisterTimer(timer);
+			}
+			this.removedTimers.clear();
+			while (!this.activeTimers.isEmpty() && (this.activeTimers.peek().getEngineFireTick() <= this.gameTurnTick)) {
+				this.activeTimers.pop().fire(this);
+			}
+			if (this.globalScope != null) {
+				this.globalScope.runThreads();
+			}
+			for (final GlobalScope aiScope : this.aiGlobalScopes) {
+				aiScope.runThreads();
+			}
+			return;
+		}
 		final Iterator<CUnit> unitIterator = this.units.iterator();
 		while (unitIterator.hasNext()) {
 			final CUnit unit = unitIterator.next();
@@ -612,6 +635,9 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		this.removedOnTickTriggers.clear();
 
 		this.globalScope.runThreads();
+		for (final GlobalScope aiScope : this.aiGlobalScopes) {
+			aiScope.runThreads();
+		}
 
 		this.runningPostUpdateCallbacks.clear();
 		this.runningPostUpdateCallbacks.addAll(this.postUpdateCallbacks);
@@ -1147,6 +1173,24 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	public void setTimeOfDaySuspended(final boolean flag) {
 		this.timeOfDaySuspended = flag;
 
+	}
+
+	public void setGamePaused(final boolean gamePaused) {
+		this.gamePaused = gamePaused;
+	}
+
+	public boolean isGamePaused() {
+		return this.gamePaused;
+	}
+
+	public void addAiGlobalScope(final GlobalScope aiScope) {
+		if ((aiScope != null) && !this.aiGlobalScopes.contains(aiScope)) {
+			this.aiGlobalScopes.add(aiScope);
+		}
+	}
+
+	public void removeAiGlobalScope(final GlobalScope aiScope) {
+		this.aiGlobalScopes.remove(aiScope);
 	}
 
 	public boolean isDay() {

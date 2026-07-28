@@ -925,6 +925,10 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 		this.menuUI.startMap(finalFileToLoad);
 	}
 
+	public void setPendingChangeLevel(final String mapPath) {
+		this.menuUI.setPendingChangeLevel(mapPath);
+	}
+
 	public void onReturnFromGame() {
 		this.menuUI.onReturnFromGame();
 	}

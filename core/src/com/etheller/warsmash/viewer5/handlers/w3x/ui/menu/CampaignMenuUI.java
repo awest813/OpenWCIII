@@ -24,6 +24,10 @@ public class CampaignMenuUI extends SimpleFrame {
 	}
 
 	public void addButton(final String header, final String name, final Runnable onClick) {
+		addButtonReturning(header, name, onClick);
+	}
+
+	public CampaignButtonUI addButtonReturning(final String header, final String name, final Runnable onClick) {
 		final CampaignButtonUI campaignButtonUI = new CampaignButtonUI(null, this);
 		final TextButtonFrame campaignArrowButton = (TextButtonFrame) this.rootFrame
 				.createFrame("CampaignArrowButtonTemplate", campaignButtonUI, 0, 0);
@@ -48,7 +52,11 @@ public class CampaignMenuUI extends SimpleFrame {
 
 		add(campaignButtonUI);
 		this.buttonUIs.add(campaignButtonUI);
+		return campaignButtonUI;
+	}
 
+	public List<CampaignButtonUI> getButtonUIs() {
+		return this.buttonUIs;
 	}
 
 	@Override

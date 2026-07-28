@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.etheller.interpreter.ast.util.CHandle;
 import com.etheller.warsmash.util.War3ID;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.StoredUnitData.StoredAbilityData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.StoredUnitData.StoredItemData;
 
 /**
@@ -28,7 +29,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.StoredUnitData.Stor
  */
 public final class CGameCache implements CHandle {
 	private static final int FILE_MAGIC = 0x57335630; // "W3V0"
-	private static final int FILE_VERSION = 1;
+	/** v1: primitives + unit stats/items. v2: adds learned hero abilities. */
+	private static final int FILE_VERSION = 2;
 
 	private static final AtomicInteger HANDLE_ID_COUNTER = new AtomicInteger(0);
 
@@ -176,6 +178,24 @@ public final class CGameCache implements CHandle {
 	}
 
 	/**
+	 * Returns true if any value (of any type) is stored under {@code missionKey}.
+	 * Registered as {@code HaveStoredMission} for campaign scripts that probe
+	 * whether a mission bucket exists.
+	 */
+	public boolean haveStoredMission(final String missionKey) {
+		if (missionKey == null) {
+			return false;
+		}
+		return hasAny(this.integers, missionKey) || hasAny(this.reals, missionKey) || hasAny(this.booleans, missionKey)
+				|| hasAny(this.strings, missionKey) || hasAny(this.units, missionKey);
+	}
+
+	private static <V> boolean hasAny(final Map<String, Map<String, V>> outer, final String missionKey) {
+		final Map<String, V> mission = outer.get(missionKey);
+		return (mission != null) && !mission.isEmpty();
+	}
+
+	/**
 	 * Removes all values across all mission keys and types.
 	 */
 	public void flushAll() {
@@ -311,6 +331,14 @@ public final class CGameCache implements CHandle {
 						}
 					}
 				}
+				final int abilityCount = data.abilities != null ? data.abilities.length : 0;
+				out.writeInt(abilityCount);
+				if (data.abilities != null) {
+					for (final StoredAbilityData ability : data.abilities) {
+						out.writeInt(ability.abilityId.getValue());
+						out.writeInt(ability.level);
+					}
+				}
 			}
 		}
 	}
@@ -331,7 +359,7 @@ public final class CGameCache implements CHandle {
 		try (final DataInputStream in = new DataInputStream(new FileInputStream(file))) {
 			final int magic = in.readInt();
 			final int version = in.readInt();
-			if (magic != FILE_MAGIC || version != FILE_VERSION) {
+			if (magic != FILE_MAGIC || (version != 1 && version != FILE_VERSION)) {
 				return null;
 			}
 			final CGameCache cache = new CGameCache(cacheName);
@@ -400,8 +428,20 @@ public final class CGameCache implements CHandle {
 						}
 					}
 				}
+				StoredAbilityData[] abilities = null;
+				if (version >= 2) {
+					final int abilityCount = in.readInt();
+					if (abilityCount > 0) {
+						abilities = new StoredAbilityData[abilityCount];
+						for (int a = 0; a < abilityCount; a++) {
+							final War3ID abilityId = new War3ID(in.readInt());
+							final int level = in.readInt();
+							abilities[a] = new StoredAbilityData(abilityId, level);
+						}
+					}
+				}
 				cache.storeUnit(mk, k, new StoredUnitData(typeId, xp, skillPoints, strBase, agiBase, intBase,
-						strBonus, agiBonus, intBonus, properName, items));
+						strBonus, agiBonus, intBonus, properName, items, abilities));
 			}
 			return cache;
 		}

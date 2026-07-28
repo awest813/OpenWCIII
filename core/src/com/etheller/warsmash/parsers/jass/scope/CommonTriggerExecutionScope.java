@@ -21,6 +21,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.dialog.CScriptDialog;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.dialog.CScriptDialogButton;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.ui.CTrackable;
 
 public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	private CUnit triggeringUnit;
@@ -79,6 +80,9 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	private CWidget triggerWidget;
 	private CScriptDialog clickedDialog;
 	private CScriptDialogButton clickedButton;
+	private CTrackable triggeringTrackable;
+	private String chatString;
+	private String chatStringMatched;
 	private CAbility spellAbility;
 	private CUnit spellAbilityUnit;
 	private CUnit spellTargetUnit;
@@ -167,6 +171,9 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		this.triggerWidget = parentScope.triggerWidget;
 		this.clickedDialog = parentScope.clickedDialog;
 		this.clickedButton = parentScope.clickedButton;
+		this.triggeringTrackable = parentScope.triggeringTrackable;
+		this.chatString = parentScope.chatString;
+		this.chatStringMatched = parentScope.chatStringMatched;
 		this.spellAbilityTargetType = parentScope.spellAbilityTargetType;
 		this.spellAbilityOrderCommandCard = parentScope.spellAbilityOrderCommandCard;
 		this.enumFilePath = parentScope.enumFilePath;
@@ -398,6 +405,18 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		return this.clickedDialog;
 	}
 
+	public CTrackable getTriggeringTrackable() {
+		return this.triggeringTrackable;
+	}
+
+	public String getChatString() {
+		return this.chatString != null ? this.chatString : "";
+	}
+
+	public String getChatStringMatched() {
+		return this.chatStringMatched != null ? this.chatStringMatched : "";
+	}
+
 	public JassGameEventsWar3 getTriggerEventId() {
 		return this.triggerEventId;
 	}
@@ -622,6 +641,14 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		return scope;
 	}
 
+	public static CommonTriggerExecutionScope trackableScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CTrackable trackable) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggeringTrackable = trackable;
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
 	public static CommonTriggerExecutionScope unitPickupItemScope(final JassGameEventsWar3 triggerEventId,
 			final Trigger trigger, final CUnit orderedUnit, final CItem whichItem) {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
@@ -799,6 +826,16 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
 		scope.triggeringPlayer = player;
 		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope playerChatScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CPlayerJass player, final String chatString, final String chatStringMatched) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggeringPlayer = player;
+		scope.triggerEventId = triggerEventId;
+		scope.chatString = chatString;
+		scope.chatStringMatched = chatStringMatched;
 		return scope;
 	}
 

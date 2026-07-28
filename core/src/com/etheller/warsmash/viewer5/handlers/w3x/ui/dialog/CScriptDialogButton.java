@@ -15,14 +15,30 @@ public class CScriptDialogButton {
 	private final GlueTextButtonFrame buttonFrame;
 	private final StringFrame buttonText;
 	private final List<Trigger> eventTriggers = new ArrayList<>();
+	private char hotkey;
+	private CScriptDialog ownerDialog;
 
 	public CScriptDialogButton(final GlueTextButtonFrame buttonFrame, final StringFrame buttonText) {
+		this(buttonFrame, buttonText, '\0');
+	}
+
+	public CScriptDialogButton(final GlueTextButtonFrame buttonFrame, final StringFrame buttonText,
+			final char hotkey) {
 		this.buttonFrame = buttonFrame;
 		this.buttonText = buttonText;
+		this.hotkey = Character.toUpperCase(hotkey);
 	}
 
 	public GlueTextButtonFrame getButtonFrame() {
 		return this.buttonFrame;
+	}
+
+	public char getHotkey() {
+		return this.hotkey;
+	}
+
+	public void setHotkey(final char hotkey) {
+		this.hotkey = Character.toUpperCase(hotkey);
 	}
 
 	public void setText(final GameUI rootFrame, final String text) {
@@ -30,17 +46,21 @@ public class CScriptDialogButton {
 	}
 
 	public void setupEvents(final CScriptDialog dialog) {
-		this.buttonFrame.setOnClick(new Runnable() {
-			@Override
-			public void run() {
-				for (final Trigger trigger : CScriptDialogButton.this.eventTriggers) {
-					final CommonTriggerExecutionScope scope = CommonTriggerExecutionScope.triggerDialogScope(
-							JassGameEventsWar3.EVENT_DIALOG_BUTTON_CLICK, trigger, dialog, CScriptDialogButton.this);
-					dialog.getGlobalScope().queueTrigger(null, null, trigger, scope, scope);
-				}
-				dialog.onButtonClick(CScriptDialogButton.this);
-			}
-		});
+		this.ownerDialog = dialog;
+		this.buttonFrame.setOnClick(this::click);
+	}
+
+	/** Fires button-click triggers and closes the owning dialog. */
+	public void click() {
+		if (this.ownerDialog == null) {
+			return;
+		}
+		for (final Trigger trigger : this.eventTriggers) {
+			final CommonTriggerExecutionScope scope = CommonTriggerExecutionScope.triggerDialogScope(
+					JassGameEventsWar3.EVENT_DIALOG_BUTTON_CLICK, trigger, this.ownerDialog, this);
+			this.ownerDialog.getGlobalScope().queueTrigger(null, null, trigger, scope, scope);
+		}
+		this.ownerDialog.onButtonClick(this);
 	}
 
 	public RemovableTriggerEvent addEvent(final Trigger trigger) {

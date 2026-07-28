@@ -482,6 +482,29 @@ public class CPlayer extends CBasePlayer {
 		return playerEvent;
 	}
 
+	public RemovableTriggerEvent addChatEvent(final GlobalScope globalScope, final Trigger whichTrigger,
+			final String chatMessageToDetect, final boolean exactMatchOnly) {
+		final CPlayerEvent playerEvent = new CPlayerEvent(globalScope, this, whichTrigger,
+				JassGameEventsWar3.EVENT_PLAYER_CHAT, null, chatMessageToDetect, exactMatchOnly);
+		getOrCreateEventList(JassGameEventsWar3.EVENT_PLAYER_CHAT).add(playerEvent);
+		return playerEvent;
+	}
+
+	public void fireChatEvent(final GlobalScope globalScope, final String message) {
+		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_CHAT);
+		if (eventList == null) {
+			return;
+		}
+		final String chatMessage = message != null ? message : "";
+		for (final CPlayerEvent event : eventList) {
+			if (event.matchesChat(chatMessage)) {
+				final String matched = event.getChatMatch() != null ? event.getChatMatch() : "";
+				event.fire(this, CommonTriggerExecutionScope.playerChatScope(JassGameEventsWar3.EVENT_PLAYER_CHAT,
+						event.getTrigger(), this, chatMessage, matched));
+			}
+		}
+	}
+
 	public RemovableTriggerEvent addUnitEvent(final GlobalScope globalScope, final Trigger whichTrigger,
 			final JassGameEventsWar3 eventType, final TriggerBooleanExpression filter) {
 		final CPlayerEvent playerEvent = new CPlayerEvent(globalScope, this, whichTrigger, eventType, filter);

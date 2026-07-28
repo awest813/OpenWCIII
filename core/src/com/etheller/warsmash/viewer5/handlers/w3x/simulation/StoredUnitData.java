@@ -6,9 +6,10 @@ import com.etheller.warsmash.util.War3ID;
  * Immutable snapshot of a unit's serializable state captured by
  * {@code StoreUnit} and consumed by {@code RestoreUnit}.
  *
- * <p>For hero units the snapshot records XP, stat bases/bonuses, skill points
- * and proper name.  For every unit type the snapshot records inventory items
- * (type-id + charges) so items survive the carry-over between maps.</p>
+ * <p>For hero units the snapshot records XP, stat bases/bonuses, skill points,
+ * proper name, and learned hero abilities. For every unit type the snapshot
+ * records inventory items (type-id + charges) so items survive the carry-over
+ * between maps.</p>
  */
 public final class StoredUnitData {
 
@@ -34,9 +35,23 @@ public final class StoredUnitData {
 	/** Per-slot item data; length = inventory capacity, null entry = empty slot. */
 	public final StoredItemData[] items;
 
+	/**
+	 * Learned hero abilities (ability id + level). Empty/null for non-heroes or
+	 * heroes with no skills learned yet.
+	 */
+	public final StoredAbilityData[] abilities;
+
 	public StoredUnitData(final War3ID unitTypeId, final int xp, final int skillPoints, final int strengthBase,
 			final int agilityBase, final int intelligenceBase, final int strengthBonus, final int agilityBonus,
 			final int intelligenceBonus, final String properName, final StoredItemData[] items) {
+		this(unitTypeId, xp, skillPoints, strengthBase, agilityBase, intelligenceBase, strengthBonus, agilityBonus,
+				intelligenceBonus, properName, items, null);
+	}
+
+	public StoredUnitData(final War3ID unitTypeId, final int xp, final int skillPoints, final int strengthBase,
+			final int agilityBase, final int intelligenceBase, final int strengthBonus, final int agilityBonus,
+			final int intelligenceBonus, final String properName, final StoredItemData[] items,
+			final StoredAbilityData[] abilities) {
 		this.unitTypeId = unitTypeId;
 		this.xp = xp;
 		this.skillPoints = skillPoints;
@@ -48,6 +63,7 @@ public final class StoredUnitData {
 		this.intelligenceBonus = intelligenceBonus;
 		this.properName = properName != null ? properName : "";
 		this.items = items;
+		this.abilities = abilities;
 	}
 
 	/** Data for a single inventory slot. */
@@ -58,6 +74,17 @@ public final class StoredUnitData {
 		public StoredItemData(final War3ID typeId, final int charges) {
 			this.typeId = typeId;
 			this.charges = charges;
+		}
+	}
+
+	/** Data for a learned hero ability. */
+	public static final class StoredAbilityData {
+		public final War3ID abilityId;
+		public final int level;
+
+		public StoredAbilityData(final War3ID abilityId, final int level) {
+			this.abilityId = abilityId;
+			this.level = level;
 		}
 	}
 }

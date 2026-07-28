@@ -22,6 +22,8 @@ public class CScriptDialog {
 	private StringFrame scriptDialogTextFrame;
 	private UIFrame lastAddedComponent;
 	private final List<Trigger> eventTriggers = new ArrayList<>();
+	private final List<CScriptDialogButton> buttons = new ArrayList<>();
+	private boolean visible;
 
 	public CScriptDialog(final GlobalScope globalScope, final SimpleFrame scriptDialogFrame,
 			final StringFrame scriptDialogTextFrame) {
@@ -51,10 +53,21 @@ public class CScriptDialog {
 		this.scriptDialogFrame = scriptDialogFrame;
 		this.scriptDialogTextFrame = scriptDialogTextFrame;
 		this.lastAddedComponent = scriptDialogTextFrame;
+		this.buttons.clear();
+		this.visible = false;
 	}
 
 	public void setVisible(final boolean flag) {
+		this.visible = flag;
 		this.scriptDialogFrame.setVisible(flag);
+	}
+
+	public boolean isVisible() {
+		return this.visible && (this.scriptDialogFrame != null) && this.scriptDialogFrame.isVisible();
+	}
+
+	public List<CScriptDialogButton> getButtons() {
+		return this.buttons;
 	}
 
 	public RemovableTriggerEvent addEvent(final Trigger trigger) {
@@ -81,6 +94,7 @@ public class CScriptDialog {
 		final GlueTextButtonFrame buttonFrame = scriptDialogButton.getButtonFrame();
 		this.scriptDialogFrame.add(buttonFrame);
 		this.lastAddedComponent = buttonFrame;
+		this.buttons.add(scriptDialogButton);
 		buttonFrame.positionBounds(rootFrame, uiViewport);
 		this.scriptDialogFrame
 				.setHeight(((this.scriptDialogFrame.getAssignedHeight() + (buttonFrame.getFramePointY(FramePoint.TOP)))

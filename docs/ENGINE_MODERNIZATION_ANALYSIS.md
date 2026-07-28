@@ -1,19 +1,30 @@
-# Warsmash Engine Modernization Analysis
+# OpenWCIII Engine Modernization Analysis
 
-## Vision: The OpenMW for Warcraft III
+## Vision: Faithful open-source Warcraft III (+ QoL)
 
-Warsmash's long-term goal is to be for Warcraft III what [OpenMW](https://openmw.org/) is for
-Morrowind: a fully open, community-maintained reimplementation of the game engine that lets
-anyone run WC3 maps and mods on a modern, portable, hackable platform — forever.
+**OpenWCIII** is a community fork of [Warsmash](https://github.com/Retera/WarsmashModEngine).
+Upstream framed the long-term goal as being for Warcraft III what
+[OpenMW](https://openmw.org/) is for Morrowind: a fully open, community-maintained
+engine that lets anyone run WC3 maps and mods on a modern, portable, hackable
+platform — forever.
 
-OpenMW took roughly 15 years from first commit to full feature parity. Warsmash is on a
-similar trajectory. The phases below describe the structured path toward that goal, organized
-around four recurring concerns:
+OpenWCIII keeps that compass and sharpens the **product** mission:
+
+> A **faithful open-source Warcraft III** — campaigns, melee, and maps that play
+> like the classic game — plus **quality-of-life** upgrades that make it better
+> to run and maintain today.
+
+See [MISSION.md](MISSION.md) for fidelity vs QoL vs non-goals.
+
+Engineering work is organized around four recurring concerns:
 
 1. **Modernization** — codebase and platform sustainability
-2. **Compatibility** — hardware/driver/OS resilience
+2. **Compatibility** — hardware/driver/OS resilience + retail WC3 fidelity
 3. **Performance** — frame-time stability and throughput
-4. **Quality of Life (QoL)** — developer and player ergonomics
+4. **Quality of Life (QoL)** — developer and player ergonomics (without rewriting WC3)
+
+This is not a rewrite-from-scratch project. It is an evolutionary path with
+explicit risk management: preserve behavior, close parity gaps, then layer QoL.
 
 ---
 
@@ -25,7 +36,7 @@ around four recurring concerns:
 | **B** | Light leak fix, shader normalization, parser consolidation design | **Complete** |
 | **C** | Per-frame allocation reduction, light-data caching, simulation instrumentation | **Complete** |
 | **D** | Parser unification, server hardening, async asset pipeline | **Complete** |
-| **E** | Full JASS/Lua scripting, map format support to 1.32, multiplayer hardening | Planned |
+| **E** | Full JASS/Lua scripting, campaign/map fidelity, multiplayer hardening | **In progress** |
 | **F** | Community modding layer, asset-override system, mod manager API | Planned |
 
 ---
@@ -38,7 +49,7 @@ around four recurring concerns:
 - Launcher argument handling now applies profile presets first and then explicit
   overrides deterministically (`-window`, `-fps`, `-vsync/-novsync`, `-msaa`,
   including `-msaa 0`), and `-help` exits before display-mode probing.
-- The README now explicitly documents the OpenMW-equivalent long-term vision.
+- The README and [MISSION.md](MISSION.md) document OpenWCIII’s faithful-WC3 + QoL product goal (OpenMW-style preservation).
 - Server business logic has comments acknowledging potential inefficiency and
   DDoS sensitivity in a hot path.
 
@@ -315,7 +326,10 @@ All planned Phase D items are now complete.
 
 ---
 
-## Phase E — Scripting & Map Format (Planned)
+## Phase E — Scripting, Campaign & Map Fidelity (In progress)
+
+Phase E is the primary **faithful WC3** push: close JASS/campaign/map gaps vs
+retail before treating QoL as the main focus.
 
 | Item | Description |
 |------|-------------|
@@ -334,7 +348,7 @@ All planned Phase D items are now complete.
 | Asset override system | Per-map and per-mod texture/model/sound replacement |
 | Mod manager API | Declarative mod descriptors; load-order resolution |
 | Custom UI scripting | Frame-definition extensions beyond stock FDF |
-| Editor integration | Round-trip with World Editor; Warsmash as a preview backend |
+| Editor integration | Round-trip with World Editor; OpenWCIII/Warsmash as a preview backend |
 | Distribution tooling | Self-contained mod package format (no raw WC3 assets shipped) |
 
 ---

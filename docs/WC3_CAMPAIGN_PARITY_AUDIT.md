@@ -2,7 +2,12 @@
 
 **Goal:** Run the Warcraft III single-player campaigns (Reign of Chaos + The Frozen Throne) in Warsmash / OpenWCIII with full parity to retail WC3.
 
-**Status (as of 2026-07):** Campaign menu + single-mission launch work. Full campaign progression (map chaining, movies, hero skill carry-over, post-mission UI, campaign AI) does **not**. Phase E in `ENGINE_MODERNIZATION_ANALYSIS.md` still lists campaign support as planned.
+**Status (as of 2026-07-28):** Campaign menu + single-mission launch work.
+**P0 progression spine is largely landed** (`ChangeLevel` + score Continue,
+dialog buttons, selection, hero carry-over, menu restore, availability store,
+score/boards MVP, transmission VO + named anims, cine filters, volume groups,
+hero natives, AI assault MVP). Still missing for full parity: real movie
+decode, competitive build AI, sky mesh, RoC/TFT soak.
 
 **Severity legend**
 
@@ -23,126 +28,140 @@
 - Partial `StoreUnit` / `RestoreUnit` (XP, stats, skill points, inventory)
 - Partial `SaveGame` / `LoadGame` (JASS primitive globals + gold/lumber)
 - In-map cinematic HUD mode (`CinematicMode`, `ShowInterface`, `SetCinematicScene`)
-- Transmission text + portrait (no VO)
+- Transmission text + portrait + VO label playback (`soundLabel`)
 - Thematic music start/end
 - `CustomVictory` / `CustomDefeat` fire events then exit to menu screen object
-- Quest / multiboard **state** (no UI rendering)
-- Script dialogs (visible; button handle broken — see P0)
+- Quest / multiboard / leaderboard state + text overlays
+- Script dialogs (visible; button handle returns)
 - Timer dialogs
 - Trigger exception isolation so one bad trigger does not kill the loop
 - Core hero XP / level / `SelectHeroSkill` gameplay natives
+- Cine-filter MVP overlay; volume-group MUSIC scaling
+- Hero script natives (`SetHeroProperName`, `UnitModifySkillPoints`, …)
 
 ---
 
 ## P0 — Progression spine (must ship first)
 
 ### 1. Chain map loading — `ChangeLevel`
-- **Gap:** Native is **missing**. Retail campaigns flush gamecache then call `ChangeLevel` to load the next map.
-- **Need:** Unload current map → keep gamecache → load next map path → restore script environment; honor `doScoreScreen` flag once score screen exists.
-- **Where:** `Jass2.java` (new native); map-screen teardown/load path in `WarsmashGdxMapScreen` / `War3MapViewer`.
+- **Status:** **DONE (MVP)** — native calls `WarsmashUI.requestChangeLevel`;
+  `MenuUI` loads the next map via pending-change-level (score screen skipped).
+- **Remaining:** honor `doScoreScreen` once score screen exists; verify retail
+  map-path resolution quirks across RoC/TFT.
 
 ### 2. Restore campaign chrome after mission exit
-- **Gap:** `MenuUI.onReturnFromGame()` restores ambient/background for `CAMPAIGN` / `MISSION_SELECT`, but the code that re-shows campaign frames is **commented out** (~2506–2547).
-- **Need:** Uncomment/complete frame visibility restore; set `menuState` back to mission select; play campaign fade correctly.
-- **Where:** `MenuUI.java`.
+- **Status:** **DONE** — `MenuUI.onReturnFromGame()` restores mission-select
+  chrome and ambient for campaign returns.
 
 ### 3. Victory / defeat → next step
-- **Gap:** `CustomVictory` / `CustomDefeat` only run `exitGameRunnable` (back to menu). Score screen ignored despite `enableScoreScreen`. `EndGame` native missing.
-- **Need:** Optional score screen; then either return to campaign menu with unlock updates **or** honor in-script `ChangeLevel`.
-- **Where:** `MeleeUI.java`, `WarsmashUI.java`, `WarsmashGdxMapScreen.java`.
+- **Status:** **DONE (MVP)** — exit-to-menu works; score Continue dialog;
+  `EndGame` and `ChangeLevel(..., true)` honor score screen before proceed.
+  In-script `ChangeLevel` chains maps.
 
 ### 4. Fix `DialogAddButton` handle return
-- **Gap:** Creates a button via `meleeUI.createScriptDialogButton(...)` but **returns `null`**, so scripts cannot register `TriggerRegisterDialogButtonEvent`.
-- **Need:** Return the `CScriptDialogButton` handle.
-- **Where:** `Jass2.java` ~2228–2234.
+- **Status:** **DONE** — returns `button` handle.
 
 ### 5. Selection natives for cinematic / scripted control
-- **Gap:** `SelectUnit`, `ClearSelection`, `SelectGroup` are no-ops; `GroupEnumUnitsSelected` cannot see selection.
-- **Need:** Wire to local `MeleeUI` selection state.
-- **Where:** `Jass2.java` ~6150–6163; `MeleeUI` selection APIs.
+- **Status:** **DONE** — wired to `MeleeUI` + selection circles.
 
 ### 6. Hero carry-over: learned abilities + proper name
-- **Gap:** `StoredUnitData` has XP/stats/SP/items/`properName`, but **no ability id→level map**. `RestoreUnit` never re-learns skills and never applies `properName`.
-- **Need:** Snapshot hero abilities on `StoreUnit`; on restore call skill-learn / `SetUnitAbilityLevel`; set proper name on `CAbilityHero`.
-- **Where:** `StoredUnitData.java`, `CGameCache.java` serialization, `Jass2.snapshotUnit` / `RestoreUnit`.
+- **Status:** **DONE** — `StoredUnitData` + gamecache v2 + restore path.
 
 ### 7. Movie / intro cinematic playback
-- **Gap:** `PlayCinematic` is an empty no-op (“movie playback is not yet implemented”). `PlayModelCinematic`, `SetIntroShotText`, `SetIntroShotModel` missing. No SMK/BIK (or Reforged video) decoder in-repo. CampaignInfo Intro/Open/End cinematic entries are parsed in `CampaignMenuData` but never played.
-- **Need (minimum viable):** Blocking playback stub that advances campaign scripts (duration + skip), then real video decode for retail movie files.
-- **Where:** `Jass2.java` ~6345–6348; new media handler; `MenuUI` / `CampaignMenuData` consumers.
+- **Status:** **MVP DONE** — `PlayCinematic` shows overlay and blocks the
+  calling JASS thread (~5s / ESC skip). Real SMK/BIK/video decode still TODO.
+  `PlayModelCinematic` / `SetIntroShot*` registered as stubs.
 
 ### 8. Campaign AI bootstrap
-- **Gap:** `StartCampaignAI`, `StartMeleeAI`, `CommandAI`, `PauseCompAI`, `GetAIDifficulty`, guard-position APIs missing. `JassAIEnvironment` is Sleep/StartThread-level only.
-- **Need:** Load and run campaign `.ai` scripts with enough common.ai parity for stock missions.
-- **Where:** AI environment + new natives in `Jass2.java`.
+- **Status:** **MVP DONE** — `StartCampaignAI`/`StartMeleeAI` load scripts into
+  `JassAIEnvironment` with `StartThread`/`Sleep`. Unit-count + captain-home
+  natives work; **assault roster** (`AddAssault`/`CaptainIsEmpty`/`CaptainAttack`
+  orders + `SuicidePlayer` attack-move) MVP landed. Build-queue natives remain
+  stubs — AI will not yet produce competitive economies.
+
+### Also landed this pass
+- **`PauseGame`** freezes sim (timers/threads still run).
+- **`EndGame`** exits to menu via custom-victory path.
+- **Quest log panel** (toolbar button + ScriptDialog list).
+- **Score screen MVP** (Victory/Defeat Continue dialog).
+- **Multiboard + leaderboard** text overlays and Create* natives.
+- **Campaign menu gating** from `CampaignProgressStore`.
+- **`PolledWait`**, **`SaveGameExists`**, **`SetUnitPathing`**,
+  **`CachePlayerHeroData`**.
+
 
 ---
 
 ## P1 — Retail-critical mission features
 
 ### Campaign progress & menu state
-- [ ] Persist mission / campaign / cinematic availability (`SetMissionAvailable` is no-op; `GetMissionAvailable` always `TRUE`)
-- [ ] Implement missing availability natives: `SetCampaignAvailable`, `SetOpCinematicAvailable`, `SetEdCinematicAvailable`, `SetTutorialCleared`, `ForceCampaignSelectScreen`, `CustomCampaignButtonSetVisible`
-- [ ] `SetCampaignMenuRace` / `Ex` + `GetCampaignMenuRace` (currently no-op / returns 0)
-- [ ] Honor `CampaignMenuData.isDefaultOpen` for gating
-- [ ] Enable or implement Custom Campaign / Load Saved / Options / Credits (`ENABLE_NOT_YET_IMPLEMENTED_BUTTONS=false` in `MenuUI`)
+- [x] Persist mission / campaign / cinematic availability (`CampaignProgressStore`)
+- [x] Availability natives: `SetCampaignAvailable`, `SetOpCinematicAvailable`, `SetEdCinematicAvailable`, `SetTutorialCleared`, `ForceCampaignSelectScreen`, `CustomCampaignButtonSetVisible`
+- [x] `SetCampaignMenuRace` / `Ex` + `GetCampaignMenuRace`
+- [x] Honor `CampaignMenuData.isDefaultOpen` for gating (seed all campaigns)
+- [ ] Enable or implement Custom Campaign / Options / Credits (`ENABLE_NOT_YET_IMPLEMENTED_BUTTONS=false` in `MenuUI`); Load Saved still menu-gated
 
 ### Save / load UX & completeness
-- [ ] Esc-menu Save/Load buttons (`MeleeUI` currently disabled)
+- [x] Esc-menu Save/Load buttons (QuickSave MVP)
 - [ ] Main-menu Load Saved
-- [ ] `ReloadGame` (currently logs “not implemented”)
-- [ ] `SaveGameExists`, `CopySaveGame`, `RemoveSaveDirectory`, `RenameSaveDirectory`; `GetSaveBasicFilename` returns `""`
-- [ ] `CachePlayerHeroData`
+- [x] `ReloadGame` (restores last-save globals/resources MVP)
+- [x] `SaveGameExists`, `CopySaveGame`, `RemoveSaveDirectory`, `RenameSaveDirectory`; `GetSaveBasicFilename`
+- [x] `CachePlayerHeroData`
 - [ ] Extend `SaveGame`/`LoadGame` beyond primitives (or document that campaign continuity is gamecache-only and match retail usage)
 
 ### In-mission UI parity
-- [ ] Quest dialog UI (quest button disabled; `CQuest` is state-only)
-- [ ] Multiboard rendering (`CMultiboard`: “Full rendering is not yet implemented”)
-- [ ] Leaderboard API (`CreateLeaderboard` and family largely missing)
-- [ ] Score screen after victory/defeat
-- [ ] Dialog hotkey handling (`TODO use hotkey` in `MeleeUI`)
+- [x] Quest dialog UI (quest button + ScriptDialog list)
+- [x] Multiboard rendering (text overlay MVP)
+- [x] Leaderboard API + text overlay MVP
+- [x] Score screen after victory/defeat (Continue dialog MVP)
+- [x] Dialog hotkey handling
 
 ### Cinematic / presentation (in-map)
-- [ ] Transmission voice / `soundLabel` playback (text-only today)
-- [ ] Named transmission animations
-- [ ] `ClearTransmissionQueue` / `EnableTransmission` (empty)
-- [ ] `SetCinematicCamera` (no-op)
-- [ ] Cine-filter API (`SetCineFilter*`, `DisplayCineFilter`, …)
-- [ ] `PauseGame` (no-op; cinematics often pause)
-- [ ] `CinematicSkipButton`, `SetCinematicAudio`, `SetSkyModel`
+- [x] Transmission voice / `soundLabel` playback (UISounds MVP)
+- [x] Named transmission animations (`setSequence` by name; fallback PORTRAIT/TALK)
+- [x] `ClearTransmissionQueue` / `EnableTransmission`
+- [x] `SetCinematicCamera` (stops pans/noise; MDX track playback still TODO)
+- [x] Cine-filter API MVP (`SetCineFilter*`, `DisplayCineFilter`, …)
+- [x] `PauseGame` (sim freeze; timers/threads still run)
+- [x] `CinematicSkipButton` (ESC skip for `PlayCinematic`); `SetSkyModel` accepted (mesh swap pending); `SetCinematicAudio` ducks MUSIC/AMBIENT MVP
 
 ### Sound / music groups
-- [ ] `VolumeGroupSetVolume` / `VolumeGroupReset` (no-ops)
+- [x] `VolumeGroupSetVolume` / `VolumeGroupReset` (MUSIC → music player; others stored)
 - [ ] Stacked / ambient / remaining 3D sound setters
 - [ ] Separate thematic music layer / fade parity
-- [ ] `ClearMapMusic`
+- [x] `ClearMapMusic`
 
 ### Heroes / abilities / pathing used by scripts
-- [ ] Fail soft or implement remaining ability rawcodes (`UnitAddAbility` “not been programmed yet”)
-- [ ] `UnitModifySkillPoints`, `UnitStripHeroLevel`, `SetHeroProperName`, `DecUnitAbilityLevel`, `SetReservedLocalHeroButtons`
-- [ ] Non-permanent `SetHeroStr` / `Agi` / `Int` (`Todo add else case`)
-- [ ] `SetUnitPathing` (no-op; common in cinematics)
+- [x] Soft-fail `UnitAddAbility` for unprogrammed rawcodes (`CAbilityGenericDoNothing`)
+- [x] `UnitModifySkillPoints`, `UnitStripHeroLevel` (MVP; no ability unlearn), `SetHeroProperName`, `DecUnitAbilityLevel`, `SetReservedLocalHeroButtons` (stored)
+- [x] Non-permanent `SetHeroStr` / `Agi` / `Int`
+- [x] `SetUnitPathing`
+- [x] `UnitShareVision` (per-unit fog modifier)
 
 ### Camera / images / blight (often used in campaign scripts)
-- [ ] Missing camera noise / smooth / orient / rotate / stop variants
-- [ ] Image / Ubersplat / blight natives largely missing
+- [x] Camera noise / stop variants (`CameraSet*Noise`, `StopCamera`)
+- [x] Image MVP (`CreateImage`/`ShowImage`/`SetImagePosition` via ground splat); Ubersplat MVP (`CreateUbersplat`/show/destroy)
+- [x] `SetBlight` / `SetBlightLoc`
+- [x] Terrain queries: `IsTerrainPathable`, `GetTerrainType`, `GetTerrainVariance`, null-safe `GetTerrainCliffLevel`
+- [x] `PingMinimap` / `PingMinimapEx`
+- [x] `EnableUserUI` → control + interface visibility
 
 ---
 
 ## P2 — Polish & verification
 
-- [ ] `PolledWait` (BJ often wraps `TriggerSleepAction`)
-- [ ] Trackables (NYI → null events)
-- [ ] Chat event registration fires events
-- [ ] `SyncStored*` (SP less critical)
-- [ ] `HaveStoredMission`; make `ReloadGameCachesFromDisk` real
-- [ ] Deduplicate early vs late `Store*` native registrations in `Jass2`
-- [ ] Timer dialog color/speed
-- [ ] `FlashQuestDialogButton` / `ForceQuestDialogUpdate`
-- [ ] DefeatCondition as real type (dummy `Object` today)
+- [x] `PolledWait` (BJ often wraps `TriggerSleepAction`)
+- [x] Trackables (`CreateTrackable` + hit/track events MVP)
+- [x] Chat event registration fires events (Enter/chat button prompt MVP)
+- [x] `SyncStored*` (SP no-op)
+- [x] `HaveStoredMission`; `ReloadGameCachesFromDisk` still returns TRUE (InitGameCache already loads disk)
+- [x] Deduplicate early vs late `Store*` native registrations in `Jass2`
+- [x] Timer dialog color/speed
+- [x] `FlashQuestDialogButton` / `ForceQuestDialogUpdate`
+- [x] DefeatCondition as real type
 - [ ] Campaign BLP alpha artifacts (README)
 - [ ] Reforged FLAC quality (`docs/COMPATIBILITY.md`)
-- [ ] `Cheat` native (cheat query natives exist)
+- [x] `Cheat` native (basic: whosyourdaddy / greedisgood / pointbreak / thereisnospoon)
 
 ### Mission soak matrix (required for “full parity” sign-off)
 

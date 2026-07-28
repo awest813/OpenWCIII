@@ -1,7 +1,15 @@
-# Contributing to Warsmash
+# Contributing to OpenWCIII
 
 Thank you for your interest in contributing. This guide covers the development
 workflow, coding conventions, and profiling approach used in the project.
+
+**Mission:** build a **faithful open-source Warcraft III** first, then add
+careful **quality-of-life** upgrades on top. See [docs/MISSION.md](docs/MISSION.md)
+and the [README](README.md).
+
+OpenWCIII is a fork of [Warsmash](https://github.com/Retera/WarsmashModEngine);
+many package and binary names still say Warsmash. Prefer “OpenWCIII” in
+product/docs language.
 
 ---
 
@@ -24,7 +32,7 @@ workflow, coding conventions, and profiling approach used in the project.
   with LibGDX).
 - **Gradle** — use the included `./gradlew` wrapper; do not install Gradle
   system-wide.
-- **Warcraft III assets** — Warsmash requires a legally-purchased copy of
+- **Warcraft III assets** — OpenWCIII requires a legally purchased copy of
   Warcraft III. See the [README](README.md) for INI configuration.
 
 ### Building
@@ -81,13 +89,36 @@ The project has four primary layers. Keep cross-layer dependencies minimal:
 
 ---
 
+## What we welcome
+
+- Bug fixes with clear reproduction steps (especially campaign / JASS / UI parity)
+- Faithful WC3 behavior fixes that close gaps vs retail
+- Careful QoL that does not break mod / map compatibility
+- Performance improvements with before/after notes when possible
+- Documentation that helps new contributors
+- Small, focused refactors that unlock safer modernization later
+- Tests for previously untested critical paths
+
+## What to discuss first (open an issue)
+
+- Large architectural changes
+- New networking protocols or multiplayer features
+- Dependency upgrades that touch rendering or audio extensively
+- Anything that changes save-game or replay formats
+- QoL defaults that change classic campaign / melee feel without an opt-in
+
+---
+
 ## Submitting Changes
 
 1. Fork the repository and create a feature branch from `main`.
 2. Keep commits small and focused; write a descriptive commit message.
-3. Add your change to `CHANGELOG.md` under the appropriate category and the
-   `[Unreleased]` section.
-4. Open a pull request against `main`. The CI build must pass.
+3. Prefer **retail WC3 semantics** when adding engine behavior, unless the PR
+   is explicitly QoL (call that out in the description).
+4. Add your change to `CHANGELOG.md` under the appropriate category and the
+   `[Unreleased]` section (or the nearest dated section if that is project
+   convention for the batch).
+5. Open a pull request against `main`. The CI build must pass.
 
 ---
 
@@ -95,7 +126,7 @@ The project has four primary layers. Keep cross-layer dependencies minimal:
 
 ### Built-in Frame Pacing Log
 
-Warsmash logs a frame-pacing summary to stdout every 60 seconds:
+OpenWCIII (Warsmash engine) logs a frame-pacing summary to stdout every 60 seconds:
 
 ```
 [FramePacing] avg=16.67 ms  min=15.20 ms  max=22.40 ms  fps=59.9  (window: 600 frames)

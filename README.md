@@ -123,6 +123,9 @@ takedown. Upstream Discord: https://discord.com/invite/ucjftZ7x7H
 
 [![GAMEPLAY VIDEO](http://img.youtube.com/vi/EO-FDeQhFWc/0.jpg)](https://www.youtube.com/watch?v=EO-FDeQhFWc)
 
+For a concrete checklist of what remains before RoC/TFT campaigns match
+retail WC3, see [`docs/WC3_CAMPAIGN_PARITY_AUDIT.md`](docs/WC3_CAMPAIGN_PARITY_AUDIT.md).
+
 ---
 
 ## Before you Begin: INI File

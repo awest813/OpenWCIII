@@ -110,6 +110,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerStat
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CPlayerFogOfWar;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CUnitAttackVisionFogModifier;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CUnitDeathVisionFogModifier;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CUnitVisionFogModifier;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegion;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegionEnumFunction;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegionManager;
@@ -265,6 +266,7 @@ public class CUnit extends CWidget {
 	private List<CUnitAttack> unitSpecificCurrentAttacks;
 	private boolean disableAttacks;
 	private final CUnitAttackVisionFogModifier attackFogMod;
+	private Map<Integer, CUnitVisionFogModifier> sharedVisionByPlayer;
 
 	private final Map<CUnitAttackPreDamageListenerPriority, List<CUnitAttackPreDamageListener>> preDamageListeners = new HashMap<>();
 	private final List<CUnitAttackPostDamageListener> postDamageListeners = new ArrayList<>();
@@ -2640,6 +2642,30 @@ public class CUnit extends CWidget {
 		this.playerIndex = playerIndex;
 		if (changeColor) {
 			simulation.changeUnitColor(this, playerIndex);
+		}
+	}
+
+	/**
+	 * Share this unit's sight radius with {@code playerIndex} (UnitShareVision).
+	 */
+	public void setShareVision(final CSimulation simulation, final int playerIndex, final boolean share) {
+		if (this.sharedVisionByPlayer == null) {
+			this.sharedVisionByPlayer = new HashMap<>();
+		}
+		final CUnitVisionFogModifier existing = this.sharedVisionByPlayer.get(playerIndex);
+		if (share) {
+			if (existing != null) {
+				existing.setEnabled(true);
+				return;
+			}
+			final CUnitVisionFogModifier modifier = new CUnitVisionFogModifier(this, false);
+			this.sharedVisionByPlayer.put(playerIndex, modifier);
+			simulation.getPlayer(playerIndex).addFogModifer(simulation, modifier, false);
+		}
+		else if (existing != null) {
+			existing.setEnabled(false);
+			simulation.getPlayer(playerIndex).removeFogModifer(simulation, existing);
+			this.sharedVisionByPlayer.remove(playerIndex);
 		}
 	}
 

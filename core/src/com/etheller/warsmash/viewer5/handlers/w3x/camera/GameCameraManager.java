@@ -31,6 +31,13 @@ public final class GameCameraManager extends CameraManager {
 	private Vector2 panRate;
 	private Float zOffsetDestination;
 	private float zOffsetRate;
+	private float targetNoiseMag;
+	private float targetNoiseVel;
+	private float sourceNoiseMag;
+	private float sourceNoiseVel;
+	private float noiseTime;
+	private float noiseOffsetX;
+	private float noiseOffsetY;
 
 	public GameCameraManager(final CameraPreset[] presets, final CameraRates cameraRates) {
 		this.presets = presets;
@@ -66,6 +73,49 @@ public final class GameCameraManager extends CameraManager {
 			this.target.x = applyAtRate(this.target.x, this.panDestination.x, this.panRate.x);
 			this.target.y = applyAtRate(this.target.y, this.panDestination.y, this.panRate.y);
 		}
+		updateNoise(Gdx.graphics.getDeltaTime());
+	}
+
+	private void updateNoise(final float dt) {
+		final float mag = Math.max(this.targetNoiseMag, this.sourceNoiseMag);
+		final float vel = Math.max(this.targetNoiseVel, this.sourceNoiseVel);
+		if (mag <= 0f) {
+			this.noiseOffsetX = 0f;
+			this.noiseOffsetY = 0f;
+			return;
+		}
+		this.noiseTime += dt * Math.max(0.1f, vel);
+		this.noiseOffsetX = (float) (Math.sin(this.noiseTime * 7.1) * mag);
+		this.noiseOffsetY = (float) (Math.cos(this.noiseTime * 5.3) * mag);
+		this.target.x += this.noiseOffsetX * dt;
+		this.target.y += this.noiseOffsetY * dt;
+	}
+
+	public void setTargetNoise(final float magnitude, final float velocity) {
+		this.targetNoiseMag = Math.max(0f, magnitude);
+		this.targetNoiseVel = Math.max(0f, velocity);
+		if (magnitude <= 0f) {
+			this.noiseOffsetX = 0f;
+			this.noiseOffsetY = 0f;
+		}
+	}
+
+	public void setSourceNoise(final float magnitude, final float velocity) {
+		this.sourceNoiseMag = Math.max(0f, magnitude);
+		this.sourceNoiseVel = Math.max(0f, velocity);
+		if (magnitude <= 0f) {
+			this.noiseOffsetX = 0f;
+			this.noiseOffsetY = 0f;
+		}
+	}
+
+	public void stopCamera() {
+		clearPan();
+		this.zOffsetDestination = null;
+		this.customCameraRates = null;
+		setTargetNoise(0f, 0f);
+		setSourceNoise(0f, 0f);
+		setTargetController(null, 0f, 0f, false);
 	}
 
 	private CameraRates getCurrentRates() {

@@ -1,7 +1,9 @@
-# Warsmash Compatibility Reference
+# OpenWCIII Compatibility Reference
 
 This document summarises known-good hardware and software configurations, known
-limitations, and troubleshooting tips for running Warsmash.
+limitations, and troubleshooting tips for running **OpenWCIII** (Warsmash-lineage
+engine). Product goal: faithful Warcraft III first, then optional QoL — see
+[MISSION.md](MISSION.md).
 
 ---
 
@@ -40,7 +42,7 @@ add your results.*
 
 ## Warcraft III Asset Compatibility
 
-| WC3 Patch | Data Layout | Warsmash Support | Notes |
+| WC3 Patch | Data Layout | OpenWCIII Support | Notes |
 |---|---|---|---|
 | 1.22 – 1.28 | MPQ archives | ✅ Supported | Classic assets; set `MaxPlayers=16` |
 | 1.29 | MPQ (no War3Patch.mpq) | ✅ Supported | Remove `War3Patch.mpq` from INI; `MaxPlayers=28` |
@@ -74,15 +76,16 @@ These commands validate launcher/config behavior without opening a game window.
 
 ### FLAC Audio Quality (Patch 1.32+)
 Warcraft III Reforged stores all audio as FLAC. LibGDX does not natively decode
-FLAC, so Warsmash converts on-the-fly using a bundled pure-Java FLAC decoder.
+FLAC, so OpenWCIII converts on-the-fly using a bundled pure-Java FLAC decoder.
 This decoder drops some precision bytes to fit LibGDX's WAV pipeline; audio may
 sound slightly "tinny" compared to playing the files in an external player.
 
 ### DDS Texture Gamma (Patch 1.32+)
 Reforged stores textures in DDS format. An sRGB correction that was required for
-BLP textures is not needed for DDS. On older builds of Warsmash this correction
-was sometimes applied to DDS textures, making them appear very dark. Should be
-fixed in recent code, but worth verifying if textures look unusually dark.
+BLP textures is not needed for DDS. On older Warsmash-lineage builds this
+correction was sometimes applied to DDS textures, making them appear very dark.
+Should be fixed in recent code, but worth verifying if textures look unusually
+dark.
 
 ---
 
@@ -118,7 +121,8 @@ Cap the frame rate and disable VSync as a starting point:
 
 ## Startup Capability Report
 
-At every launch, Warsmash prints a capability report to stdout/log:
+At every launch, OpenWCIII prints a capability report to stdout/log (engine
+banner may still say Warsmash):
 
 ```
 === Warsmash Startup Capability Report ===

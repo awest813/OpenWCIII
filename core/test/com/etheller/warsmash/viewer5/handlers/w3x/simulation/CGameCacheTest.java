@@ -217,7 +217,11 @@ class CGameCacheTest {
 		final StoredItemData[] items = new StoredItemData[6];
 		items[0] = new StoredItemData(War3ID.fromString("ratf"), 0); // rat fink item
 		items[2] = new StoredItemData(War3ID.fromString("stel"), 3); // storm earth lightning, 3 charges
-		return new StoredUnitData(War3ID.fromString("Hpal"), 1500, 2, 22, 14, 18, 5, 0, 3, "Arthas", items);
+		final StoredUnitData.StoredAbilityData[] abilities = new StoredUnitData.StoredAbilityData[] {
+				new StoredUnitData.StoredAbilityData(War3ID.fromString("AHhb"), 2),
+				new StoredUnitData.StoredAbilityData(War3ID.fromString("AHds"), 1),
+		};
+		return new StoredUnitData(War3ID.fromString("Hpal"), 1500, 2, 22, 14, 18, 5, 0, 3, "Arthas", items, abilities);
 	}
 
 	@Test
@@ -239,6 +243,8 @@ class CGameCacheTest {
 		assertNull(retrieved.items[1]);
 		assertNotNull(retrieved.items[2]);
 		assertEquals(3, retrieved.items[2].charges);
+		assertNotNull(retrieved.abilities);
+		assertEquals(2, retrieved.abilities.length);
 	}
 
 	@Test
@@ -313,6 +319,12 @@ class CGameCacheTest {
 		assertNull(unit.items[1]);
 		assertNotNull(unit.items[2]);
 		assertEquals(3, unit.items[2].charges);
+		assertNotNull(unit.abilities);
+		assertEquals(2, unit.abilities.length);
+		assertEquals(War3ID.fromString("AHhb"), unit.abilities[0].abilityId);
+		assertEquals(2, unit.abilities[0].level);
+		assertEquals(War3ID.fromString("AHds"), unit.abilities[1].abilityId);
+		assertEquals(1, unit.abilities[1].level);
 	}
 
 	@Test

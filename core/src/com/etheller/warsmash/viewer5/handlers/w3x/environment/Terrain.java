@@ -81,6 +81,7 @@ public class Terrain {
 	//
 	public List<GroundTexture> groundTextures = new ArrayList<>();
 	public List<UnloadedTexture> cliffTextures = new ArrayList<>();
+	private final List<War3ID> groundTileIds = new ArrayList<>();
 	public RenderCorner[][] corners;
 	public int columns;
 	public int rows;
@@ -252,6 +253,7 @@ public class Terrain {
 			this.groundTextures
 					.add(new GroundTexture(dir + "\\" + file + texturesExt, terrainTileInfo, dataSource, Gdx.gl30));
 			this.groundTextureToId.put(groundTile.asStringValue(), this.groundTextures.size() - 1);
+			this.groundTileIds.add(groundTile);
 		}
 
 		final Element tilesets = worldEditData.get("TileSets");
@@ -1504,6 +1506,19 @@ public class Terrain {
 		}
 
 		return null;
+	}
+
+	/** Returns the ground-tile War3ID rawcode at world (x,y), or 0 if unknown. */
+	public int getGroundTileRawcode(final float x, final float y) {
+		final RenderCorner corner = getCorner(x, y);
+		if (corner == null) {
+			return 0;
+		}
+		final int textureIndex = corner.getGroundTexture();
+		if ((textureIndex < 0) || (textureIndex >= this.groundTileIds.size())) {
+			return 0;
+		}
+		return this.groundTileIds.get(textureIndex).getValue();
 	}
 
 	public float getWaterHeight(final float x, final float y) {

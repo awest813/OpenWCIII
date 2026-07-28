@@ -1,5 +1,9 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -27,6 +31,7 @@ public class MeleeUIMinimap {
 	private float heroAlpha = 0.90f;
 	private byte polarity = -1;
 	private boolean visible = true;
+	private final List<MinimapPing> pings = new ArrayList<>();
 
 	public MeleeUIMinimap(final Rectangle displayArea, final Rectangle playableMapArea, final Texture minimapTexture,
 			final Texture[] teamColors, final Texture[] specialIcons) {
@@ -44,6 +49,24 @@ public class MeleeUIMinimap {
 		this.minimapFilledArea = new Rectangle(this.minimap.x + ((this.minimap.width - minimapFilledWidth) / 2),
 				this.minimap.y + ((this.minimap.height - minimapFilledHeight) / 2), minimapFilledWidth,
 				minimapFilledHeight);
+	}
+
+	public void ping(final float worldX, final float worldY, final float durationSeconds, final float r, final float g,
+			final float b) {
+		final float durationMs = Math.max(0.25f, durationSeconds) * 1000f;
+		this.pings.add(new MinimapPing(worldX, worldY, durationMs, r, g, b));
+	}
+
+	public void update(final float dtSeconds) {
+		final float dtMs = dtSeconds * 1000f;
+		final Iterator<MinimapPing> it = this.pings.iterator();
+		while (it.hasNext()) {
+			final MinimapPing ping = it.next();
+			ping.remainingMs -= dtMs;
+			if (ping.remainingMs <= 0f) {
+				it.remove();
+			}
+		}
 	}
 
 	public void render(final CSimulation game, final SpriteBatch batch, final Iterable<RenderUnit> units,
@@ -111,7 +134,6 @@ public class MeleeUIMinimap {
 						batch.setColor(1f, 1f, 1f, this.heroAlpha);
 					}
 					else {
-//						Color pc = new Color(game.getPlayer(simUnit.getPlayerIndex()).getColor());
 						batch.setColor(1f, 0.2f, 0.2f, this.heroAlpha);
 					}
 					minimapIcon = this.specialIcons[2];
@@ -133,6 +155,18 @@ public class MeleeUIMinimap {
 				batch.setColor(1, 1, 1, 1);
 			}
 		}
+
+		for (final MinimapPing ping : this.pings) {
+			final float pulse = 0.55f + (0.45f * (float) Math.sin(ping.remainingMs * 0.02f));
+			batch.setColor(ping.r, ping.g, ping.b, pulse);
+			final float size = 12f + (6f * pulse);
+			final float px = this.minimapFilledArea.x + (((ping.worldX - this.playableMapArea.getX())
+					/ this.playableMapArea.getWidth()) * this.minimapFilledArea.width) - (size * 0.5f);
+			final float py = this.minimapFilledArea.y + (((ping.worldY - this.playableMapArea.getY())
+					/ this.playableMapArea.getHeight()) * this.minimapFilledArea.height) - (size * 0.5f);
+			batch.draw(this.teamColors[0], px, py, size, size);
+		}
+		batch.setColor(og);
 	}
 
 	public Vector2 getWorldPointFromScreen(final float screenX, final float screenY) {
@@ -151,5 +185,24 @@ public class MeleeUIMinimap {
 
 	public void setVisible(boolean visible) {
 		this.visible = visible;
+	}
+
+	private static final class MinimapPing {
+		private final float worldX;
+		private final float worldY;
+		private float remainingMs;
+		private final float r;
+		private final float g;
+		private final float b;
+
+		private MinimapPing(final float worldX, final float worldY, final float remainingMs, final float r,
+				final float g, final float b) {
+			this.worldX = worldX;
+			this.worldY = worldY;
+			this.remainingMs = remainingMs;
+			this.r = r;
+			this.g = g;
+			this.b = b;
+		}
 	}
 }

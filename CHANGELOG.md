@@ -1,6 +1,8 @@
 # Changelog
 
-All notable changes to Warsmash are documented here.
+All notable changes to **OpenWCIII** (Warsmash-lineage engine) are documented
+here. Product mission: faithful open-source Warcraft III, with QoL upgrades —
+see [docs/MISSION.md](docs/MISSION.md).
 
 Changes are grouped by category:
 
@@ -12,6 +14,15 @@ Changes are grouped by category:
 | `render` | Rendering correctness or visuals |
 | `fix` | General bug fix |
 | `break` | Breaking change requiring user action |
+
+---
+
+## [Unreleased]
+
+### qol
+- Clarified product mission across README and docs: **faithful open-source
+  Warcraft III** first, with **quality-of-life** upgrades on top
+  ([docs/MISSION.md](docs/MISSION.md)).
 
 ---
 

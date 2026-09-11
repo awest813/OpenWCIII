@@ -19,10 +19,49 @@ Changes are grouped by category:
 
 ## [Unreleased]
 
+### fix
+- **Ability Builder configs load again on Java 17**: Gson eagerly builds an
+  adapter for every reachable field type, and the pooled enum functions added
+  for spatial-query performance hold a `CSimulation` reference. The walk
+  reached `CPlayerFogOfWar`'s `ByteBuffer`, which the module system refuses to
+  open, so all 15 `abilityBehaviors` config files failed to parse and every
+  Ability Builder ability was silently missing. Those pools are runtime state
+  and are now `transient`, covered by `AbilityBuilderGsonBuilderTest`.
+- **Scene lights no longer crash the render thread**: `LightInstance.bind` did
+  a relative bulk put, so the light managers' buffer had nothing remaining when
+  they set its limit and GL rejected the texture upload.
+- **Older UI data boots**: the Battle.net account-email panels, password
+  recovery button and change email button are treated as optional, since UI
+  data from before those screens shipped has none of them.
+- **Missing minimap icons are not fatal**: the entangled and haunted gold mine
+  icons fall back to the gold mine icon on data that predates them.
+- **Unparseable object data tables no longer abort map load**: a table whose
+  layout does not match the parser is skipped with a warning, which is what
+  already happened for tables that failed the end-marker check.
+
 ### qol
+- **Campaign native coverage audit**: `./gradlew :desktop:campaignNativeAudit`
+  extracts every retail campaign script from your own archives, walks the call
+  graph through Blizzard.j, and reports which `common.j` natives the campaigns
+  reach that the engine does not implement
+  ([docs/CAMPAIGN_NATIVE_COVERAGE.md](docs/CAMPAIGN_NATIVE_COVERAGE.md)).
 - Clarified product mission across README and docs: **faithful open-source
   Warcraft III** first, with **quality-of-life** upgrades on top
   ([docs/MISSION.md](docs/MISSION.md)).
+
+### compat
+- **Natives the campaigns call**: `SetRandomSeed`, `GetDefaultDifficulty`,
+  `QuestCreateItem` (retail's name for the engine's `CreateQuestItem`),
+  `UnitSuspendDecay`, `GetUnitDefaultMoveSpeed`, `IsUnitSelected`,
+  `IsUnitVisible`, `IsUnitIllusion`, `IsLocationVisibleToPlayer`,
+  `IsLocationFoggedToPlayer`, `IsLocationMaskedToPlayer`, `GetPlayerUnitCount`,
+  `UnitHasItem`, `GetDestructableTypeId`, `SetDestructableMaxLife`,
+  `SetTimeOfDayScale`, `GetTimeOfDayScale`, `DisplayTimedTextFromPlayer`,
+  `SetCameraQuickPosition`, `PlayerSetLeaderboard`, `PlayerGetLeaderboard`,
+  `LeaderboardHasPlayerItem` and `LeaderboardRemovePlayerItem` now work.
+  Presentation switches with nothing to drive yet (`EnableOcclusion`,
+  `EnableWorldFogBoundary`, `CameraSetSmoothingFactor`, the indicator and
+  leaderboard styling calls) are accepted and ignored so scripts keep running.
 
 ## Campaign Parity P0 Spine (2026-07-28)
 

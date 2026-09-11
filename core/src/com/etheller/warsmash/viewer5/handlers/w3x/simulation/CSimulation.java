@@ -127,6 +127,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	private final EnumMap<JassGameEventsWar3, List<CGlobalEvent>> eventTypeToEvents = new EnumMap<>(
 			JassGameEventsWar3.class);
 	private boolean timeOfDaySuspended;
+	private float timeOfDayScale = 1.0f;
 	private boolean gamePaused;
 	private Float nextGameTime = null;
 	private FalseTimeOfDay falseTimeOfDay = null;
@@ -586,7 +587,8 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 			}
 			else if (!this.timeOfDaySuspended) {
 				this.currentGameDayTimeElapsed = (this.currentGameDayTimeElapsed
-						+ WarsmashConstants.SIMULATION_STEP_TIME) % this.gameplayConstants.getGameDayLength();
+						+ (WarsmashConstants.SIMULATION_STEP_TIME * this.timeOfDayScale))
+						% this.gameplayConstants.getGameDayLength();
 			}
 		}
 		final float timeOfDayAfter = getGameTimeOfDay();
@@ -1173,6 +1175,15 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	public void setTimeOfDaySuspended(final boolean flag) {
 		this.timeOfDaySuspended = flag;
 
+	}
+
+	/** How fast the day/night cycle runs; 1.0 is the normal rate. */
+	public float getTimeOfDayScale() {
+		return this.timeOfDayScale;
+	}
+
+	public void setTimeOfDayScale(final float timeOfDayScale) {
+		this.timeOfDayScale = timeOfDayScale;
 	}
 
 	public void setGamePaused(final boolean gamePaused) {

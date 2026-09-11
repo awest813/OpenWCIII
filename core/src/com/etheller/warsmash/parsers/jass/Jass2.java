@@ -6435,6 +6435,241 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetSizeByItemCount",
 					(arguments, globalScope, triggerScope) -> null);
+
+			// ============================================================
+			// Natives that common.j declares and retail campaign scripts
+			// reach, but that had no implementation here. Ones whose only
+			// retail effect is a visual the renderer does not model yet are
+			// accepted and ignored, so scripts keep running.
+			// ============================================================
+			final Map<Integer, CLeaderboard> playerLeaderboards = new HashMap<>();
+			jassProgramVisitor.getJassNativeManager().createNative("PlayerSetLeaderboard",
+					(arguments, globalScope, triggerScope) -> {
+						final CPlayerJass player = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CLeaderboard board = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						if (player != null) {
+							if (board == null) {
+								playerLeaderboards.remove(player.getId());
+							}
+							else {
+								playerLeaderboards.put(player.getId(), board);
+							}
+						}
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("PlayerGetLeaderboard",
+					(arguments, globalScope, triggerScope) -> {
+						final CPlayerJass player = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CLeaderboard board = (player == null) ? null : playerLeaderboards.get(player.getId());
+						if (board == null) {
+							return leaderboardType.getNullValue();
+						}
+						return new HandleJassValue(leaderboardType, board);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardHasPlayerItem",
+					(arguments, globalScope, triggerScope) -> {
+						final CLeaderboard board = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CPlayerJass player = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						return BooleanJassValue
+								.of((board != null) && (player != null) && board.hasPlayerItem(player.getId()));
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardRemovePlayerItem",
+					(arguments, globalScope, triggerScope) -> {
+						final CLeaderboard board = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CPlayerJass player = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						if ((board != null) && (player != null)) {
+							board.removePlayerItem(player.getId());
+						}
+						return null;
+					});
+			// Leaderboard styling: the board renders as a text overlay, so the
+			// show-flags and per-row colors have nothing to apply to yet.
+			final JassFunction ignoredLeaderboardStyling = (arguments, globalScope, triggerScope) -> null;
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetStyle",
+					ignoredLeaderboardStyling);
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetItemStyle",
+					ignoredLeaderboardStyling);
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetLabelColor",
+					ignoredLeaderboardStyling);
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetValueColor",
+					ignoredLeaderboardStyling);
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetItemLabelColor",
+					ignoredLeaderboardStyling);
+			jassProgramVisitor.getJassNativeManager().createNative("LeaderboardSetItemValueColor",
+					ignoredLeaderboardStyling);
+
+			// Retail spells this one QuestCreateItem; the engine only had the
+			// made-up CreateQuestItem name, so scripts got a null quest item.
+			jassProgramVisitor.getJassNativeManager().createNative("QuestCreateItem",
+					(arguments, globalScope, triggerScope) -> {
+						final com.etheller.warsmash.viewer5.handlers.w3x.simulation.quest.CQuest quest = nullable(
+								arguments, 0, ObjectJassValueVisitor.getInstance());
+						if (quest == null) {
+							return questitemType.getNullValue();
+						}
+						return new HandleJassValue(questitemType, quest.createItem(""));
+					});
+
+			jassProgramVisitor.getJassNativeManager().createNative("UnitSuspendDecay",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final boolean suspend = arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+						if (whichUnit != null) {
+							whichUnit.setDecays(!suspend);
+						}
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("GetUnitDefaultMoveSpeed",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						if ((whichUnit == null) || (whichUnit.getUnitType() == null)) {
+							return RealJassValue.ZERO;
+						}
+						return RealJassValue.of(whichUnit.getUnitType().getSpeed());
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("IsUnitIllusion",
+					(arguments, globalScope, triggerScope) -> {
+						// Illusions are not simulated yet, so no unit is one.
+						return BooleanJassValue.FALSE;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("IsUnitSelected",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CPlayer whichPlayer = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						// Only the local player has a selection in this client, so a
+						// script asking about any other player gets false.
+						final boolean localPlayer = (whichPlayer != null)
+								&& (whichPlayer == CommonEnvironment.this.simulation
+										.getPlayer(war3MapViewer.getLocalPlayerIndex()));
+						return BooleanJassValue.of(localPlayer && (whichUnit != null)
+								&& meleeUI.getScriptSelectedUnits().contains(whichUnit));
+					});
+
+			jassProgramVisitor.getJassNativeManager().createNative("GetDestructableTypeId",
+					(arguments, globalScope, triggerScope) -> {
+						final CDestructable whichDestructable = nullable(arguments, 0,
+								ObjectJassValueVisitor.getInstance());
+						if (whichDestructable == null) {
+							return IntegerJassValue.of(0);
+						}
+						return IntegerJassValue.of(whichDestructable.getTypeId().getValue());
+					});
+
+			jassProgramVisitor.getJassNativeManager().createNative("DisplayTimedTextFromPlayer",
+					(arguments, globalScope, triggerScope) -> {
+						final CPlayer whichPlayer = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final float x = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float y = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float duration = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final String message = CommonEnvironment.this.gameUI
+								.getTrigStr(arguments.get(4).visit(StringJassValueVisitor.getInstance()));
+						if (whichPlayer == CommonEnvironment.this.simulation
+								.getPlayer(war3MapViewer.getLocalPlayerIndex())) {
+							meleeUI.displayTimedText(x, y, duration, message);
+						}
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetCameraQuickPosition",
+					(arguments, globalScope, triggerScope) -> {
+						final float x = arguments.get(0).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float y = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+						meleeUI.getCameraManager().target.x = x;
+						meleeUI.getCameraManager().target.y = y;
+						return null;
+					});
+
+			jassProgramVisitor.getJassNativeManager().createNative("IsUnitVisible",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CPlayerJass whichPlayer = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						if ((whichUnit == null) || (whichPlayer == null)) {
+							return BooleanJassValue.FALSE;
+						}
+						return BooleanJassValue
+								.of(whichUnit.isVisible(CommonEnvironment.this.simulation, whichPlayer.getId()));
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("IsLocationVisibleToPlayer",
+					(arguments, globalScope, triggerScope) -> BooleanJassValue
+							.of(fogStateAt(arguments) == CFogState.VISIBLE));
+			jassProgramVisitor.getJassNativeManager().createNative("IsLocationFoggedToPlayer",
+					(arguments, globalScope, triggerScope) -> BooleanJassValue
+							.of(fogStateAt(arguments) == CFogState.FOGGED));
+			jassProgramVisitor.getJassNativeManager().createNative("IsLocationMaskedToPlayer",
+					(arguments, globalScope, triggerScope) -> BooleanJassValue
+							.of(fogStateAt(arguments) == CFogState.MASKED));
+			jassProgramVisitor.getJassNativeManager().createNative("GetPlayerUnitCount",
+					(arguments, globalScope, triggerScope) -> {
+						final CPlayerJass whichPlayer = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final boolean includeIncomplete = arguments.get(1)
+								.visit(BooleanJassValueVisitor.getInstance());
+						if (whichPlayer == null) {
+							return IntegerJassValue.of(0);
+						}
+						int count = 0;
+						for (final CUnit unit : CommonEnvironment.this.simulation.getUnits()) {
+							if ((unit.getPlayerIndex() != whichPlayer.getId()) || unit.isDead()) {
+								continue;
+							}
+							if (!includeIncomplete && unit.isConstructing()) {
+								continue;
+							}
+							count++;
+						}
+						return IntegerJassValue.of(count);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("UnitHasItem",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final CItem whichItem = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						if ((whichUnit == null) || (whichItem == null)) {
+							return BooleanJassValue.FALSE;
+						}
+						final CAbilityInventory inventory = whichUnit.getInventoryData();
+						if (inventory == null) {
+							return BooleanJassValue.FALSE;
+						}
+						for (int slot = 0; slot < inventory.getCapacity(); slot++) {
+							if (inventory.getItemInSlot(slot) == whichItem) {
+								return BooleanJassValue.TRUE;
+							}
+						}
+						return BooleanJassValue.FALSE;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("SetTimeOfDayScale",
+					(arguments, globalScope, triggerScope) -> {
+						final float scale = arguments.get(0).visit(RealJassValueVisitor.getInstance()).floatValue();
+						CommonEnvironment.this.simulation.setTimeOfDayScale(scale);
+						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("GetTimeOfDayScale",
+					(arguments, globalScope, triggerScope) -> RealJassValue
+							.of(CommonEnvironment.this.simulation.getTimeOfDayScale()));
+			jassProgramVisitor.getJassNativeManager().createNative("SetDestructableMaxLife",
+					(arguments, globalScope, triggerScope) -> {
+						final CDestructable whichDestructable = nullable(arguments, 0,
+								ObjectJassValueVisitor.getInstance());
+						final float max = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+						if (whichDestructable != null) {
+							whichDestructable.setMaxLife(max);
+						}
+						return null;
+					});
+
+			// Accepted and ignored: presentation switches with no modelled
+			// counterpart, and single-player no-ops.
+			final JassFunction ignoredNative = (arguments, globalScope, triggerScope) -> null;
+			jassProgramVisitor.getJassNativeManager().createNative("CameraSetSmoothingFactor", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("EnableOcclusion", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("EnableWorldFogBoundary", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("SetAllyColorFilterState", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("UnitAddIndicator", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("AddIndicator", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("SyncSelections", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("DoNotSaveReplay", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("PreloadRefresh", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("PreloadEndEx", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("DisableRestartMission", ignoredNative);
+
 			jassProgramVisitor.getJassNativeManager().createNative("SetUnitInvulnerable",
 					(arguments, globalScope, triggerScope) -> {
 						final CUnit whichUnit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
@@ -12087,6 +12322,25 @@ public class Jass2 {
 					});
 		}
 
+		/**
+		 * Fog state of a (location, player) argument pair, as the
+		 * IsLocation*ToPlayer natives take them. An unknown location or player
+		 * reads as unexplored.
+		 */
+		private CFogState fogStateAt(final List<JassValue> arguments) {
+			final AbilityPointTarget location = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+			final CPlayerJass whichPlayer = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+			if ((location == null) || (whichPlayer == null)) {
+				return CFogState.MASKED;
+			}
+			final CPlayer simulationPlayer = this.simulation.getPlayer(whichPlayer.getId());
+			if (simulationPlayer == null) {
+				return CFogState.MASKED;
+			}
+			return simulationPlayer.getFogOfWar().getFogState(this.simulation, this.simulation.getPathingGrid(),
+					location.x, location.y);
+		}
+
 		public void main() {
 			this.simulation.setGlobalScope(this.jassProgramVisitor.getGlobals());
 			// The JASS ability layer is optional: it only exists when the ini
@@ -12513,6 +12767,12 @@ public class Jass2 {
 					return IntegerJassValue
 							.of(simulation.getSeededRandom().nextInt((highBound - lowBound) + 1) + lowBound);
 				});
+		jassProgramVisitor.getJassNativeManager().createNative("SetRandomSeed",
+				(arguments, globalScope, triggerScope) -> {
+					final int seed = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					simulation.getSeededRandom().setSeed(seed);
+					return null;
+				});
 	}
 
 	/**
@@ -12832,6 +13092,12 @@ public class Jass2 {
 							.visit(ObjectJassValueVisitor.<CMapDifficulty>getInstance());
 					mapConfig.setGameDifficulty(gameDifficulty);
 					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetDefaultDifficulty",
+				(arguments, globalScope, triggerScope) -> {
+					final CMapDifficulty gameDifficulty = mapConfig.getGameDifficulty();
+					return new HandleJassValue(gamedifficultyType,
+							gameDifficulty == null ? CMapDifficulty.NORMAL : gameDifficulty);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("SetResourceDensity",
 				(arguments, globalScope, triggerScope) -> {

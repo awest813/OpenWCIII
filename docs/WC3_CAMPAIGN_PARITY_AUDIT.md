@@ -2,12 +2,44 @@
 
 **Goal:** Run the Warcraft III single-player campaigns (Reign of Chaos + The Frozen Throne) in Warsmash / OpenWCIII with full parity to retail WC3.
 
-**Status (as of 2026-07-28):** Campaign menu + single-mission launch work.
+**Status (as of 2026-09-10):** Missions load and play from retail disc data.
 **P0 progression spine is largely landed** (`ChangeLevel` + score Continue,
 dialog buttons, selection, hero carry-over, menu restore, availability store,
 score/boards MVP, transmission VO + named anims, cine filters, volume groups,
 hero natives, AI assault MVP). Still missing for full parity: real movie
-decode, competitive build AI, sky mesh, RoC/TFT soak.
+decode, competitive build AI, sky mesh, full RoC/TFT soak.
+
+## Measuring parity
+
+`./gradlew :desktop:campaignNativeAudit` reads the campaign scripts out of your
+own archives and reports which `common.j` natives the campaigns reach that the
+engine does not implement. Re-run it after native work; the current output is
+[CAMPAIGN_NATIVE_COVERAGE.md](CAMPAIGN_NATIVE_COVERAGE.md).
+
+```bash
+./gradlew :desktop:campaignNativeAudit -Pargs="--mpq <war3.mpq> --mpq <War3x.mpq> --mpq <War3xlocal.mpq>"
+```
+
+Across all 85 retail campaign maps, reachable-but-unimplemented natives went
+from 79 to 41 in the 2026-09-10 pass.
+
+## First soak on retail disc data (2026-09-10)
+
+Nine campaign openers were launched with `-loadfile` against unpatched Reign of
+Chaos 1.00 + Frozen Throne 1.07 disc data: RoC Prologue01, Human01, Orc01,
+Undead01, NightElf01 and TFT HumanX01, UndeadX01, OrcX01, NightElfX01. All nine
+now reach in-mission simulation with no fatal exception. What that pass found:
+
+- Every `abilityBehaviors` config file failed to parse on Java 17, so every
+  Ability Builder ability was missing. Fixed.
+- Scene lights crashed the render thread through a buffer-position bug. Fixed.
+- Older Battle.net UI data, missing minimap icons and an unparseable doodad
+  object data table each aborted startup or map load. All three now degrade.
+- `TriggerRegisterUnitInRange` is the largest remaining gameplay gap: 24 maps
+  reach it and the engine has no moving-unit proximity event.
+- `CreateTimer` and `CreateGroup` are reported as unimplemented at menu time by
+  a script environment that declares but cannot call them. Harmless so far,
+  worth tracing.
 
 **Severity legend**
 
@@ -164,6 +196,9 @@ decode, competitive build AI, sky mesh, RoC/TFT soak.
 - [x] `Cheat` native (basic: whosyourdaddy / greedisgood / pointbreak / thereisnospoon)
 
 ### Mission soak matrix (required for “full parity” sign-off)
+
+Nine campaign openers pass a load-and-run check as of 2026-09-10; the rest of
+the matrix below is still to do.
 
 Play and log missing natives / abilities / crashes for each:
 

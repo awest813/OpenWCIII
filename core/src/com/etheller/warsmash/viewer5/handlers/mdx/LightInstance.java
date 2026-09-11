@@ -59,8 +59,13 @@ public class LightInstance implements UpdatableObject, SceneLightInstance {
 			rebuildCache();
 			cacheGeneration = currentGeneration;
 		}
+		// Bulk-copy at the requested offset without consuming the buffer: callers
+		// fill several lights and then set the limit to the total float count, so a
+		// relative put would leave nothing remaining for the texture upload.
+		final int previousPosition = floatBuffer.position();
 		floatBuffer.position(offset);
 		floatBuffer.put(cache, 0, 16);
+		floatBuffer.position(previousPosition);
 	}
 
 	/**

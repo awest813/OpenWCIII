@@ -139,3 +139,5 @@ Thumbs.db
 ## data
 /core/data
 /core/assets/Logs
+# Local dev data configs
+core/assets/warsmash.local.ini

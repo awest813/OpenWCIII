@@ -29,7 +29,7 @@ public class ABActionIterateUnitsInRangeOfUnitMatchingCondition implements ABAct
 
 	// ⚡ Bolt Optimization: Use an object pool for the CUnitEnumFunction to prevent allocating an anonymous class
 	// on every tick during spatial queries, while avoiding re-entrancy bugs. This reduces GC pressure safely.
-	private final Pool<IterateUnitsInRangeOfUnitMatchingConditionEnum> enumFunctionPool = new Pool<IterateUnitsInRangeOfUnitMatchingConditionEnum>() {
+	private final transient Pool<IterateUnitsInRangeOfUnitMatchingConditionEnum> enumFunctionPool = new Pool<IterateUnitsInRangeOfUnitMatchingConditionEnum>() {
 		@Override
 		protected IterateUnitsInRangeOfUnitMatchingConditionEnum newObject() {
 			return new IterateUnitsInRangeOfUnitMatchingConditionEnum();

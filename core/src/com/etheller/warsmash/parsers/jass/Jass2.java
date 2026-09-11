@@ -12089,15 +12089,24 @@ public class Jass2 {
 
 		public void main() {
 			this.simulation.setGlobalScope(this.jassProgramVisitor.getGlobals());
-			try {
-				final JassThread abilitiesThread = this.jassProgramVisitor.getGlobals().createThread("abilities_main",
-						Collections.emptyList(), TriggerExecutionScope.EMPTY);
-				this.jassProgramVisitor.getGlobals().queueThread(abilitiesThread);
+			// The JASS ability layer is optional: it only exists when the ini
+			// JassFileList includes Scripts\abilitiesDefaults.j. Without it the
+			// abilities come from the Ability Builder JSON configs instead.
+			if (this.jassProgramVisitor.getGlobals().getFunctionDefinitionByName("abilities_main") == null) {
+				System.out.println(
+						"No abilities_main in the loaded scripts; using Ability Builder abilities only. Add Scripts\\abilitiesDefaults.j to JassFileList to load the JASS ability layer.");
 			}
-			catch (final Exception exc) {
-				new JassException(this.jassProgramVisitor.getGlobals(),
-						"Exception on Line " + this.jassProgramVisitor.getGlobals().getLineNumber(), exc)
-						.printStackTrace();
+			else {
+				try {
+					final JassThread abilitiesThread = this.jassProgramVisitor.getGlobals()
+							.createThread("abilities_main", Collections.emptyList(), TriggerExecutionScope.EMPTY);
+					this.jassProgramVisitor.getGlobals().queueThread(abilitiesThread);
+				}
+				catch (final Exception exc) {
+					new JassException(this.jassProgramVisitor.getGlobals(),
+							"Exception on Line " + this.jassProgramVisitor.getGlobals().getLineNumber(), exc)
+							.printStackTrace();
+				}
 			}
 			try {
 				final JassThread mainThread = this.jassProgramVisitor.getGlobals().createThread("main",

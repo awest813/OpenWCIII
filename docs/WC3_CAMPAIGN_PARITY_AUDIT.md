@@ -21,7 +21,7 @@ engine does not implement. Re-run it after native work; the current output is
 ```
 
 Across all 85 retail campaign maps, reachable-but-unimplemented natives went
-from 79 to 41 in the 2026-09-10 pass.
+from 79 to 37 across the 2026-09-10 and 2026-09-13 passes.
 
 ## First soak on retail disc data (2026-09-10)
 
@@ -35,11 +35,18 @@ now reach in-mission simulation with no fatal exception. What that pass found:
 - Scene lights crashed the render thread through a buffer-position bug. Fixed.
 - Older Battle.net UI data, missing minimap icons and an unparseable doodad
   object data table each aborted startup or map load. All three now degrade.
-- `TriggerRegisterUnitInRange` is the largest remaining gameplay gap: 24 maps
-  reach it and the engine has no moving-unit proximity event.
-- `CreateTimer` and `CreateGroup` are reported as unimplemented at menu time by
-  a script environment that declares but cannot call them. Harmless so far,
-  worth tracing.
+- `TriggerRegisterUnitInRange` was the largest remaining gameplay gap, reached
+  by 24 maps. It now works: `CUnitInRangeEvent` watches the circle each tick.
+- `CreateTimer` and `CreateGroup` were missing from the config environment,
+  which is where Blizzard.j's timer and group globals get initialized. Fixed.
+
+### Next gap: the AI script environment
+
+Campaign AI scripts call `common.j` natives such as `Player` that `common.ai`
+never declares, so `JassAIEnvironment.loadAI` fails to compile them and the
+mission runs with no AI. NightElf01 shows this. Alongside it, 64 of the 123
+`common.ai` natives have no implementation, which is what keeps the enemy from
+building a competitive economy.
 
 **Severity legend**
 

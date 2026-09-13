@@ -2215,6 +2215,19 @@ public class Jass2 {
 						// but do not yet fire events; return null handle and continue gracefully.
 						return eventType.getNullValue();
 					});
+			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterUnitInRange",
+					(arguments, globalScope, triggerScope) -> {
+						final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.<Trigger>getInstance());
+						final CUnit whichUnit = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
+						final float range = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final TriggerBooleanExpression filter = nullable(arguments, 3,
+								ObjectJassValueVisitor.<TriggerBooleanExpression>getInstance());
+						if (whichUnit == null) {
+							return eventType.getNullValue();
+						}
+						return new HandleJassValue(eventType, CommonEnvironment.this.simulation
+								.registerUnitInRangeEvent(globalScope, trigger, whichUnit, range, filter));
+					});
 			if (JassSettings.CONTINUE_EXECUTING_ON_ERROR) {
 				jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterUnitStateEvent",
 						(arguments, globalScope, triggerScope) -> {
@@ -3287,6 +3300,35 @@ public class Jass2 {
 						final int variation = arguments.get(6).visit(IntegerJassValueVisitor.getInstance());
 						return new HandleJassValue(destructableType, CommonEnvironment.this.simulation
 								.createDestructableZ(new War3ID(rawcode), x, y, z, facing, scale, variation));
+					});
+			// The dead variants place the destructable already destroyed, which is
+			// how maps lay out rubble and broken gates at mission start.
+			jassProgramVisitor.getJassNativeManager().createNative("CreateDeadDestructable",
+					(arguments, globalScope, triggerScope) -> {
+						final int rawcode = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+						final float x = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float y = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float facing = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float scale = arguments.get(4).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final int variation = arguments.get(5).visit(IntegerJassValueVisitor.getInstance());
+						final CDestructable dest = CommonEnvironment.this.simulation
+								.createDestructable(new War3ID(rawcode), x, y, facing, scale, variation);
+						dest.setLife(CommonEnvironment.this.simulation, 0f);
+						return new HandleJassValue(destructableType, dest);
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("CreateDeadDestructableZ",
+					(arguments, globalScope, triggerScope) -> {
+						final int rawcode = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+						final float x = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float y = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float z = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float facing = arguments.get(4).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final float scale = arguments.get(5).visit(RealJassValueVisitor.getInstance()).floatValue();
+						final int variation = arguments.get(6).visit(IntegerJassValueVisitor.getInstance());
+						final CDestructable dest = CommonEnvironment.this.simulation
+								.createDestructableZ(new War3ID(rawcode), x, y, z, facing, scale, variation);
+						dest.setLife(CommonEnvironment.this.simulation, 0f);
+						return new HandleJassValue(destructableType, dest);
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("KillDestructable",
 					(arguments, globalScope, triggerScope) -> {
@@ -5010,6 +5052,11 @@ public class Jass2 {
 						final boolean flag = arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
 						unit.setPaused(flag);
 						return null;
+					});
+			jassProgramVisitor.getJassNativeManager().createNative("IsUnitPaused",
+					(arguments, globalScope, triggerScope) -> {
+						final CUnit unit = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						return BooleanJassValue.of((unit != null) && unit.isPaused());
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetPlayerHandicapXP",
 					(arguments, globalScope, triggerScope) -> {

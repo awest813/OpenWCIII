@@ -50,6 +50,17 @@ Changes are grouped by category:
   ([docs/MISSION.md](docs/MISSION.md)).
 
 ### compat
+- **`TriggerRegisterUnitInRange`** works: the simulation now watches a circle
+  around the registered unit and fires the trigger as another unit crosses into
+  it, once per entry, with the entering unit as the triggering unit. 24 campaign
+  maps use it for the approach-and-talk triggers.
+- **`CreateDeadDestructable`** and **`CreateDeadDestructableZ`** place a
+  destroyed destructable, which is how maps lay out rubble at mission start.
+- **`IsUnitPaused`** reports the unit's pause state.
+- **Map config gets `CreateTimer` and `CreateGroup`**: Blizzard.j initializes
+  timer and group globals where it declares them, so reading a map's config ran
+  both before any config function did, and every map load logged seven
+  missing-native errors.
 - **Natives the campaigns call**: `SetRandomSeed`, `GetDefaultDifficulty`,
   `QuestCreateItem` (retail's name for the engine's `CreateQuestItem`),
   `UnitSuspendDecay`, `GetUnitDefaultMoveSpeed`, `IsUnitSelected`,

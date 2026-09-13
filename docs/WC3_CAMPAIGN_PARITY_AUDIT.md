@@ -40,6 +40,16 @@ now reach in-mission simulation with no fatal exception. What that pass found:
 - `CreateTimer` and `CreateGroup` were missing from the config environment,
   which is where Blizzard.j's timer and group globals get initialized. Fixed.
 
+### Also worth tracing: config runs only in the lobby
+
+Only `ConfigEnvironment` ever runs a map's `config` function, so anything a map
+does there outside the config natives is dropped. Undead01 sets allied victory
+from `InitCustomTeams`, and the config pass has no `SetPlayerState` to apply it
+with. The simulation does support allied victory and the W3I force flags carry
+it too, so check whether these maps rely on the script call before deciding
+between registering the native in the config pass or running `config` in the
+game environment.
+
 ### Next gap: the AI script environment
 
 Campaign AI scripts call `common.j` natives such as `Player` that `common.ai`

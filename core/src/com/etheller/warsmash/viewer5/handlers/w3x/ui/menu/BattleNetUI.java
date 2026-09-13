@@ -152,6 +152,22 @@ public class BattleNetUI {
 	private War3Map gameChatroomMap;
 	private War3MapW3i gameChatroomMapInfo;
 
+	/**
+	 * Looks up a glue panel that only exists in newer Warcraft III UI data. Patches
+	 * before the account-email screens shipped (RoC 1.00 / TFT 1.07 CD data, for
+	 * example) have no ChangeEmailPanel, PasswordRecoveryPanel or EmailBindPanel in
+	 * their FDF, so a missing frame is expected there rather than a fatal error.
+	 */
+	private static UIFrame hideOptionalPanel(final GameUI rootFrame, final String frameName) {
+		final UIFrame panel = rootFrame.getFrameByName(frameName, 0);
+		if (panel == null) {
+			System.err.println("BattleNetUI: no \"" + frameName + "\" frame in this UI data; skipping it");
+			return null;
+		}
+		panel.setVisible(false);
+		return panel;
+	}
+
 	public BattleNetUI(final GameUI rootFrame, final Viewport uiViewport, final Scene uiScene,
 			final DataSource dataSource, final BattleNetUIActionListener actionListener) {
 		this.rootFrame = rootFrame;
@@ -164,14 +180,10 @@ public class BattleNetUI {
 		this.battleNetMainFrame.setVisible(false);
 		this.battleNetDoors = (SpriteFrame) rootFrame.getFrameByName("BattleNetMainBackground", 0);
 		this.battleNetDoors.setVisible(false);
-		this.battleNetChangePasswordPanel = rootFrame.getFrameByName("ChangePasswordPanel", 0);
-		this.battleNetChangePasswordPanel.setVisible(false);
-		this.battleNetChangeEmailPanel = rootFrame.getFrameByName("ChangeEmailPanel", 0);
-		this.battleNetChangeEmailPanel.setVisible(false);
-		this.battleNetPasswordRecoveryPanel = rootFrame.getFrameByName("PasswordRecoveryPanel", 0);
-		this.battleNetPasswordRecoveryPanel.setVisible(false);
-		this.battleNetEmailBindPanel = rootFrame.getFrameByName("EmailBindPanel", 0);
-		this.battleNetEmailBindPanel.setVisible(false);
+		this.battleNetChangePasswordPanel = hideOptionalPanel(rootFrame, "ChangePasswordPanel");
+		this.battleNetChangeEmailPanel = hideOptionalPanel(rootFrame, "ChangeEmailPanel");
+		this.battleNetPasswordRecoveryPanel = hideOptionalPanel(rootFrame, "PasswordRecoveryPanel");
+		this.battleNetEmailBindPanel = hideOptionalPanel(rootFrame, "EmailBindPanel");
 
 		// *******************************************
 		// *
@@ -218,16 +230,22 @@ public class BattleNetUI {
 		this.accountNameEditBox.setOnEnter(logonRunnable);
 		this.passwordEditBox = (EditBoxFrame) rootFrame.getFrameByName("Password", 0);
 		this.passwordEditBox.setOnEnter(logonRunnable);
+		// Password recovery and account email arrived with the later Battle.net
+		// account screens; RoC 1.00 / TFT 1.07 login panels have neither button.
 		this.passwordRecoveryButton = (GlueButtonFrame) rootFrame.getFrameByName("PasswordRecoveryButton", 0);
-		this.passwordRecoveryButton.setOnClick(new Runnable() {
-			@Override
-			public void run() {
-				actionListener.recoverPassword(BattleNetUI.this.accountNameEditBox.getText());
-			}
-		});
+		if (this.passwordRecoveryButton != null) {
+			this.passwordRecoveryButton.setOnClick(new Runnable() {
+				@Override
+				public void run() {
+					actionListener.recoverPassword(BattleNetUI.this.accountNameEditBox.getText());
+				}
+			});
+		}
 		this.selectedRealmValue = (StringFrame) rootFrame.getFrameByName("SelectedRealmValue", 0);
 		this.changeEmailButton = (GlueButtonFrame) rootFrame.getFrameByName("ChangeEmailButton", 0);
-		this.changeEmailButton.setEnabled(false);
+		if (this.changeEmailButton != null) {
+			this.changeEmailButton.setEnabled(false);
+		}
 		this.changePasswordButton = (GlueButtonFrame) rootFrame.getFrameByName("ChangePasswordButton", 0);
 		this.newAccountButton = (GlueButtonFrame) rootFrame.getFrameByName("NewAccountButton", 0);
 		this.newAccountButton.setOnClick(new Runnable() {

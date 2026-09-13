@@ -28,7 +28,7 @@ public class ABActionIterateDestructablesInRangeOfLocation implements ABAction {
 	private List<ABAction> iterationActions;
 
 	// ⚡ Bolt Optimization: Cache enum function to prevent per-tick GC allocations during spatial queries
-	private final Pool<IterateDestructablesInRangeOfLocationEnum> enumFunctionPool = new Pool<IterateDestructablesInRangeOfLocationEnum>() {
+	private final transient Pool<IterateDestructablesInRangeOfLocationEnum> enumFunctionPool = new Pool<IterateDestructablesInRangeOfLocationEnum>() {
 		@Override
 		protected IterateDestructablesInRangeOfLocationEnum newObject() {
 			return new IterateDestructablesInRangeOfLocationEnum();

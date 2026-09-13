@@ -27,7 +27,7 @@ public class ABActionIterateUnitsInRangeOfUnit implements ABAction {
 
 	// ⚡ Bolt Optimization: Use an object pool for the CUnitEnumFunction to prevent allocating an anonymous class
 	// on every tick during spatial queries, while avoiding re-entrancy bugs. This reduces GC pressure safely.
-	private final Pool<IterateUnitsInRangeEnum> enumFunctionPool = new Pool<IterateUnitsInRangeEnum>() {
+	private final transient Pool<IterateUnitsInRangeEnum> enumFunctionPool = new Pool<IterateUnitsInRangeEnum>() {
 		@Override
 		protected IterateUnitsInRangeEnum newObject() {
 			return new IterateUnitsInRangeEnum();

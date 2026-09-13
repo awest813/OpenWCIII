@@ -62,6 +62,31 @@ public class CLeaderboard {
 		this.items.clear();
 	}
 
+	public boolean hasPlayerItem(final int playerIndex) {
+		for (final Item item : this.items) {
+			if (item.playerIndex == playerIndex) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Removes the first row belonging to the given player, matching the retail
+	 * behavior of LeaderboardRemovePlayerItem.
+	 *
+	 * @return true if a row was removed
+	 */
+	public boolean removePlayerItem(final int playerIndex) {
+		for (int i = 0; i < this.items.size(); i++) {
+			if (this.items.get(i).playerIndex == playerIndex) {
+				this.items.remove(i);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public int getPlayerIndex(final int itemIndex) {
 		if ((itemIndex < 0) || (itemIndex >= this.items.size())) {
 			return -1;

@@ -20,7 +20,7 @@ public class ABCallbackCountUnitsInRangeOfLocation extends ABIntegerCallback {
 	private int count = 0;
 	
 	// ⚡ Bolt Optimization: Cache enum function to prevent per-tick GC allocations during spatial queries
-	private final Pool<CountUnitsInRangeOfLocationEnum> enumFunctionPool = new Pool<CountUnitsInRangeOfLocationEnum>() {
+	private final transient Pool<CountUnitsInRangeOfLocationEnum> enumFunctionPool = new Pool<CountUnitsInRangeOfLocationEnum>() {
 		@Override
 		protected CountUnitsInRangeOfLocationEnum newObject() {
 			return new CountUnitsInRangeOfLocationEnum();

@@ -44,6 +44,7 @@ add your results.*
 
 | WC3 Patch | Data Layout | OpenWCIII Support | Notes |
 |---|---|---|---|
+| 1.00 + 1.07 (retail CDs) | MPQ archives | ⚠️ Partial | Unpatched disc data; see below |
 | 1.22 – 1.28 | MPQ archives | ✅ Supported | Classic assets; set `MaxPlayers=16` |
 | 1.29 | MPQ (no War3Patch.mpq) | ✅ Supported | Remove `War3Patch.mpq` from INI; `MaxPlayers=28` |
 | 1.30 | Manually extracted CASC folders | ⚠️ Untested recently | May have regressions from newer code |
@@ -54,6 +55,23 @@ add your results.*
 ---
 
 ## Known Issues and Workarounds
+
+### Unpatched retail CD data (Reign of Chaos 1.00 + Frozen Throne 1.07)
+
+Both campaigns load and play from unpatched disc data. Use `war3.mpq` from the
+Reign of Chaos disc together with `War3x.mpq` and `War3xlocal.mpq` from the
+Frozen Throne installer, keeping the expansion archives after the base one in
+`[DataSources]` so they take priority. Set `GameVersion=1` and `MaxPlayers=16`.
+
+Three things differ from later patches:
+
+- The Battle.net glue has no account-email or password-recovery screens, so
+  those panels are skipped at startup and logged.
+- The entangled and haunted gold mine minimap icons do not exist yet, so the
+  minimap draws the plain gold mine icon for those.
+- Some doodad object data tables (`war3map.w3d`) carry no level/data fields
+  where the parser expects them, so those tables are skipped with a warning and
+  the map loads without their doodad tweaks.
 
 ### Patch 1.30 / 1.31 data layouts
 These patches are still supported in principle, but they are tested less

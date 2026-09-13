@@ -6,6 +6,7 @@ import java.util.EnumSet;
 import java.util.List;
 
 import com.badlogic.gdx.math.Rectangle;
+import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid.RemovablePathingMapInstance;
 import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.RenderWidget.UnitAnimationListenerImpl;
@@ -25,6 +26,7 @@ public class CDestructable extends CWidget {
 	private final RemovablePathingMapInstance pathingInstanceDeath;
 	private UnitAnimationListenerImpl unitAnimationListenerImpl;
 	private boolean invulnerable;
+	private float maxLifeOverride = -1;
 	private boolean blighted;
 	private Rectangle registeredEnumRectangle;
 
@@ -182,6 +184,11 @@ public class CDestructable extends CWidget {
 		return visitor.accept(this);
 	}
 
+	/** The rawcode of this destructable's type, as GetDestructableTypeId returns. */
+	public War3ID getTypeId() {
+		return this.destType.getTypeId();
+	}
+
 	public CDestructableType getDestType() {
 		return this.destType;
 	}
@@ -192,7 +199,12 @@ public class CDestructable extends CWidget {
 
 	@Override
 	public float getMaxLife() {
-		return this.destType.getMaxLife();
+		return this.maxLifeOverride < 0 ? this.destType.getMaxLife() : this.maxLifeOverride;
+	}
+
+	/** Per-instance maximum life, as SetDestructableMaxLife sets it. */
+	public void setMaxLife(final float maxLife) {
+		this.maxLifeOverride = maxLife;
 	}
 
 	public void setInvulnerable(final boolean invulnerable) {

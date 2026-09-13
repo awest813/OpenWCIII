@@ -614,12 +614,29 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		specialIcons[1] = ImageUtils.getAnyExtensionTexture(war3MapViewer.mapMpq,
 				"UI\\MiniMap\\minimap-neutralbuilding.blp");
 		specialIcons[2] = ImageUtils.getAnyExtensionTexture(war3MapViewer.mapMpq, "UI\\MiniMap\\minimap-hero.blp");
-		specialIcons[3] = ImageUtils.getAnyExtensionTexture(war3MapViewer.mapMpq,
-				"UI\\MiniMap\\minimap-gold-entangled.blp");
-		specialIcons[4] = ImageUtils.getAnyExtensionTexture(war3MapViewer.mapMpq,
-				"UI\\MiniMap\\minimap-gold-haunted.blp");
+		// Entangled and haunted gold mines only got their own minimap icons in a
+		// later patch; older data draws the plain gold mine icon for them.
+		specialIcons[3] = loadOptionalMinimapIcon(war3MapViewer, "UI\\MiniMap\\minimap-gold-entangled.blp",
+				specialIcons[0]);
+		specialIcons[4] = loadOptionalMinimapIcon(war3MapViewer, "UI\\MiniMap\\minimap-gold-haunted.blp",
+				specialIcons[0]);
 		final Rectangle playableMapArea = war3MapViewer.terrain.getPlayableMapArea();
 		return new MeleeUIMinimap(minimapDisplayArea, playableMapArea, minimapTexture, teamColors, specialIcons);
+	}
+
+	private static Texture loadOptionalMinimapIcon(final War3MapViewer war3MapViewer, final String path,
+			final Texture fallback) {
+		try {
+			final Texture icon = ImageUtils.getAnyExtensionTexture(war3MapViewer.mapMpq, path);
+			if (icon != null) {
+				return icon;
+			}
+		}
+		catch (final IllegalStateException missingTexture) {
+			// fall through and use the fallback icon
+		}
+		System.err.println("Minimap icon missing from this data version, using the gold mine icon: " + path);
+		return fallback;
 	}
 
 	/**

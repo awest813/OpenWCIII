@@ -2,12 +2,61 @@
 
 **Goal:** Run the Warcraft III single-player campaigns (Reign of Chaos + The Frozen Throne) in Warsmash / OpenWCIII with full parity to retail WC3.
 
-**Status (as of 2026-07-28):** Campaign menu + single-mission launch work.
+**Status (as of 2026-09-10):** Missions load and play from retail disc data.
 **P0 progression spine is largely landed** (`ChangeLevel` + score Continue,
 dialog buttons, selection, hero carry-over, menu restore, availability store,
 score/boards MVP, transmission VO + named anims, cine filters, volume groups,
 hero natives, AI assault MVP). Still missing for full parity: real movie
-decode, competitive build AI, sky mesh, RoC/TFT soak.
+decode, competitive build AI, sky mesh, full RoC/TFT soak.
+
+## Measuring parity
+
+`./gradlew :desktop:campaignNativeAudit` reads the campaign scripts out of your
+own archives and reports which `common.j` natives the campaigns reach that the
+engine does not implement. Re-run it after native work; the current output is
+[CAMPAIGN_NATIVE_COVERAGE.md](CAMPAIGN_NATIVE_COVERAGE.md).
+
+```bash
+./gradlew :desktop:campaignNativeAudit -Pargs="--mpq <war3.mpq> --mpq <War3x.mpq> --mpq <War3xlocal.mpq>"
+```
+
+Across all 85 retail campaign maps, reachable-but-unimplemented natives went
+from 79 to 37 across the 2026-09-10 and 2026-09-13 passes.
+
+## First soak on retail disc data (2026-09-10)
+
+Nine campaign openers were launched with `-loadfile` against unpatched Reign of
+Chaos 1.00 + Frozen Throne 1.07 disc data: RoC Prologue01, Human01, Orc01,
+Undead01, NightElf01 and TFT HumanX01, UndeadX01, OrcX01, NightElfX01. All nine
+now reach in-mission simulation with no fatal exception. What that pass found:
+
+- Every `abilityBehaviors` config file failed to parse on Java 17, so every
+  Ability Builder ability was missing. Fixed.
+- Scene lights crashed the render thread through a buffer-position bug. Fixed.
+- Older Battle.net UI data, missing minimap icons and an unparseable doodad
+  object data table each aborted startup or map load. All three now degrade.
+- `TriggerRegisterUnitInRange` was the largest remaining gameplay gap, reached
+  by 24 maps. It now works: `CUnitInRangeEvent` watches the circle each tick.
+- `CreateTimer` and `CreateGroup` were missing from the config environment,
+  which is where Blizzard.j's timer and group globals get initialized. Fixed.
+
+### Also worth tracing: config runs only in the lobby
+
+Only `ConfigEnvironment` ever runs a map's `config` function, so anything a map
+does there outside the config natives is dropped. Undead01 sets allied victory
+from `InitCustomTeams`, and the config pass has no `SetPlayerState` to apply it
+with. The simulation does support allied victory and the W3I force flags carry
+it too, so check whether these maps rely on the script call before deciding
+between registering the native in the config pass or running `config` in the
+game environment.
+
+### Next gap: the AI script environment
+
+Campaign AI scripts call `common.j` natives such as `Player` that `common.ai`
+never declares, so `JassAIEnvironment.loadAI` fails to compile them and the
+mission runs with no AI. NightElf01 shows this. Alongside it, 64 of the 123
+`common.ai` natives have no implementation, which is what keeps the enemy from
+building a competitive economy.
 
 **Severity legend**
 
@@ -164,6 +213,9 @@ decode, competitive build AI, sky mesh, RoC/TFT soak.
 - [x] `Cheat` native (basic: whosyourdaddy / greedisgood / pointbreak / thereisnospoon)
 
 ### Mission soak matrix (required for “full parity” sign-off)
+
+Nine campaign openers pass a load-and-run check as of 2026-09-10; the rest of
+the matrix below is still to do.
 
 Play and log missing natives / abilities / crashes for each:
 

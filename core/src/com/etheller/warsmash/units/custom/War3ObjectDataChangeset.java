@@ -476,6 +476,18 @@ public final class War3ObjectDataChangeset {
 		return 3; // string
 	}
 
+	/**
+	 * Reports a table whose layout does not match what this parser expects and
+	 * abandons it. The caller restores its previous contents, so the map keeps
+	 * loading without the modifications in that one table. Classic doodad tables
+	 * hit this: they carry no level/data fields where the parser expects them.
+	 */
+	private boolean desynced(final String reason) {
+		System.err.println("Object data table for '" + this.kind + "' does not match the expected layout (" + reason
+				+ "); skipping its modifications.");
+		return false;
+	}
+
 	public boolean loadtable(final LittleEndianDataInputStream stream, final ObjectMap map, final boolean isOriginal,
 			final WTS wts, final boolean inlineWTS) throws IOException {
 		final War3ID noid = new War3ID(0);
@@ -490,7 +502,7 @@ public final class War3ObjectDataChangeset {
 			ObjectDataChangeEntry existingObject;
 			if (isOriginal) {
 				if (noid.equals(origid)) {
-					throw new IOException("the input stream might be screwed");
+					return desynced("zero object id in the standard table");
 				}
 				existingObject = map.get(origid);
 				if (existingObject == null) {
@@ -501,7 +513,7 @@ public final class War3ObjectDataChangeset {
 			else {
 				newid = readWar3ID(stream);
 				if (noid.equals(origid) || noid.equals(newid)) {
-					throw new IOException("the input stream might be screwed");
+					return desynced("zero object id in the custom table");
 				}
 				existingObject = map.get(newid);
 				if (existingObject == null) {
@@ -529,7 +541,7 @@ public final class War3ObjectDataChangeset {
 			for (int j = 0; j < ccount; j++) {
 				final War3ID chid = readWar3ID(stream);
 				if (noid.equals(chid)) {
-					throw new IOException("the input stream might be screwed");
+					return desynced("zero field id on object " + (isOriginal ? origid : newid));
 				}
 				if (!this.detected) {
 					this.detected = detectKind(chid);

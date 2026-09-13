@@ -74,6 +74,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CPla
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegionManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.state.FalseTimeOfDay;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.CUnitInRangeEvent;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CEffectType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CFogState;
@@ -124,9 +125,11 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	private transient CommandErrorListener commandErrorListener;
 	private final CRegionManager regionManager;
 	private final List<TimeOfDayEvent> timeOfDayVariableEvents = new ArrayList<>();
+	private final List<CUnitInRangeEvent> unitInRangeEvents = new ArrayList<>();
 	private final EnumMap<JassGameEventsWar3, List<CGlobalEvent>> eventTypeToEvents = new EnumMap<>(
 			JassGameEventsWar3.class);
 	private boolean timeOfDaySuspended;
+	private float timeOfDayScale = 1.0f;
 	private boolean gamePaused;
 	private Float nextGameTime = null;
 	private FalseTimeOfDay falseTimeOfDay = null;
@@ -567,6 +570,9 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		for (final CPathfindingProcessor pathfindingProcessor : this.pathfindingProcessors) {
 			pathfindingProcessor.update(this);
 		}
+		for (int i = 0; i < this.unitInRangeEvents.size(); i++) {
+			this.unitInRangeEvents.get(i).update(this);
+		}
 		this.gameTurnTick++;
 		final float timeOfDayBefore = getGameTimeOfDay();
 		if (this.falseTimeOfDay != null) {
@@ -586,7 +592,8 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 			}
 			else if (!this.timeOfDaySuspended) {
 				this.currentGameDayTimeElapsed = (this.currentGameDayTimeElapsed
-						+ WarsmashConstants.SIMULATION_STEP_TIME) % this.gameplayConstants.getGameDayLength();
+						+ (WarsmashConstants.SIMULATION_STEP_TIME * this.timeOfDayScale))
+						% this.gameplayConstants.getGameDayLength();
 			}
 		}
 		final float timeOfDayAfter = getGameTimeOfDay();
@@ -959,6 +966,23 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		};
 	}
 
+	/**
+	 * Registers a TriggerRegisterUnitInRange watch. The circle is re-checked every
+	 * simulation tick, so the trigger fires as a unit crosses into it.
+	 */
+	public RemovableTriggerEvent registerUnitInRangeEvent(final GlobalScope globalScope, final Trigger trigger,
+			final CUnit whichUnit, final float range, final TriggerBooleanExpression filter) {
+		final CUnitInRangeEvent unitInRangeEvent = new CUnitInRangeEvent(globalScope, trigger, whichUnit, range,
+				filter);
+		this.unitInRangeEvents.add(unitInRangeEvent);
+		return new RemovableTriggerEvent(trigger) {
+			@Override
+			public void remove() {
+				CSimulation.this.unitInRangeEvents.remove(unitInRangeEvent);
+			}
+		};
+	}
+
 	public RemovableTriggerEvent registerGameEvent(final GlobalScope globalScope, final Trigger trigger,
 			final JassGameEventsWar3 gameEvent) {
 		switch (gameEvent) {
@@ -1173,6 +1197,15 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	public void setTimeOfDaySuspended(final boolean flag) {
 		this.timeOfDaySuspended = flag;
 
+	}
+
+	/** How fast the day/night cycle runs; 1.0 is the normal rate. */
+	public float getTimeOfDayScale() {
+		return this.timeOfDayScale;
+	}
+
+	public void setTimeOfDayScale(final float timeOfDayScale) {
+		this.timeOfDayScale = timeOfDayScale;
 	}
 
 	public void setGamePaused(final boolean gamePaused) {

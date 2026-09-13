@@ -53,14 +53,14 @@ public class CAbilityAbilityBuilderActivePairing extends CAbilityAbilityBuilderG
 	private static final Rectangle RECYCLE_RECT = new Rectangle();
 
 	// ⚡ Bolt: Object pooling for re-entrant spatial queries to avoid allocations and state corruption
-	private final Pool<EnumRangeFunction> enumRangeFunctionPool = new Pool<EnumRangeFunction>() {
+	private final transient Pool<EnumRangeFunction> enumRangeFunctionPool = new Pool<EnumRangeFunction>() {
 		@Override
 		protected EnumRangeFunction newObject() {
 			return new EnumRangeFunction();
 		}
 	};
 
-	private final Pool<EnumRectFunction> enumRectFunctionPool = new Pool<EnumRectFunction>() {
+	private final transient Pool<EnumRectFunction> enumRectFunctionPool = new Pool<EnumRectFunction>() {
 		@Override
 		protected EnumRectFunction newObject() {
 			return new EnumRectFunction();

@@ -12550,9 +12550,20 @@ public class Jass2 {
 					raritycontrolType, blendmodeType, texmapflagsType, effecttypeType, fogstateType, versionType,
 					itemtypeType, attacktypeType, damagetypeType, weapontypeType, soundtypeType, pathingtypeType);
 			registerConversionAndStringNatives(jassProgramVisitor, gameUI);
+			final HandleIdAllocator configHandleIdAllocator = new HandleIdAllocator();
 			registerConfigNatives(jassProgramVisitor, mapConfig, startlocprioType, gametypeType, placementType,
 					gamespeedType, gamedifficultyType, mapdensityType, locationType, playerType, playercolorType,
-					mapcontrolType, playerslotstateType, mapConfig, new HandleIdAllocator());
+					mapcontrolType, playerslotstateType, mapConfig, configHandleIdAllocator);
+			// Blizzard.j initializes several timer and group globals where they are
+			// declared, so reading a map's config runs these before any config
+			// function does. The handles are never started here, but without them
+			// every map load logs the missing natives.
+			jassProgramVisitor.getJassNativeManager().createNative("CreateTimer",
+					(arguments, globalScope, triggerScope) -> new HandleJassValue(timerType,
+							new CTimerJass(configHandleIdAllocator.createId())));
+			jassProgramVisitor.getJassNativeManager().createNative("CreateGroup",
+					(arguments, globalScope, triggerScope) -> new HandleJassValue(groupType,
+							new UnitGroup(configHandleIdAllocator.createId())));
 
 		}
 

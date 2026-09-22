@@ -1328,6 +1328,25 @@ public class MenuUI {
 					this.rootFrame.add(missionSelectMenuUI);
 					this.campaignMissionSelectUIs[campaignIdx] = missionSelectMenuUI;
 
+					CampaignMission introCinematic = campaign.getIntroCinematic();
+					if (introCinematic == null) {
+						introCinematic = campaign.getOpenCinematic();
+					}
+					if (introCinematic != null) {
+						final CampaignMission finalIntro = introCinematic;
+						final CampaignButtonUI introButton = missionSelectMenuUI.addButtonReturning(
+								finalIntro.getHeader(), finalIntro.getMissionName(), new Runnable() {
+							@Override
+							public void run() {
+								if (!CampaignProgressStore.get().isOpCinematicAvailable(campaignIdx, 0)) {
+									return;
+								}
+								launchCampaignMission(finalIntro);
+							}
+						});
+						introButton.setEnabled(CampaignProgressStore.get().isOpCinematicAvailable(campaignIdx, 0));
+					}
+
 					int missionIndex = 0;
 					for (final CampaignMission mission : campaign.getMissions()) {
 						final int missionIdx = missionIndex;
@@ -1338,37 +1357,27 @@ public class MenuUI {
 								if (!CampaignProgressStore.get().isMissionAvailable(campaignIdx, missionIdx)) {
 									return;
 								}
-								if (!tryLoadAndCacheMapConfigs(mission.getMapFilename())) {
-									return;
-								}
-								MenuUI.this.campaignMenu.setVisible(false);
-								MenuUI.this.campaignBackButton.setVisible(false);
-								MenuUI.this.missionSelectFrame.setVisible(false);
-								MenuUI.this.campaignSelectFrame.setVisible(false);
-								MenuUI.this.campaignWarcraftIIILogo.setVisible(false);
-								MenuUI.this.campaignRootMenuUI.setVisible(false);
-								MenuUI.this.currentMissionSelectMenuUI.setVisible(false);
-								MenuUI.this.campaignFade.setSequence("Birth");
-								int localPlayerIndex = -1;
-								for (int i = 0; i < WarsmashConstants.MAX_PLAYERS; i++) {
-									final CBasePlayer player = MenuUI.this.currentMapConfig.getPlayer(i);
-									if (player.getController() == CMapControl.USER) {
-										player.setSlotState(CPlayerSlotState.PLAYING);
-										player.setName(MenuUI.this.profileManager.getCurrentProfile());
-										if (localPlayerIndex == -1) {
-											localPlayerIndex = i;
-										}
-									}
-								}
-								MenuUI.this.beginGameInformation = new BeginGameInformation();
-								MenuUI.this.beginGameInformation.gameMapLookup = new CurrentNetGameMapLookupPath(
-										mission.getMapFilename());
-								MenuUI.this.beginGameInformation.localPlayerIndex = localPlayerIndex;
+								launchCampaignMission(mission);
 							}
 						});
 						missionButton.setEnabled(
 								CampaignProgressStore.get().isMissionAvailable(campaignIdx, missionIdx));
 						missionIndex++;
+					}
+
+					final CampaignMission endCinematic = campaign.getEndCinematic();
+					if (endCinematic != null) {
+						final CampaignButtonUI endButton = missionSelectMenuUI.addButtonReturning(
+								endCinematic.getHeader(), endCinematic.getMissionName(), new Runnable() {
+							@Override
+							public void run() {
+								if (!CampaignProgressStore.get().isEdCinematicAvailable(campaignIdx, 0)) {
+									return;
+								}
+								launchCampaignMission(endCinematic);
+							}
+						});
+						endButton.setEnabled(CampaignProgressStore.get().isEdCinematicAvailable(campaignIdx, 0));
 					}
 
 					final CampaignButtonUI campaignButton = this.campaignRootMenuUI.addButtonReturning(
@@ -1671,13 +1680,19 @@ public class MenuUI {
 
 	private void internalStartMap(final String mapFilename, final int localPlayerIndex) {
 		this.loadingFrame.setVisible(true);
+		this.loadingBackground.setVisible(true);
 		this.loadingBar.setVisible(true);
 		this.loadingCustomPanel.setVisible(true);
+		this.loadingMeleePanel.setVisible(false);
+		this.glueScreenLoop.stop();
+		stopMusic();
+
 		final DataSource codebase = WarsmashGdxMapScreen.parseDataSources(this.warsmashIni);
 		final GameTurnManager turnManager;
 		turnManager = GameTurnManager.PAUSED;
 		final War3MapViewer viewer = new War3MapViewer(codebase, this.screenManager, this.currentMapConfig,
 				turnManager);
+		viewer.setCurrentMapPath(mapFilename);
 
 		if (WarsmashGdxMapScreen.ENABLE_AUDIO) {
 			viewer.worldScene.enableAudio();
@@ -1689,19 +1704,37 @@ public class MenuUI {
 			final DataTable worldEditData = viewer.loadWorldEditData(map);
 			final WTS wts = viewer.preloadWTS(map);
 
+			final String customLoadingModel = mapInfo.getLoadingScreenModel();
 			final int campaignBackground = mapInfo.getCampaignBackground();
-			int animationSequenceIndex;
-			final String campaignScreenModel;
-			if (campaignBackground == -1) {
+			int animationSequenceIndex = 0;
+			String campaignScreenModel = null;
+			if ((customLoadingModel != null) && !customLoadingModel.isEmpty()) {
+				campaignScreenModel = customLoadingModel;
+				animationSequenceIndex = 0;
+			}
+			else if (campaignBackground != -1) {
+				final Element loadingScreens = worldEditData != null ? worldEditData.get("LoadingScreens") : null;
+				if (loadingScreens != null) {
+					final String key = String.format("%2s", Integer.toString(campaignBackground)).replace(' ', '0');
+					if (loadingScreens.hasField(key)) {
+						animationSequenceIndex = loadingScreens.getFieldValue(key, 2);
+						campaignScreenModel = loadingScreens.getField(key, 3);
+					}
+				}
+			}
+			if ((campaignScreenModel == null) || campaignScreenModel.isEmpty()) {
 				animationSequenceIndex = 0;
 				String skinKey = "Default";
-				for (int j = 0; j < WarsmashConstants.RACE_MANAGER.getEntryCount(); j++) {
-					final CRaceManagerEntry entry = WarsmashConstants.RACE_MANAGER.get(j);
-					final CRacePreference racePreference = WarsmashConstants.RACE_MANAGER
-							.getRacePreferenceById(entry.getRacePrefId());
-					if (this.currentMapConfig.getPlayer(localPlayerIndex).isRacePrefSet(racePreference)) {
-						skinKey = entry.getKey();
-						break;
+				if ((localPlayerIndex >= 0) && (localPlayerIndex < WarsmashConstants.MAX_PLAYERS)
+						&& (this.currentMapConfig != null)) {
+					for (int j = 0; j < WarsmashConstants.RACE_MANAGER.getEntryCount(); j++) {
+						final CRaceManagerEntry entry = WarsmashConstants.RACE_MANAGER.get(j);
+						final CRacePreference racePreference = WarsmashConstants.RACE_MANAGER
+								.getRacePreferenceById(entry.getRacePrefId());
+						if (this.currentMapConfig.getPlayer(localPlayerIndex).isRacePrefSet(racePreference)) {
+							skinKey = entry.getKey();
+							break;
+						}
 					}
 				}
 				// NOTE: this is a heavy reload to get the user skin, because MeleeUI loads it
@@ -1710,12 +1743,6 @@ public class MenuUI {
 				// and only loaded once.
 				final GameSkin userSkin = GameUI.loadSkin(map, skinKey);
 				campaignScreenModel = userSkin.getSkin().getField("LoadingMeleeBackground");
-			}
-			else {
-				final Element loadingScreens = worldEditData.get("LoadingScreens");
-				final String key = String.format("%2s", Integer.toString(campaignBackground)).replace(' ', '0');
-				animationSequenceIndex = loadingScreens.getFieldValue(key, 2);
-				campaignScreenModel = loadingScreens.getField(key, 3);
 			}
 
 			this.menuScreen.setModel(null, null);
@@ -1738,8 +1765,19 @@ public class MenuUI {
 	}
 
 	private static String getStringWithWTS(final WTS wts, String string) {
-		if (string.startsWith("TRIGSTR_")) {
-			string = wts.get(Integer.parseInt(string.substring(8)));
+		if (string == null) {
+			return "";
+		}
+		if (string.startsWith("TRIGSTR_") && (wts != null)) {
+			try {
+				final String resolved = wts.get(Integer.parseInt(string.substring(8)));
+				if (resolved != null) {
+					return resolved;
+				}
+			}
+			catch (final NumberFormatException e) {
+				// retain string as-is
+			}
 		}
 		return string;
 	}
@@ -1771,16 +1809,19 @@ public class MenuUI {
 			final CBasePlayer player = this.currentMapConfig.getPlayer(i);
 			if (player.getController() == CMapControl.USER) {
 				player.setSlotState(CPlayerSlotState.PLAYING);
-//					player.setName(MenuUI.this.profileManager.getCurrentProfile());
-//					break;
+				player.setName(MenuUI.this.profileManager.getCurrentProfile());
 				if (localPlayerIndex == -1) {
 					localPlayerIndex = i;
 				}
 			}
 		}
 		MenuUI.this.beginGameInformation.localPlayerIndex = localPlayerIndex;
-//		this.beginGameInformation.loadingStarted = true;
-		MenuUI.this.menuState = MenuState.GOING_TO_MAP;
+		if (this.currentCampaign != null) {
+			MenuUI.this.menuState = MenuState.MISSION_SELECT;
+		}
+		else {
+			MenuUI.this.menuState = MenuState.GOING_TO_MAP;
+		}
 	}
 
 	private void loadAndCacheMapConfigs(final String mapFilename) throws IOException {
@@ -2585,7 +2626,18 @@ public class MenuUI {
 				this.campaignFade.setVisible(true);
 				this.campaignFade.setSequence("Death");
 			}
-			this.menuState = MenuState.MISSION_SELECT;
+			if (CampaignProgressStore.get().consumeForceCampaignSelectScreen()) {
+				this.campaignSelectFrame.setVisible(true);
+				this.campaignRootMenuUI.setVisible(true);
+				if (this.currentMissionSelectMenuUI != null) {
+					this.currentMissionSelectMenuUI.setVisible(false);
+				}
+				this.missionSelectFrame.setVisible(false);
+				this.menuState = MenuState.CAMPAIGN;
+			}
+			else {
+				this.menuState = MenuState.MISSION_SELECT;
+			}
 			break;
 		case BATTLE_NET_CUSTOM_GAME_LOBBY: {
 			this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"), this.menuFogSettings);
@@ -2599,6 +2651,34 @@ public class MenuUI {
 
 	public void setPendingChangeLevel(final String mapPath) {
 		this.pendingChangeLevel = mapPath;
+	}
+
+	private void launchCampaignMission(final CampaignMission mission) {
+		if (!tryLoadAndCacheMapConfigs(mission.getMapFilename())) {
+			return;
+		}
+		this.campaignMenu.setVisible(false);
+		this.campaignBackButton.setVisible(false);
+		this.missionSelectFrame.setVisible(false);
+		this.campaignSelectFrame.setVisible(false);
+		this.campaignWarcraftIIILogo.setVisible(false);
+		this.campaignRootMenuUI.setVisible(false);
+		this.currentMissionSelectMenuUI.setVisible(false);
+		this.campaignFade.setSequence("Birth");
+		int localPlayerIndex = -1;
+		for (int i = 0; i < WarsmashConstants.MAX_PLAYERS; i++) {
+			final CBasePlayer player = this.currentMapConfig.getPlayer(i);
+			if (player.getController() == CMapControl.USER) {
+				player.setSlotState(CPlayerSlotState.PLAYING);
+				player.setName(this.profileManager.getCurrentProfile());
+				if (localPlayerIndex == -1) {
+					localPlayerIndex = i;
+				}
+			}
+		}
+		this.beginGameInformation = new BeginGameInformation();
+		this.beginGameInformation.gameMapLookup = new CurrentNetGameMapLookupPath(mission.getMapFilename());
+		this.beginGameInformation.localPlayerIndex = localPlayerIndex;
 	}
 
 	private void refreshCampaignAvailability() {
@@ -2619,9 +2699,17 @@ public class MenuUI {
 				continue;
 			}
 			final List<CampaignButtonUI> buttons = missionUI.getButtonUIs();
+			int btnIdx = 0;
+			final boolean hasIntro = (campaign.getIntroCinematic() != null) || (campaign.getOpenCinematic() != null);
+			if (hasIntro && (btnIdx < buttons.size())) {
+				buttons.get(btnIdx++).setEnabled(store.isOpCinematicAvailable(campaignIdx, 0));
+			}
 			final List<CampaignMission> missions = campaign.getMissions();
-			for (int missionIdx = 0; (missionIdx < buttons.size()) && (missionIdx < missions.size()); missionIdx++) {
-				buttons.get(missionIdx).setEnabled(store.isMissionAvailable(campaignIdx, missionIdx));
+			for (int missionIdx = 0; (missionIdx < missions.size()) && (btnIdx < buttons.size()); missionIdx++, btnIdx++) {
+				buttons.get(btnIdx).setEnabled(store.isMissionAvailable(campaignIdx, missionIdx));
+			}
+			if ((campaign.getEndCinematic() != null) && (btnIdx < buttons.size())) {
+				buttons.get(btnIdx++).setEnabled(store.isEdCinematicAvailable(campaignIdx, 0));
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 package com.etheller.warsmash.parsers.jass;
 
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -17,7 +18,10 @@ import com.etheller.interpreter.ast.value.CodeJassValue;
 import com.etheller.interpreter.ast.value.HandleJassType;
 import com.etheller.interpreter.ast.value.HandleJassValue;
 import com.etheller.interpreter.ast.value.IntegerJassValue;
+import com.etheller.interpreter.ast.value.JassValue;
+import com.etheller.interpreter.ast.value.JassValueVisitor;
 import com.etheller.interpreter.ast.value.RealJassValue;
+import com.etheller.interpreter.ast.value.visitor.BooleanJassValueVisitor;
 import com.etheller.interpreter.ast.value.visitor.CodeJassValueVisitor;
 import com.etheller.interpreter.ast.value.visitor.IntegerJassValueVisitor;
 import com.etheller.interpreter.ast.value.visitor.ObjectJassValueVisitor;
@@ -26,17 +30,29 @@ import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.viewer5.Scene;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitClassification;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitType;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUpgradeType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.HandleIdAllocator;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.build.AbstractCAbilityBuild;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityGoldMine;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityGoldMinable;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityQueue;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.upgrade.CAbilityUpgrade;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorReturnResources;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderExecutor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimerSleepAction;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.unit.BuildOnBuildingIntersector;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.PointAbilityTargetCheckReceiver;
 import com.etheller.warsmash.util.War3ID;
@@ -222,7 +238,7 @@ public class JassAIEnvironment {
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("Player", (arguments, globalScope, triggerScope) -> {
 			final int index = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
-			final CPlayer player = simulation.getPlayer(index);
+			final CPlayer player = simulation != null ? simulation.getPlayer(index) : null;
 			return new HandleJassValue(JassAIEnvironment.this.playerType, player);
 		});
 		jassProgramVisitor.getJassNativeManager().createNative("UnitAlive",
@@ -296,12 +312,12 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
 		jassProgramVisitor.getJassNativeManager().createNative("GetGold",
 				(arguments, globalScope, triggerScope) -> {
-					final CPlayer player = simulation.getPlayer(JassAIEnvironment.this.aiPlayerIndex);
+					final CPlayer player = simulation != null ? simulation.getPlayer(JassAIEnvironment.this.aiPlayerIndex) : null;
 					return IntegerJassValue.of(player != null ? player.getGold() : 0);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetWood",
 				(arguments, globalScope, triggerScope) -> {
-					final CPlayer player = simulation.getPlayer(JassAIEnvironment.this.aiPlayerIndex);
+					final CPlayer player = simulation != null ? simulation.getPlayer(JassAIEnvironment.this.aiPlayerIndex) : null;
 					return IntegerJassValue.of(player != null ? player.getLumber() : 0);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetUnitCount",
@@ -336,21 +352,244 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("GetNextExpansion",
 				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(-1));
 		jassProgramVisitor.getJassNativeManager().createNative("GetExpansionX",
-				(arguments, globalScope, triggerScope) -> RealJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of((int) getTownCenterX()));
 		jassProgramVisitor.getJassNativeManager().createNative("GetExpansionY",
-				(arguments, globalScope, triggerScope) -> RealJassValue.ZERO);
-		jassProgramVisitor.getJassNativeManager().createNative("SetBuildUnit",
-				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
-		jassProgramVisitor.getJassNativeManager().createNative("SetBuildUnitEx",
-				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
-		jassProgramVisitor.getJassNativeManager().createNative("SetBuildUpgr",
-				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
-		jassProgramVisitor.getJassNativeManager().createNative("SetBuildUpgrEx",
-				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
-		jassProgramVisitor.getJassNativeManager().createNative("SetBuildDone",
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of((int) getTownCenterY()));
+		jassProgramVisitor.getJassNativeManager().createNative("SetProduce",
+				(arguments, globalScope, triggerScope) -> {
+					final int qty = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final int unitId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					final int town = arguments.get(2).visit(IntegerJassValueVisitor.getInstance());
+					return BooleanJassValue.of(setProduce(qty, unitId, town));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("SetExpansion",
+				(arguments, globalScope, triggerScope) -> {
+					final CUnit peon = nullable(arguments, 0, ObjectJassValueVisitor.<CUnit>getInstance());
+					final int unitId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					return BooleanJassValue.of(setProduce(1, unitId, -1));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("SetUpgrade",
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					return BooleanJassValue.of(setProduce(1, unitId, -1));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUnitGoldCost",
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CUnitType ut = simulation.getUnitData().getUnitType(new War3ID(unitId));
+					return IntegerJassValue.of(ut != null ? ut.getGoldCost() : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUnitWoodCost",
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CUnitType ut = simulation.getUnitData().getUnitType(new War3ID(unitId));
+					return IntegerJassValue.of(ut != null ? ut.getLumberCost() : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUpgradeGoldCost",
+				(arguments, globalScope, triggerScope) -> {
+					final int upgId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CUpgradeType ut = simulation.getUpgradeData().getType(new War3ID(upgId));
+					final CPlayer player = simulation.getPlayer(aiPlayerIndex);
+					final int currentLevel = player != null ? player.getTechtreeUnlocked(new War3ID(upgId)) : 0;
+					return IntegerJassValue.of(ut != null ? ut.getGoldCost(currentLevel) : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUpgradeWoodCost",
+				(arguments, globalScope, triggerScope) -> {
+					final int upgId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CUpgradeType ut = simulation.getUpgradeData().getType(new War3ID(upgId));
+					final CPlayer player = simulation.getPlayer(aiPlayerIndex);
+					final int currentLevel = player != null ? player.getTechtreeUnlocked(new War3ID(upgId)) : 0;
+					return IntegerJassValue.of(ut != null ? ut.getLumberCost(currentLevel) : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUpgradeLevel",
+				(arguments, globalScope, triggerScope) -> {
+					final int upgId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CPlayer player = simulation.getPlayer(aiPlayerIndex);
+					return IntegerJassValue.of(player != null ? player.getTechtreeUnlocked(new War3ID(upgId)) : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetTownUnitCount",
+				(arguments, globalScope, triggerScope) -> {
+					final int id = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final int town = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					final boolean doneOnly = arguments.get(2).visit(BooleanJassValueVisitor.getInstance());
+					return IntegerJassValue.of(getTownUnitCount(id, town, doneOnly));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUnitCountDone",
+				(arguments, globalScope, triggerScope) -> {
+					final int id = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					return IntegerJassValue.of(countUnitsOfTypeDone(id));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetMinesOwned",
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(townHasMine(0) ? 1 : 0));
+		jassProgramVisitor.getJassNativeManager().createNative("GetGoldOwned",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayer player = simulation != null ? simulation.getPlayer(aiPlayerIndex) : null;
+					return IntegerJassValue.of(player != null ? player.getGold() : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("TownWithMine",
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(townHasMine(0) ? 0 : -1));
+		jassProgramVisitor.getJassNativeManager().createNative("TownHasMine",
+				(arguments, globalScope, triggerScope) -> {
+					final int town = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					return BooleanJassValue.of(townHasMine(town));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("TownHasHall",
+				(arguments, globalScope, triggerScope) -> {
+					final int town = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					return BooleanJassValue.of(townHasHall(town));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("TownThreated",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.of(isTownThreatened()));
+		jassProgramVisitor.getJassNativeManager().createNative("HarvestGold",
+				(arguments, globalScope, triggerScope) -> {
+					final int town = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final int peons = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					orderHarvestGold(peons);
+					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("HarvestWood",
+				(arguments, globalScope, triggerScope) -> {
+					final int town = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final int peons = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					orderHarvestWood(peons);
+					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("ClearHarvestAI",
 				(arguments, globalScope, triggerScope) -> null);
-		jassProgramVisitor.getJassNativeManager().createNative("ClearBuildQueue",
+		jassProgramVisitor.getJassNativeManager().createNative("StopGathering",
 				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("GetBuilding",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayer p = nullable(arguments, 0, ObjectJassValueVisitor.<CPlayer>getInstance());
+					return new HandleJassValue(unitType, getBuilding(p));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetEnemyBase",
+				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType, getEnemyBase()));
+		jassProgramVisitor.getJassNativeManager().createNative("GetExpansionFoe",
+				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType, getEnemyBase()));
+		jassProgramVisitor.getJassNativeManager().createNative("GetEnemyExpansion",
+				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType, getEnemyBase()));
+		jassProgramVisitor.getJassNativeManager().createNative("GetExpansionPeon",
+				(arguments, globalScope, triggerScope) -> new HandleJassValue(unitType, getExpansionPeon()));
+		jassProgramVisitor.getJassNativeManager().createNative("ShiftTownSpot",
+				(arguments, globalScope, triggerScope) -> {
+					final float x = arguments.get(0).visit(RealJassValueVisitor.getInstance()).floatValue();
+					final float y = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+					JassAIEnvironment.this.captainHomeX = x;
+					JassAIEnvironment.this.captainHomeY = y;
+					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("AttackMoveXY",
+				(arguments, globalScope, triggerScope) -> {
+					final int x = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final int y = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					issueAssaultPointOrder(x, y, OrderIds.attack);
+					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("AttackMoveKill",
+				(arguments, globalScope, triggerScope) -> {
+					final CUnit target = nullable(arguments, 0, ObjectJassValueVisitor.<CUnit>getInstance());
+					if (target != null) {
+						issueAssaultPointOrder(target.getX(), target.getY(), OrderIds.attack);
+					}
+					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("SetCampaignAI",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("SetMeleeAI",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("SetHeroLevels",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("SetNewHeroes",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("GetHeroId",
+				(arguments, globalScope, triggerScope) -> {
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CPlayer p = simulation.getPlayer(aiPlayerIndex);
+					if ((p != null) && !p.getHeroes().isEmpty()) {
+						return IntegerJassValue.of(p.getHeroes().get(0).getTypeId().getValue());
+					}
+					return IntegerJassValue.ZERO;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetHeroLevelAI",
+				(arguments, globalScope, triggerScope) -> {
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CPlayer p = simulation.getPlayer(aiPlayerIndex);
+					if ((p != null) && !p.getHeroes().isEmpty()) {
+						final CUnit hero = p.getHeroes().get(0);
+						if (hero.getHeroData() != null) {
+							return IntegerJassValue.of(hero.getHeroData().getHeroLevel());
+						}
+					}
+					return IntegerJassValue.ZERO;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("Unsummon",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("MergeUnits",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
+		jassProgramVisitor.getJassNativeManager().createNative("PurchaseZeppelin",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("SetReplacementCount",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("RemoveInjuries",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("RemoveSiege",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("GetCreepCamp",
+				(arguments, globalScope, triggerScope) -> unitType.getNullValue());
+		jassProgramVisitor.getJassNativeManager().createNative("StartGetEnemyBase",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("WaitGetEnemyBase",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.TRUE);
+		jassProgramVisitor.getJassNativeManager().createNative("SetStagePoint",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("AddGuardPost",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("FillGuardPosts",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("ReturnGuardPosts",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("CreateCaptains",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("TeleportCaptain",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("IsTowered",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
+		jassProgramVisitor.getJassNativeManager().createNative("IgnoredUnits",
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+		jassProgramVisitor.getJassNativeManager().createNative("CreepsOnMap",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
+		jassProgramVisitor.getJassNativeManager().createNative("GetMegaTarget",
+				(arguments, globalScope, triggerScope) -> unitType.getNullValue());
+		jassProgramVisitor.getJassNativeManager().createNative("GetEnemyPower",
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+		jassProgramVisitor.getJassNativeManager().createNative("SetAllianceTarget",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("GetAllianceTarget",
+				(arguments, globalScope, triggerScope) -> unitType.getNullValue());
+		jassProgramVisitor.getJassNativeManager().createNative("DoAiScriptDebug",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
+		jassProgramVisitor.getJassNativeManager().createNative("CaptainReadinessMa",
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
 		jassProgramVisitor.getJassNativeManager().createNative("AddAssault",
 				(arguments, globalScope, triggerScope) -> {
 					final int count = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
@@ -490,10 +729,6 @@ public class JassAIEnvironment {
 					issueAllCombatUnitsAttack(tx, ty);
 					return BooleanJassValue.TRUE;
 				});
-		jassProgramVisitor.getJassNativeManager().createNative("SuicideUnit",
-				(arguments, globalScope, triggerScope) -> null);
-		jassProgramVisitor.getJassNativeManager().createNative("SuicideUnitEx",
-				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("UnitAliveCheck",
 				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
 		jassProgramVisitor.getJassNativeManager().createNative("GroupTimedLife",
@@ -522,6 +757,9 @@ public class JassAIEnvironment {
 	}
 
 	private int countUnitsOfType(final int playerIndex, final int unitTypeId, final boolean enemiesOnly) {
+		if (this.simulation == null) {
+			return 0;
+		}
 		int count = 0;
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
 		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
@@ -636,6 +874,452 @@ public class JassAIEnvironment {
 		}
 	}
 
+	private static <T> T nullable(final List<JassValue> arguments, final int index,
+			final JassValueVisitor<T> visitor) {
+		if (index < arguments.size()) {
+			final JassValue value = arguments.get(index);
+			if (value != null) {
+				return value.visit(visitor);
+			}
+		}
+		return null;
+	}
+
+	private float getTownCenterX() {
+		if ((this.captainHomeX != 0f) || (this.captainHomeY != 0f)) {
+			return this.captainHomeX;
+		}
+		if (this.simulation != null) {
+			for (final CUnit unit : this.simulation.getUnits()) {
+				if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
+					return unit.getX();
+				}
+			}
+		}
+		return 0f;
+	}
+
+	private float getTownCenterY() {
+		if ((this.captainHomeX != 0f) || (this.captainHomeY != 0f)) {
+			return this.captainHomeY;
+		}
+		if (this.simulation != null) {
+			for (final CUnit unit : this.simulation.getUnits()) {
+				if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
+					return unit.getY();
+				}
+			}
+		}
+		return 0f;
+	}
+
+	private AbilityPointTarget findBuildLocation(final CUnitType unitType, final float centerX, final float centerY) {
+		final BufferedImage buildingPathingPixelMap = unitType.getBuildingPathingPixelMap();
+		final boolean canBeBuiltOnThem = unitType.isCanBeBuiltOnThem();
+		for (float radius = 256f; radius <= 1536f; radius += 128f) {
+			for (int angle = 0; angle < 360; angle += 45) {
+				final double rad = Math.toRadians(angle);
+				final float testX = (float) (centerX + (radius * Math.cos(rad)));
+				final float testY = (float) (centerY + (radius * Math.sin(rad)));
+				final AbilityPointTarget point = new AbilityPointTarget(testX, testY);
+				AbstractCAbilityBuild.roundTargetPoint(point, unitType);
+				final boolean obstructed = AbstractCAbilityBuild.isBuildLocationObstructed(this.simulation, unitType,
+						buildingPathingPixelMap, canBeBuiltOnThem, point.getX(), point.getY(), null,
+						BuildOnBuildingIntersector.INSTANCE.reset(point.getX(), point.getY()));
+				if (!obstructed) {
+					return point;
+				}
+			}
+		}
+		return null;
+	}
+
+	private boolean setProduce(final int qty, final int unitIdInt, final int town) {
+		if (this.simulation == null) {
+			return false;
+		}
+		final War3ID unitId = new War3ID(unitIdInt);
+		final CPlayer player = this.simulation.getPlayer(this.aiPlayerIndex);
+		if (player == null) {
+			return false;
+		}
+		final CPlayerUnitOrderExecutor executor = this.simulation
+				.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
+		if (executor == null) {
+			return false;
+		}
+
+		final CUnitType unitType = this.simulation.getUnitData().getUnitType(unitId);
+		if (unitType != null) {
+			final int currentCount = countUnitsOfType(this.aiPlayerIndex, unitIdInt, false);
+			if (currentCount >= qty) {
+				return true;
+			}
+			if ((player.getGold() < unitType.getGoldCost()) || (player.getLumber() < unitType.getLumberCost())) {
+				return false;
+			}
+			if (!unitType.isBuilding() && (unitType.getFoodUsed() > 0)
+					&& ((player.getFoodUsed() + unitType.getFoodUsed()) > player.getFoodCap())) {
+				return false;
+			}
+
+			// Structure building
+			if (unitType.isBuilding()) {
+				for (final CUnit bldg : this.simulation.getUnits()) {
+					if ((bldg != null) && !bldg.isDead() && (bldg.getPlayerIndex() == this.aiPlayerIndex)) {
+						for (final CAbility ability : bldg.getAbilities()) {
+							if (ability instanceof CAbilityUpgrade) {
+								final CAbilityUpgrade upg = (CAbilityUpgrade) ability;
+								if (upg.getUpgradesTo().contains(unitId)) {
+									executor.issueImmediateOrder(bldg.getHandleId(), upg.getHandleId(), unitIdInt,
+											false);
+									return true;
+								}
+							}
+						}
+					}
+				}
+				for (final CUnit worker : this.simulation.getUnits()) {
+					if ((worker != null) && !worker.isDead() && (worker.getPlayerIndex() == this.aiPlayerIndex)) {
+						for (final CAbility ability : worker.getAbilities()) {
+							if (ability instanceof AbstractCAbilityBuild) {
+								final AbstractCAbilityBuild buildAbil = (AbstractCAbilityBuild) ability;
+								if (buildAbil.getStructuresBuilt().contains(unitId)) {
+									final AbilityPointTarget target = findBuildLocation(unitType, getTownCenterX(),
+											getTownCenterY());
+									if (target != null) {
+										executor.issuePointOrder(worker.getHandleId(), buildAbil.getHandleId(),
+												unitIdInt, target.getX(), target.getY(), false);
+										return true;
+									}
+								}
+							}
+						}
+					}
+				}
+				return false;
+			}
+
+			// Unit training
+			for (final CUnit bldg : this.simulation.getUnits()) {
+				if ((bldg != null) && !bldg.isDead() && (bldg.getPlayerIndex() == this.aiPlayerIndex)) {
+					for (final CAbility ability : bldg.getAbilities()) {
+						if (ability instanceof CAbilityQueue) {
+							final CAbilityQueue queue = (CAbilityQueue) ability;
+							if (queue.getUnitsTrained().contains(unitId)) {
+								executor.issueImmediateOrder(bldg.getHandleId(), queue.getHandleId(), unitIdInt,
+										false);
+								return true;
+							}
+						}
+					}
+				}
+			}
+			return false;
+		}
+
+		final CUpgradeType upgType = this.simulation.getUpgradeData().getType(unitId);
+		if (upgType != null) {
+			final int currentLevel = player.getTechtreeUnlocked(unitId);
+			if (currentLevel >= qty) {
+				return true;
+			}
+			if ((player.getGold() < upgType.getGoldCost(currentLevel))
+					|| (player.getLumber() < upgType.getLumberCost(currentLevel))) {
+				return false;
+			}
+			for (final CUnit bldg : this.simulation.getUnits()) {
+				if ((bldg != null) && !bldg.isDead() && (bldg.getPlayerIndex() == this.aiPlayerIndex)) {
+					for (final CAbility ability : bldg.getAbilities()) {
+						if (ability instanceof CAbilityQueue) {
+							final CAbilityQueue queue = (CAbilityQueue) ability;
+							if (queue.getResearchesAvailable().contains(unitId)) {
+								executor.issueImmediateOrder(bldg.getHandleId(), queue.getHandleId(), unitIdInt,
+										false);
+								return true;
+							}
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	private int countUnitsOfTypeDone(final int unitTypeId) {
+		if (this.simulation == null) {
+			return 0;
+		}
+		int count = 0;
+		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				continue;
+			}
+			if (unit.isConstructing()) {
+				continue;
+			}
+			if ((typeId != null) && (unit.getTypeId().getValue() != typeId.getValue())) {
+				continue;
+			}
+			count++;
+		}
+		return count;
+	}
+
+	private int getTownUnitCount(final int unitTypeId, final int townIndex, final boolean doneOnly) {
+		if (this.simulation == null) {
+			return 0;
+		}
+		int count = 0;
+		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				continue;
+			}
+			if (doneOnly && unit.isConstructing()) {
+				continue;
+			}
+			if ((typeId != null) && (unit.getTypeId().getValue() != typeId.getValue())) {
+				continue;
+			}
+			count++;
+		}
+		return count;
+	}
+
+	private void orderHarvestGold(final int peonCount) {
+		if (this.simulation == null) {
+			return;
+		}
+		final CPlayerUnitOrderExecutor executor = this.simulation
+				.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
+		if (executor == null) {
+			return;
+		}
+		int ordered = 0;
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if (ordered >= peonCount) {
+				break;
+			}
+			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				continue;
+			}
+			CAbilityHarvest harvest = null;
+			for (final CAbility a : unit.getAbilities()) {
+				if (a instanceof CAbilityHarvest) {
+					harvest = (CAbilityHarvest) a;
+					break;
+				}
+			}
+			if (harvest != null) {
+				final CUnit mine = CBehaviorReturnResources.findNearestMine(unit, this.simulation);
+				if (mine != null) {
+					executor.issueTargetOrder(unit.getHandleId(), harvest.getHandleId(), OrderIds.smart,
+							mine.getHandleId(), false);
+					ordered++;
+				}
+			}
+		}
+	}
+
+	private void orderHarvestWood(final int peonCount) {
+		if (this.simulation == null) {
+			return;
+		}
+		final CPlayerUnitOrderExecutor executor = this.simulation
+				.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
+		if (executor == null) {
+			return;
+		}
+		int ordered = 0;
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if (ordered >= peonCount) {
+				break;
+			}
+			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				continue;
+			}
+			CAbilityHarvest harvest = null;
+			for (final CAbility a : unit.getAbilities()) {
+				if (a instanceof CAbilityHarvest) {
+					harvest = (CAbilityHarvest) a;
+					break;
+				}
+			}
+			if (harvest != null) {
+				final CDestructable tree = CBehaviorReturnResources.findNearestTree(unit, harvest, this.simulation,
+						unit);
+				if (tree != null) {
+					executor.issueTargetOrder(unit.getHandleId(), harvest.getHandleId(), OrderIds.smart,
+							tree.getHandleId(), false);
+					ordered++;
+				}
+			}
+		}
+	}
+
+	private void suicideUnit(final int count, final int unitTypeId, final int targetPlayerIndex) {
+		if (this.simulation == null) {
+			return;
+		}
+		float tx = 0f;
+		float ty = 0f;
+		int enemyCount = 0;
+		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit == null) || unit.isDead()) {
+				continue;
+			}
+			if (targetPlayerIndex >= 0) {
+				if (unit.getPlayerIndex() == targetPlayerIndex) {
+					tx += unit.getX();
+					ty += unit.getY();
+					enemyCount++;
+				}
+			}
+			else if (unit.getPlayerIndex() != this.aiPlayerIndex) {
+				if ((self == null) || !self.hasAlliance(unit.getPlayerIndex(), CAllianceType.PASSIVE)) {
+					tx += unit.getX();
+					ty += unit.getY();
+					enemyCount++;
+				}
+			}
+		}
+		if (enemyCount == 0) {
+			return;
+		}
+		tx /= enemyCount;
+		ty /= enemyCount;
+
+		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
+		int ordered = 0;
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((count > 0) && (ordered >= count)) {
+				break;
+			}
+			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				continue;
+			}
+			if (unit.isBuilding()) {
+				continue;
+			}
+			if ((typeId != null) && (unit.getTypeId().getValue() != typeId.getValue())) {
+				continue;
+			}
+			issuePointOrder(unit, tx, ty, OrderIds.attack);
+			ordered++;
+		}
+	}
+
+	private CUnit getBuilding(final CPlayer p) {
+		if ((p == null) || (this.simulation == null)) {
+			return null;
+		}
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == p.getId()) && unit.isBuilding()) {
+				return unit;
+			}
+		}
+		return null;
+	}
+
+	private CUnit getEnemyBase() {
+		if (this.simulation == null) {
+			return null;
+		}
+		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
+		CUnit fallbackEnemyBldg = null;
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				if ((self != null) && !self.hasAlliance(unit.getPlayerIndex(), CAllianceType.PASSIVE)) {
+					if (unit.isBuilding()) {
+						if (unit.getClassifications().contains(CUnitClassification.TOWNHALL)) {
+							return unit;
+						}
+						if (fallbackEnemyBldg == null) {
+							fallbackEnemyBldg = unit;
+						}
+					}
+				}
+			}
+		}
+		return fallbackEnemyBldg;
+	}
+
+	private CUnit getExpansionPeon() {
+		if (this.simulation == null) {
+			return null;
+		}
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
+				for (final CAbility a : unit.getAbilities()) {
+					if (a instanceof AbstractCAbilityBuild) {
+						return unit;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private boolean townHasHall(final int townId) {
+		if (this.simulation == null) {
+			return false;
+		}
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
+				if (unit.getClassifications().contains(CUnitClassification.TOWNHALL)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private boolean townHasMine(final int townId) {
+		if (this.simulation == null) {
+			return false;
+		}
+		final float cx = getTownCenterX();
+		final float cy = getTownCenterY();
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit != null) && !unit.isDead()) {
+				for (final CAbility a : unit.getAbilities()) {
+					if ((a instanceof CAbilityGoldMine) || (a instanceof CAbilityGoldMinable)) {
+						final float dx = unit.getX() - cx;
+						final float dy = unit.getY() - cy;
+						if (((dx * dx) + (dy * dy)) < (2500f * 2500f)) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	private boolean isTownThreatened() {
+		if (this.simulation == null) {
+			return false;
+		}
+		final float cx = getTownCenterX();
+		final float cy = getTownCenterY();
+		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+				if ((self == null) || !self.hasAlliance(unit.getPlayerIndex(), CAllianceType.PASSIVE)) {
+					final float dx = unit.getX() - cx;
+					final float dy = unit.getY() - cy;
+					if (((dx * dx) + (dy * dy)) < (1500f * 1500f)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	public void main() {
 		try {
 			final JassThread mainThread = this.jassProgramVisitor.getGlobals().createThread("main",
@@ -663,29 +1347,46 @@ public class JassAIEnvironment {
 		final JassProgram jassProgramVisitor = new JassProgram();
 		final JassAIEnvironment environment = new JassAIEnvironment(jassProgramVisitor, dataSource, uiViewport, uiScene,
 				gameUI, mapConfig, simulation, aiPlayerIndex);
-		final String[] files = new String[] { "Scripts\\common.ai", scriptPath, "Scripts\\" + scriptPath };
-		boolean loadedAny = false;
-		for (final String file : files) {
+		final String[] preambleFiles = new String[] { "Scripts\\common.j", "Scripts\\common.ai" };
+		for (final String file : preambleFiles) {
 			String path = file;
 			if (!dataSource.has(path)) {
-				// try basename only
 				final int slash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
 				if (slash >= 0) {
 					path = path.substring(slash + 1);
 				}
 			}
-			if (!dataSource.has(path)) {
-				continue;
-			}
-			try {
-				Jass2.readJassFile(dataSource, jassProgramVisitor, path);
-				loadedAny = true;
-			}
-			catch (final Exception e) {
-				System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
+			if (dataSource.has(path)) {
+				try {
+					Jass2.readJassFile(dataSource, jassProgramVisitor, path);
+				}
+				catch (final Exception e) {
+					System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
+				}
 			}
 		}
-		if (!loadedAny) {
+		boolean loadedScript = false;
+		final String[] scriptCandidates = new String[] { scriptPath, "Scripts\\" + scriptPath };
+		for (final String file : scriptCandidates) {
+			String path = file;
+			if (!dataSource.has(path)) {
+				final int slash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+				if (slash >= 0) {
+					path = path.substring(slash + 1);
+				}
+			}
+			if (dataSource.has(path)) {
+				try {
+					Jass2.readJassFile(dataSource, jassProgramVisitor, path);
+					loadedScript = true;
+					break;
+				}
+				catch (final Exception e) {
+					System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
+				}
+			}
+		}
+		if (!loadedScript) {
 			System.err.println("StartCampaignAI: no AI script found for \"" + scriptPath + "\" (player "
 					+ aiPlayerIndex + ")");
 			return null;

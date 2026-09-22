@@ -319,8 +319,19 @@ public class MeleeToggleUI implements WarsmashUI {
 	}
 
 	@Override
+	public float getMovieDurationSeconds() {
+		return this.meleeUI.getMovieDurationSeconds();
+	}
+
+	@Override
 	public void bindMovieSleepThread(final com.etheller.interpreter.ast.execution.JassThread thread) {
 		this.meleeUI.bindMovieSleepThread(thread);
+	}
+
+	@Override
+	public void bindMovieSleepTimer(
+			final com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimerSleepAction timer) {
+		this.meleeUI.bindMovieSleepTimer(timer);
 	}
 
 	@Override

@@ -56,6 +56,15 @@ add your results.*
 
 ## Known Issues and Workarounds
 
+### Campaign movies need ffmpeg
+
+Interlude movies (`PlayCinematic`) are DivX AVI files, and the engine holds no
+video codec itself. Install `ffmpeg` on your `PATH` (or point
+`-Dwarsmash.ffmpeg=` / `WARSMASH_FFMPEG=` at the binary) for real playback
+with sound; without it, movies fall back to a skippable ~5s title overlay.
+The movie is looked up through your `[DataSources]` as given, with a
+`.mpq`/`.avi` extension, or under `Movies\`.
+
 ### Unpatched retail CD data (Reign of Chaos 1.00 + Frozen Throne 1.07)
 
 Both campaigns load and play from unpatched disc data. Use `war3.mpq` from the

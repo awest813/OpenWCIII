@@ -215,6 +215,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	public List<RenderEffect> projectiles = new ArrayList<>();
 	public boolean unitsReady;
 	public War3Map mapMpq;
+	private String currentMapPath;
 
 	private final DataSource gameDataSource;
 
@@ -512,16 +513,46 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 
 	public static War3Map beginLoadingMap(final DataSource gameDataSource, final String mapFilePath)
 			throws IOException {
-		if (mapFilePath.startsWith("/") || !gameDataSource.has(mapFilePath)) {
-			final File mapFile = new File(mapFilePath);
+		if (gameDataSource.has(mapFilePath)) {
+			return new War3Map(gameDataSource, mapFilePath);
+		}
+		final String normalized = mapFilePath.replace('/', '\\');
+		if (gameDataSource.has(normalized)) {
+			return new War3Map(gameDataSource, normalized);
+		}
+
+		// Cross-resolve .w3m (RoC) and .w3x (TFT) extensions
+		String withoutExt = normalized;
+		final int dot = normalized.lastIndexOf('.');
+		if (dot >= 0) {
+			withoutExt = normalized.substring(0, dot);
+		}
+		final String altW3m = withoutExt + ".w3m";
+		final String altW3x = withoutExt + ".w3x";
+		if (gameDataSource.has(altW3m)) {
+			return new War3Map(gameDataSource, altW3m);
+		}
+		if (gameDataSource.has(altW3x)) {
+			return new War3Map(gameDataSource, altW3x);
+		}
+
+		if (!normalized.startsWith("Maps\\")) {
+			for (final String prefix : new String[] { "Maps\\Campaign\\", "Maps\\" }) {
+				for (final String candidate : new String[] { prefix + normalized, prefix + altW3m, prefix + altW3x }) {
+					if (gameDataSource.has(candidate)) {
+						return new War3Map(gameDataSource, candidate);
+					}
+				}
+			}
+		}
+
+		for (final String path : new String[] { mapFilePath, normalized, altW3m, altW3x }) {
+			final File mapFile = new File(path);
 			if (mapFile.exists()) {
 				return new War3Map(gameDataSource, mapFile);
 			}
-			else {
-				throw new IllegalArgumentException("No such map file: " + mapFilePath);
-			}
 		}
-		return new War3Map(gameDataSource, mapFilePath);
+		throw new IllegalArgumentException("No such map file: " + mapFilePath);
 	}
 
 	public DataTable loadWorldEditData(final War3Map map) {
@@ -613,6 +644,19 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		this.localPlayerIndex = localPlayerIndex;
 		this.mapMpq = war3Map;
 		this.lastLoadedMapInformation = w3iFile;
+	}
+
+	/**
+	 * Remembers which map file the running game was loaded from, so scripted
+	 * flow natives (RestartGame) can reload it. Set by the menu when a map is
+	 * launched; may be null for editor flows that never set it.
+	 */
+	public void setCurrentMapPath(final String currentMapPath) {
+		this.currentMapPath = currentMapPath;
+	}
+
+	public String getCurrentMapPath() {
+		return this.currentMapPath;
 	}
 
 	public MapLoader createMapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex)

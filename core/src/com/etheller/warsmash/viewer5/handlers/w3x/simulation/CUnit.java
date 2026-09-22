@@ -289,6 +289,7 @@ public class CUnit extends CWidget {
 	private War3ID explodesOnDeathBuffId;
 	private final IntIntMap rawcodeToCooldownExpireTime = new IntIntMap();
 	private final IntIntMap rawcodeToCooldownStartTime = new IntIntMap();
+	private final Map<Integer, int[]> unitStock = new HashMap<>();
 
 	private byte invisLevels = 0;
 	private CTimer fadeTimer;
@@ -4423,6 +4424,25 @@ public class CUnit extends CWidget {
 		return null;
 	}
 
+	/**
+	 * Trigger-managed mercenary stock (AddUnitToStock), keyed by unit rawcode
+	 * value to current/max counts. There is no sell-units ability to gate
+	 * purchases through yet, so counts are recorded for scripts and future
+	 * train-flow enforcement.
+	 */
+	public void addUnitToStock(final War3ID unitId, final int currentStock, final int stockMax) {
+		this.unitStock.put(Integer.valueOf(unitId.getValue()), new int[] { currentStock, stockMax });
+	}
+
+	public void removeUnitFromStock(final War3ID unitId) {
+		this.unitStock.remove(Integer.valueOf(unitId.getValue()));
+	}
+
+	public int getUnitStockCurrent(final War3ID unitId) {
+		final int[] counts = this.unitStock.get(Integer.valueOf(unitId.getValue()));
+		return counts == null ? Integer.MAX_VALUE : counts[0];
+	}
+
 	public void setUnitSpecificAttacks(final List<CUnitAttack> unitSpecificAttacks) {
 		this.unitSpecificAttacks = unitSpecificAttacks;
 	}
@@ -5520,6 +5540,12 @@ public class CUnit extends CWidget {
 		this.rawcodeToCooldownExpireTime.put(abilityId.getValue(),
 				gameTurnTick + (int) StrictMath.ceil(cooldownDuration / WarsmashConstants.SIMULATION_STEP_TIME));
 		this.rawcodeToCooldownStartTime.put(abilityId.getValue(), gameTurnTick);
+		fireCooldownsChangedEvent();
+	}
+
+	public void clearAllAbilityCooldowns() {
+		this.rawcodeToCooldownExpireTime.clear();
+		this.rawcodeToCooldownStartTime.clear();
 		fireCooldownsChangedEvent();
 	}
 

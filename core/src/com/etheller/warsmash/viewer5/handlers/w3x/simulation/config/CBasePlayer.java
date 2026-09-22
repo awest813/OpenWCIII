@@ -28,6 +28,7 @@ public abstract class CBasePlayer implements CPlayerJass {
 	private CMapControl mapControl = CMapControl.NONE;
 	private CPlayerSlotState slotState = CPlayerSlotState.EMPTY;
 	private AIDifficulty aiDifficulty = null;
+	private final EnumMap<CPlayerState, Integer> playerStates = new EnumMap<>(CPlayerState.class);
 
 	public CBasePlayer(final CBasePlayer other) {
 		this.id = other.id;
@@ -43,6 +44,7 @@ public abstract class CBasePlayer implements CPlayerJass {
 		this.raceSelectable = other.raceSelectable;
 		this.mapControl = other.mapControl;
 		this.slotState = other.slotState;
+		this.playerStates.putAll(other.playerStates);
 	}
 
 	public CBasePlayer(final int id) {
@@ -206,5 +208,20 @@ public abstract class CBasePlayer implements CPlayerJass {
 			return 0;
 		}
 		return taxRate;
+	}
+
+	@Override
+	public void setPlayerState(final CPlayerState whichPlayerState, final int value) {
+		this.playerStates.put(whichPlayerState, value);
+	}
+
+	@Override
+	public int getPlayerState(final CPlayerState whichPlayerState) {
+		final Integer state = this.playerStates.get(whichPlayerState);
+		return state == null ? 0 : state;
+	}
+
+	public EnumMap<CPlayerState, Integer> getPlayerStates() {
+		return this.playerStates;
 	}
 }

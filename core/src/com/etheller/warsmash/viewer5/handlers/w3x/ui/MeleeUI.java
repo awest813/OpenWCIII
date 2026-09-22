@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.AudioDevice;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -184,6 +185,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnit
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRace;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRaceManagerEntry;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimerSleepAction;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CBlendMode;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CSoundVolumeGroup;
@@ -483,10 +485,23 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	private float worldFrameUnitMessageFontHeight;
 	private UIFrame upperButtonBar;
 	private UIFrame cinematicPanel;
-	private boolean moviePlaying;
+	private volatile boolean moviePlaying;
 	private boolean cinematicSkipAllowed = true;
 	private JassThread movieSleepingThread;
+	private CTimerSleepAction movieSleepTimer;
 	private String movieTitle = "";
+	// Written on the JASS thread (playCinematic) and read on the render thread
+	// (update/render); volatile for cross-thread visibility.
+	private volatile MoviePlayer.Session movieSession;
+	private Texture movieTexture;
+	private MoviePlayer.Session movieTextureSession;
+	private Pixmap moviePixmap;
+	private Thread movieAudioThread;
+	private volatile boolean movieAudioStop;
+	private volatile Process movieAudioProcess;
+	private AudioDevice movieAudioDevice;
+	private float movieClock;
+	private float movieNextFrameTime;
 	private final List<com.etheller.warsmash.viewer5.handlers.w3x.simulation.quest.CQuest> registeredQuests = new ArrayList<>();
 	private CScriptDialog questDialog;
 	private boolean questDialogVisible;
@@ -1941,6 +1956,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			}
 		}
 		this.musicPlayer.update();
+		updateMoviePlayback(deltaTime);
 		for (final CTimerDialog timerDialog : this.timerDialogs) {
 			timerDialog.update(this.rootFrame, this.war3MapViewer.simulation);
 		}
@@ -2250,10 +2266,46 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		setCursorState(state, Color.WHITE);
 	}
 
+	private void renderMovie(final SpriteBatch batch) {
+		final MoviePlayer.Session session = this.movieSession;
+		if ((this.movieTexture == null) || (session == null)) {
+			return;
+		}
+		final float screenWidth = this.uiViewport.getWorldWidth();
+		final float screenHeight = this.uiViewport.getWorldHeight();
+		final Texture blackTex = this.rootFrame.loadTexture("Textures\\Black32.blp");
+		if (blackTex != null) {
+			batch.draw(blackTex, 0, 0, screenWidth, screenHeight);
+		}
+		final float videoAspect = (float) session.getWidth() / (float) session.getHeight();
+		final float screenAspect = screenWidth / screenHeight;
+		float drawWidth;
+		float drawHeight;
+		if (screenAspect > videoAspect) {
+			drawHeight = screenHeight;
+			drawWidth = screenHeight * videoAspect;
+		}
+		else {
+			drawWidth = screenWidth;
+			drawHeight = screenWidth / videoAspect;
+		}
+		final float drawX = (screenWidth - drawWidth) / 2f;
+		final float drawY = (screenHeight - drawHeight) / 2f;
+		// Pixmap rows arrive top-down while LibGDX texture reads bottom-up, hence negative height flip
+		batch.draw(this.movieTexture, drawX, drawY + drawHeight, drawWidth, -drawHeight);
+	}
+
 	@Override
 	public void render(final SpriteBatch batch, final GlyphLayout glyphLayout) {
 		final BitmapFont font = this.rootFrame.getFont();
 		font.setColor(Color.YELLOW);
+		if (this.moviePlaying) {
+			renderMovie(batch);
+			if (this.movieTexture != null) {
+				// While a real movie is playing, suppress HUD, minimap, time indicator, and 3D text tags.
+				return;
+			}
+		}
 		if (WarsmashConstants.SHOW_FPS) {
 			final String fpsString = "FPS: " + Gdx.graphics.getFramesPerSecond();
 			glyphLayout.setText(font, fpsString);
@@ -4171,11 +4223,14 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 				Terrain.WIREFRAME_TERRAIN = !Terrain.WIREFRAME_TERRAIN;
 			}
 		}
-		if (keycode == Input.Keys.ESCAPE) {
-			if (this.moviePlaying && this.cinematicSkipAllowed) {
+		if (this.moviePlaying && this.cinematicSkipAllowed) {
+			if ((keycode == Input.Keys.ESCAPE) || (keycode == Input.Keys.SPACE) || (keycode == Input.Keys.ENTER)
+					|| (keycode == Input.Keys.NUMPAD_ENTER)) {
 				endPlayCinematic();
 				return true;
 			}
+		}
+		if (keycode == Input.Keys.ESCAPE) {
 			this.unitOrderListener.issueGuiPlayerEvent(JassGameEventsWar3.EVENT_PLAYER_END_CINEMATIC.getEventId());
 			return true;
 		}
@@ -5111,6 +5166,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 
 	@Override
 	public void dispose() {
+		stopMovieSession();
 		if (this.rootFrame != null) {
 			this.rootFrame.dispose();
 		}
@@ -5782,11 +5838,146 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			this.rootFrame.setText(this.cinematicDialogueText,
 					"Playing: " + (shortName.isEmpty() ? "(movie)" : shortName) + skipHint);
 		}
+		startMoviePlayback(moviePath);
+	}
+
+	/**
+	 * Tries to start real video playback for a PlayCinematic movie. Never touches
+	 * GL resources: texture setup happens on the render thread in
+	 * {@link #updateMoviePlayback(float)}. Any failure silently keeps the timed
+	 * text overlay fallback.
+	 */
+	private void startMoviePlayback(final String moviePath) {
+		abortMovieSession();
+		if ((moviePath == null) || moviePath.isEmpty()) {
+			return;
+		}
+		final String ffmpeg = MoviePlayer.findFfmpeg();
+		if (ffmpeg == null) {
+			System.out.println("PlayCinematic: no ffmpeg on PATH; showing timed overlay instead of " + moviePath
+					+ " (install ffmpeg or set -Dwarsmash.ffmpeg= for real movie playback)");
+			return;
+		}
+		java.io.File movieFile = null;
+		for (final String candidate : MoviePlayer.candidatePaths(moviePath)) {
+			try {
+				if (this.dataSource.has(candidate)) {
+					final java.io.File resolved = this.dataSource.getFile(candidate);
+					if (resolved != null) {
+						movieFile = resolved;
+						break;
+					}
+				}
+			}
+			catch (final IOException e) {
+				// try the next candidate
+			}
+		}
+		if (movieFile == null) {
+			System.out.println("PlayCinematic: movie not found in data sources: " + moviePath);
+			return;
+		}
+		final String probe = MoviePlayer.probeOutput(ffmpeg, movieFile);
+		final double duration = MoviePlayer.parseDurationSeconds(probe);
+		final double fps = MoviePlayer.parseFps(probe);
+		final int[] size = MoviePlayer.parseVideoSize(probe);
+		if ((duration <= 0) || (fps <= 0) || (size == null)) {
+			System.err.println("PlayCinematic: could not probe video stream in " + movieFile);
+			return;
+		}
+		final MoviePlayer.Session session = MoviePlayer.Session.start(ffmpeg, movieFile, size[0], size[1], fps,
+				duration);
+		if (session == null) {
+			return;
+		}
+		this.movieSession = session;
+		this.movieClock = 0f;
+		this.movieNextFrameTime = 0f;
+		setCinematicAudio(true);
+		if (this.cinematicSpeakerText != null) {
+			this.rootFrame.setText(this.cinematicSpeakerText, "");
+		}
+		if (this.cinematicDialogueText != null) {
+			this.rootFrame.setText(this.cinematicDialogueText, "");
+		}
+		if (MoviePlayer.hasAudioStream(probe)) {
+			startMovieAudio(ffmpeg, movieFile);
+		}
+		System.out.println("PlayCinematic: playing " + movieFile.getName() + " (" + size[0] + "x" + size[1] + ", "
+				+ fps + " fps, " + duration + "s)");
+	}
+
+	private void startMovieAudio(final String ffmpeg, final java.io.File movieFile) {
+		this.movieAudioStop = false;
+		this.movieAudioThread = new Thread(() -> {
+			Process process = null;
+			try {
+				final ProcessBuilder builder = new ProcessBuilder(ffmpeg, "-v", "error", "-i",
+						movieFile.getAbsolutePath(), "-map", "0:a:0", "-vn", "-f", "s16le", "-acodec",
+						"pcm_s16le", "-ar", "44100", "-ac", "2", "-");
+				builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+				process = builder.start();
+				MeleeUI.this.movieAudioProcess = process;
+				final AudioDevice device = Gdx.audio.newAudioDevice(44100, false);
+				MeleeUI.this.movieAudioDevice = device;
+				final byte[] buffer = new byte[44100 * 2 * 2 / 10];
+				final short[] samples = new short[buffer.length / 2];
+				final java.nio.ByteBuffer byteBuf = java.nio.ByteBuffer.wrap(buffer)
+						.order(java.nio.ByteOrder.LITTLE_ENDIAN);
+				try {
+					while (!MeleeUI.this.movieAudioStop) {
+						final int read = readFully(process.getInputStream(), buffer);
+						if (read <= 0) {
+							break;
+						}
+						byteBuf.position(0).limit(read);
+						byteBuf.asShortBuffer().get(samples, 0, read / 2);
+						device.writeSamples(samples, 0, read / 2);
+					}
+				}
+				finally {
+					device.dispose();
+					MeleeUI.this.movieAudioDevice = null;
+				}
+			}
+			catch (final IOException e) {
+				// no audio for this movie; video plays on silently
+			}
+			catch (final RuntimeException e) {
+				// no audio device (e.g. headless); video plays on silently
+				System.out.println("PlayCinematic: audio unavailable (" + e.getMessage() + ")");
+			}
+			finally {
+				if (process != null) {
+					process.destroy();
+				}
+				MeleeUI.this.movieAudioProcess = null;
+			}
+		}, "movie-audio");
+		this.movieAudioThread.setDaemon(true);
+		this.movieAudioThread.start();
+	}
+
+	private static int readFully(final InputStream in, final byte[] buffer) throws IOException {
+		int offset = 0;
+		while (offset < buffer.length) {
+			final int read = in.read(buffer, offset, buffer.length - offset);
+			if (read == -1) {
+				break;
+			}
+			offset += read;
+		}
+		return offset;
 	}
 
 	@Override
 	public void bindMovieSleepThread(final JassThread thread) {
 		this.movieSleepingThread = thread;
+	}
+
+	@Override
+	public void bindMovieSleepTimer(final CTimerSleepAction timer) {
+		this.movieSleepTimer = timer;
 	}
 
 	@Override
@@ -5803,12 +5994,22 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			this.movieSleepingThread.setSleeping(false);
 			this.movieSleepingThread = null;
 		}
+		if (this.movieSleepTimer != null) {
+			this.movieSleepTimer.cancel();
+			if ((this.war3MapViewer != null) && (this.war3MapViewer.simulation != null)) {
+				this.movieSleepTimer.pause(this.war3MapViewer.simulation);
+			}
+			this.movieSleepTimer = null;
+		}
 		finishPlayCinematicOverlay();
 	}
 
 	private void finishPlayCinematicOverlay() {
 		this.moviePlaying = false;
 		this.movieSleepingThread = null;
+		this.movieSleepTimer = null;
+		stopMovieSession();
+		setCinematicAudio(false);
 		if (this.cinematicSpeakerText != null) {
 			this.rootFrame.setText(this.cinematicSpeakerText, "");
 		}
@@ -5817,6 +6018,105 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		}
 		showInterface(true, 0f);
 		enableUserControl(true);
+	}
+
+	/**
+	 * Stops decode/audio without touching GL resources, so it is safe from any
+	 * thread. A texture left behind is reclaimed on the render thread in
+	 * {@link #updateMoviePlayback(float)}.
+	 */
+	private void abortMovieSession() {
+		if (this.movieSession != null) {
+			this.movieSession.stop();
+			this.movieSession = null;
+		}
+		this.movieAudioStop = true;
+		if (this.movieAudioProcess != null) {
+			// unblocks the audio thread's pipe read so it can exit and free the device
+			this.movieAudioProcess.destroy();
+			this.movieAudioProcess = null;
+		}
+		if (this.movieAudioThread != null) {
+			this.movieAudioThread.interrupt();
+			try {
+				this.movieAudioThread.join(250);
+			}
+			catch (final InterruptedException ignored) {
+				Thread.currentThread().interrupt();
+			}
+			this.movieAudioThread = null;
+		}
+	}
+
+	/** Full session teardown; call only on the render thread. */
+	private void stopMovieSession() {
+		abortMovieSession();
+		if (this.movieTexture != null) {
+			this.movieTexture.dispose();
+			this.movieTexture = null;
+			this.movieTextureSession = null;
+		}
+		if (this.moviePixmap != null) {
+			this.moviePixmap.dispose();
+			this.moviePixmap = null;
+		}
+	}
+
+	/** Advances movie presentation; runs on the render thread from {@link #update(float)}. */
+	private void updateMoviePlayback(final float deltaTime) {
+		// Snapshot: playCinematic on the JASS thread may replace the session
+		// concurrently; operating on a local keeps teardown race-free.
+		final MoviePlayer.Session session = this.movieSession;
+		if (this.movieTexture != null && this.movieTextureSession != session) {
+			// a previous session's texture orphaned by a non-GL-thread restart
+			this.movieTexture.dispose();
+			this.movieTexture = null;
+			this.movieTextureSession = null;
+		}
+		if (this.moviePixmap != null && this.movieTexture == null) {
+			this.moviePixmap.dispose();
+			this.moviePixmap = null;
+		}
+		if (!this.moviePlaying || (session == null)) {
+			return;
+		}
+		if (this.movieTexture == null) {
+			this.moviePixmap = new Pixmap(session.getWidth(), session.getHeight(), Pixmap.Format.RGB888);
+			this.movieTexture = new Texture(this.moviePixmap);
+			this.movieTexture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+			this.movieTextureSession = session;
+		}
+		this.movieClock += deltaTime;
+		if (this.movieClock >= session.getDurationSeconds()
+				|| (session.isFinished() && (this.movieClock >= session.getDurationSeconds() - 0.5f))) {
+			endPlayCinematic();
+			return;
+		}
+		final double frameInterval = 1.0 / session.getFps();
+		int uploaded = 0;
+		byte[] frame;
+		while ((this.movieClock >= this.movieNextFrameTime) && (uploaded < 4)
+				&& ((frame = session.pollFrame()) != null)) {
+			final java.nio.ByteBuffer pixels = this.moviePixmap.getPixels();
+			pixels.clear();
+			pixels.put(frame);
+			pixels.flip();
+			this.movieTexture.draw(this.moviePixmap, 0, 0);
+			this.movieNextFrameTime += frameInterval;
+			uploaded++;
+		}
+		if (this.movieNextFrameTime < (this.movieClock - 1f)) {
+			// decoder stalled long behind; resync rather than fast-forwarding
+			this.movieNextFrameTime = this.movieClock;
+			while (session.pollFrame() != null) {
+				// drain stale queued frames
+			}
+		}
+	}
+
+	@Override
+	public float getMovieDurationSeconds() {
+		return (this.movieSession != null) ? (float) this.movieSession.getDurationSeconds() : 0f;
 	}
 
 	@Override

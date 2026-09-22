@@ -1,7 +1,9 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItem;
@@ -24,6 +26,13 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringE
 
 public final class CAbilitySellItems extends AbstractCAbility {
 	private final List<War3ID> itemsSold;
+	/**
+	 * Trigger-managed stock counts (AddItemToStock), keyed by item rawcode value
+	 * to current/max counts. Entries absent from this map sell without limit
+	 * (object-editor stock). No timed replenish yet; counts only decrease on
+	 * purchase.
+	 */
+	private final Map<Integer, int[]> itemStock = new HashMap<>();
 
 	public CAbilitySellItems(final int handleId, final List<War3ID> itemsSold) {
 		super(handleId, War3ID.fromString("Asei"));
@@ -32,6 +41,30 @@ public final class CAbilitySellItems extends AbstractCAbility {
 
 	public List<War3ID> getItemsSold() {
 		return this.itemsSold;
+	}
+
+	public void addItemToStock(final War3ID itemId, final int currentStock, final int stockMax) {
+		if (!this.itemsSold.contains(itemId)) {
+			this.itemsSold.add(itemId);
+		}
+		this.itemStock.put(itemId.getValue(), new int[] { currentStock, stockMax });
+	}
+
+	public void removeItemFromStock(final War3ID itemId) {
+		this.itemsSold.remove(itemId);
+		this.itemStock.remove(itemId.getValue());
+	}
+
+	public int getItemStockCurrent(final War3ID itemId) {
+		final int[] counts = this.itemStock.get(itemId.getValue());
+		return counts == null ? Integer.MAX_VALUE : counts[0];
+	}
+
+	private void recordSale(final War3ID itemId) {
+		final int[] counts = this.itemStock.get(itemId.getValue());
+		if (counts != null) {
+			counts[0] = Math.max(0, counts[0] - 1);
+		}
 	}
 
 	@Override
@@ -46,7 +79,12 @@ public final class CAbilitySellItems extends AbstractCAbility {
 				final CPlayer player = game.getPlayer(playerIndex);
 				if ((player.getGold() >= itemType.getGoldCost())) {
 					if ((player.getLumber() >= itemType.getLumberCost())) {
-						receiver.useOk();
+						if (getItemStockCurrent(itemTypeId) <= 0) {
+							receiver.activationCheckFailed(CommandStringErrorKeys.OUT_OF_STOCK);
+						}
+						else {
+							receiver.useOk();
+						}
 					}
 					else {
 						receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_LUMBER);
@@ -136,12 +174,14 @@ public final class CAbilitySellItems extends AbstractCAbility {
 					if (game.getPlayer(playerIndex).charge(itemType.getGoldCost(), itemType.getLumberCost())) {
 						final CItem newItem = game.createItem(itemTypeId, caster.getX(), caster.getY());
 						purchasingInventoryData.giveItem(game, purchasingHero, newItem, false);
+						recordSale(itemTypeId);
 					}
 				}
 			}
 			else {
 				if (game.getPlayer(playerIndex).charge(itemType.getGoldCost(), itemType.getLumberCost())) {
 					game.createItem(itemTypeId, caster.getX(), caster.getY());
+					recordSale(itemTypeId);
 				}
 			}
 		}
@@ -163,6 +203,7 @@ public final class CAbilitySellItems extends AbstractCAbility {
 		final CUnitType unitType = cUnit.getUnitType();
 		this.itemsSold.clear();
 		this.itemsSold.addAll(unitType.getItemsSold());
+		this.itemStock.clear();
 	}
 
 	@Override

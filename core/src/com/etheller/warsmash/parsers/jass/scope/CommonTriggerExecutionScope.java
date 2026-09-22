@@ -16,6 +16,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.COrderBut
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.core.ABLocalStoreKeys;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerJass;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegion;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
@@ -38,6 +39,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	private CUnit leavingUnit;
 	private CRegion triggeringRegion;
 	private CPlayerJass triggeringPlayer;
+	private CPlayerState eventPlayerState;
 	private CUnit levelingUnit;
 	private CUnit learningUnit;
 	private int learnedSkill;
@@ -130,6 +132,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		this.leavingUnit = parentScope.leavingUnit;
 		this.triggeringRegion = parentScope.triggeringRegion;
 		this.triggeringPlayer = parentScope.triggeringPlayer;
+		this.eventPlayerState = parentScope.eventPlayerState;
 		this.levelingUnit = parentScope.levelingUnit;
 		this.learningUnit = parentScope.learningUnit;
 		this.learnedSkill = parentScope.learnedSkill;
@@ -239,6 +242,10 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 
 	public CPlayerJass getTriggeringPlayer() {
 		return this.triggeringPlayer;
+	}
+
+	public CPlayerState getEventPlayerState() {
+		return this.eventPlayerState;
 	}
 
 	public CUnit getLevelingUnit() {
@@ -825,6 +832,15 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 			final Trigger trigger, final CPlayerJass player) {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
 		scope.triggeringPlayer = player;
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope playerStateScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CPlayerJass player, final CPlayerState state) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggeringPlayer = player;
+		scope.eventPlayerState = state;
 		scope.triggerEventId = triggerEventId;
 		return scope;
 	}

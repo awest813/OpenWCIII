@@ -83,6 +83,9 @@ public class CPlayer extends CBasePlayer {
 		this.startLocation = startLocation;
 		// Below: 32x32 cells to find the number of 128x128 cells
 		this.fogOfWar = fogOfWar;
+		for (final Map.Entry<CPlayerState, Integer> entry : configPlayer.getPlayerStates().entrySet()) {
+			setPlayerState(null, entry.getKey(), entry.getValue());
+		}
 	}
 
 	public CPlayerFogOfWar getFogOfWar() {
@@ -524,7 +527,18 @@ public class CPlayer extends CBasePlayer {
 		}
 	}
 
+	@Override
+	public void setPlayerState(final CPlayerState whichPlayerState, final int value) {
+		setPlayerState(null, whichPlayerState, value);
+	}
+
+	@Override
+	public int getPlayerState(final CPlayerState whichPlayerState) {
+		return getPlayerState(null, whichPlayerState);
+	}
+
 	public void setPlayerState(final CSimulation simulation, final CPlayerState whichPlayerState, final int value) {
+		super.setPlayerState(whichPlayerState, value);
 		switch (whichPlayerState) {
 		case GAME_RESULT:
 			this.gameResult = value;
@@ -555,12 +569,16 @@ public class CPlayer extends CBasePlayer {
 			break;
 		case PLACED:
 			this.placed = value;
+			break;
 		case OBSERVER_ON_DEATH:
 			this.observerOnDeath = (value != 0);
+			break;
 		case OBSERVER:
 			this.observer = (value != 0);
+			break;
 		case UNFOLLOWABLE:
 			this.unfollowable = (value != 0);
+			break;
 		case GOLD_UPKEEP_RATE:
 			this.goldUpkeepRate = value;
 			break;
@@ -622,6 +640,14 @@ public class CPlayer extends CBasePlayer {
 		default:
 			return 0;
 		}
+	}
+
+	public boolean isAlliedVictory() {
+		return this.alliedVictory;
+	}
+
+	public boolean isGivesBounty() {
+		return this.givesBounty;
 	}
 
 	public boolean isObserver() {

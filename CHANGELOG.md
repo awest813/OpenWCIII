@@ -73,6 +73,60 @@ Changes are grouped by category:
   Presentation switches with nothing to drive yet (`EnableOcclusion`,
   `EnableWorldFogBoundary`, `CameraSetSmoothingFactor`, the indicator and
   leaderboard styling calls) are accepted and ignored so scripts keep running.
+- **Remaining audited campaign natives**: the 37 reachable-but-unimplemented
+  natives from the campaign audit now resolve. `UnitRemoveBuffs` /
+  `UnitRemoveBuffsEx` clear buff abilities, `UnitResetCooldown` clears ability
+  cooldowns (`CUnit.clearAllAbilityCooldowns`), `UnitAddSleep` / `UnitWakeUp` /
+  `UnitIsSleeping` drive the sleeping unit-type, `UnitApplyTimedLife` attaches
+  a timed-life buff, `IsUnitIdType` checks hero / structure / targeting /
+  classification flags, `SetBlightRect` paints blight over the rect,
+  `UnitRemoveItemFromSlot` drops and returns the slotted item, and
+  `SetSoundDistances` applies the max-distance cutoff. Doodad/destructable
+  visuals (`SetDoodadAnimationRect`, `SetDestructableAnimationSpeed`,
+  `QueueDestructableAnimation`, `ShowDestructable`, occluder heights),
+  minimap icons, `RemoveWeatherEffect`, `TerrainDeformCrater`,
+  `UnitUseItemPoint`, `IsUnitInTransport` / `IsUnitInvisible` / `IsUnitLoaded`,
+  `SetItemTypeSlots`, `SetUnitTypeSlots`, `SetUnitUseFood`,
+  `SetUnitCreepGuard`, `UnitIgnoreAlarm`, `DisplayLoadDialog` and
+  `GetEventDamage` (zero until damage events carry data) are accepted so
+  campaign scripts run without missing-native errors.
+- **`TriggerRegisterPlayerStateEvent` fires**: registrations are watched every
+  simulation tick (`CPlayerStateEvent`) and fire on the rising edge of the
+  limit comparison, with `GetTriggerPlayer` and the new `GetEventPlayerState`
+  populated in the event scope.
+- **`RestartGame` restarts the mission**: reloads the running map through the
+  `ChangeLevel` path (`War3MapViewer` now remembers its map file), honoring
+  `doScoreScreen`.
+- **Shop stock is tracked**: `AddItemToStock` extends the shop's sell-items
+  catalog with current/max counts, purchases decrement the count and fail
+  with out-of-stock at zero (`CAbilitySellItems`); `RemoveItemFromStock`
+  pulls the entry. `AddUnitToStock` / `RemoveUnitFromStock` record
+  mercenary counts on the shop unit (`CUnit` ledger). Timed replenish and
+  unit-sale purchase gating are still TODO.
+- **Campaign movies play real video**: `PlayCinematic` resolves DivX AVI
+  movies through the data sources (`.mpq`, `.avi`, `.mp4` extensions and
+  `Movies\` prefix) and decodes them with a user-provided `ffmpeg` (no codec
+  bundled; `-Dwarsmash.ffmpeg=` / `WARSMASH_FFMPEG=` override, `ffmpeg` on
+  `PATH` otherwise). Raw RGB frames stream with backpressure pacing into an
+  aspect-ratio-preserved, centered fullscreen texture, game audio ducks
+  during playback, movie audio streams to a PCM output device, the JASS
+  thread sleeps for the true movie duration, and ESC / Space / Enter skips
+  immediately while cleanly cancelling the sleep timer. Without `ffmpeg` or
+  the movie file, the timed overlay fallback remains (see
+  `docs/COMPATIBILITY.md`). In addition, `MenuUI` now instantiates campaign
+  intro and outro cinematic buttons and refreshes their availability via
+  `CampaignProgressStore`.
+- **Campaign loading polished**: `War3MapViewer.beginLoadingMap` cross-resolves
+  `.w3m` (Reign of Chaos) and `.w3x` (The Frozen Throne) extensions and
+  normalizes path slashes with automatic `Maps\Campaign\` / `Maps\` fallback.
+  Loading screen background visibility is restored for all subsequent mission
+  loads; custom loading screen models (`LoadingScreenModel`) are respected, and
+  `LoadingScreens` table lookups are safely guarded. Menu ambient loops and
+  music are cleanly halted upon entering the loading screen.
+  `ChangeLevel` preserves campaign state and binds the active profile name,
+  `CampaignProgressStore.consumeForceCampaignSelectScreen()` routes campaign
+  completions back to the campaign selection screen, and `OpenCinematic` is
+  recognized alongside `IntroCinematic`. Covered by `CampaignLoadingTest`.
 
 ## Campaign Parity P0 Spine (2026-07-28)
 

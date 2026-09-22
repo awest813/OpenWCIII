@@ -12660,7 +12660,16 @@ public class Jass2 {
 		jassProgramVisitor.getJassNativeManager().createNative("DisableTrigger",
 				(arguments, globalScope, triggerScope) -> {
 					final Trigger trigger = arguments.get(0).visit(ObjectJassValueVisitor.<Trigger>getInstance());
-					trigger.setEnabled(false);
+					if (trigger != null) {
+						trigger.setEnabled(false);
+						final Integer removeFnPtr = globalScope.getUserFunctionInstructionPtr("QueuedTriggerRemoveBJ");
+						if (removeFnPtr != null) {
+							final JassThread removeThread = globalScope.createThread(removeFnPtr,
+									Collections.singletonList(new HandleJassValue(triggerType, trigger)),
+									new CommonTriggerExecutionScope(trigger, triggerScope));
+							globalScope.queueThread(removeThread);
+						}
+					}
 					return null;
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("IsTriggerEnabled",

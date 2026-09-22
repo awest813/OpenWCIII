@@ -57,7 +57,7 @@ public class BooleanJassValueVisitor implements JassValueVisitor<Boolean> {
 
 	@Override
 	public Boolean accept(final DummyJassValue value) {
-		throw new IllegalStateException("Unable to convert " + value + " to boolean");
+		return Boolean.TRUE;
 	}
 
 	@Override

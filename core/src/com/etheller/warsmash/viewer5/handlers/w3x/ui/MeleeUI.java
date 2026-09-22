@@ -4272,8 +4272,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		if (this.meleeUIMinimap.containsMouse(screenCoordsVector.x, screenCoordsVector.y)) {
 			final Vector2 worldPoint = this.meleeUIMinimap.getWorldPointFromScreen(screenCoordsVector.x,
 					screenCoordsVector.y);
-			this.cameraManager.target.x = worldPoint.x;
-			this.cameraManager.target.y = worldPoint.y;
+			this.cameraManager.setTarget(worldPoint.x, worldPoint.y);
 			return true;
 		}
 		final UIFrame clickedUIFrame = this.rootFrame.touchDown(screenCoordsVector.x, screenCoordsVector.y, button);
@@ -4915,8 +4914,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		if (this.meleeUIMinimap.containsMouse(screenCoordsVector.x, screenCoordsVector.y)) {
 			final Vector2 worldPoint = this.meleeUIMinimap.getWorldPointFromScreen(screenCoordsVector.x,
 					screenCoordsVector.y);
-			this.cameraManager.target.x = worldPoint.x;
-			this.cameraManager.target.y = worldPoint.y;
+			this.cameraManager.setTarget(worldPoint.x, worldPoint.y);
 		}
 		else {
 			if (this.allowDrag) {
@@ -4930,6 +4928,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 						this.lastMouseDragStart.z);
 				this.currentlyDraggingPointer = pointer;
 				if (this.draggingMouseButton == Input.Buttons.MIDDLE) {
+					this.cameraManager.clearPan();
 					this.cameraManager.target.set(clickLocationTemp.sub(this.lastMouseDragStart).scl(-1)
 							.add(this.lastMouseDragCameraTargetStart));
 				}

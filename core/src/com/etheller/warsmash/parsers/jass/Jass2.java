@@ -5663,8 +5663,7 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final float x = arguments.get(0).visit(RealJassValueVisitor.getInstance()).floatValue();
 						final float y = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
-						meleeUI.getCameraManager().target.x = x;
-						meleeUI.getCameraManager().target.y = y;
+						meleeUI.getCameraManager().setTarget(x, y);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("PanCameraTo",
@@ -6620,8 +6619,7 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final float x = arguments.get(0).visit(RealJassValueVisitor.getInstance()).floatValue();
 						final float y = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
-						meleeUI.getCameraManager().target.x = x;
-						meleeUI.getCameraManager().target.y = y;
+						meleeUI.getCameraManager().setTarget(x, y);
 						return null;
 					});
 

@@ -72,6 +72,19 @@ public final class GameCameraManager extends CameraManager {
 		if (this.panDestination != null) {
 			this.target.x = applyAtRate(this.target.x, this.panDestination.x, this.panRate.x);
 			this.target.y = applyAtRate(this.target.y, this.panDestination.y, this.panRate.y);
+			if (Math.abs(this.target.x - this.panDestination.x) <= 1.0f
+					&& Math.abs(this.target.y - this.panDestination.y) <= 1.0f) {
+				this.target.x = this.panDestination.x;
+				this.target.y = this.panDestination.y;
+				clearPan();
+			}
+		}
+		if (this.zOffsetDestination != null) {
+			this.targetZOffset = applyAtRate(this.targetZOffset, this.zOffsetDestination, this.zOffsetRate);
+			if (Math.abs(this.targetZOffset - this.zOffsetDestination) <= 0.01f) {
+				this.targetZOffset = this.zOffsetDestination;
+				this.zOffsetDestination = null;
+			}
 		}
 		updateNoise(Gdx.graphics.getDeltaTime());
 	}
@@ -168,9 +181,10 @@ public final class GameCameraManager extends CameraManager {
 		this.position = this.position.add(this.target);
 		this.fov = applyAtRate(this.fov, (float) Math.toRadians(cameraPreset.getFov() / 2),
 				(float) Math.toRadians(cameraRate.fov));
-		this.camera.perspective(this.fov, this.camera.getAspect(), cameraPreset.getNearZ(), cameraPreset.getFarZ());
-
-		this.camera.moveToAndFace(this.position, this.target, this.worldUp);
+		if (this.camera != null) {
+			this.camera.perspective(this.fov, this.camera.getAspect(), cameraPreset.getNearZ(), cameraPreset.getFarZ());
+			this.camera.moveToAndFace(this.position, this.target, this.worldUp);
+		}
 	}
 
 	public static float applyAtRate(final float oldValue, final float newValue, float rate) {
@@ -267,10 +281,14 @@ public final class GameCameraManager extends CameraManager {
 
 	}
 
-	private void clearPan() {
+	public void clearPan() {
 		this.panDestination = null;
 		this.panRate = null;
 		this.zOffsetDestination = null;
+	}
+
+	public Vector2 getPanDestination() {
+		return this.panDestination;
 	}
 
 	public void updateTargetZ(final float groundHeight) {
@@ -453,7 +471,8 @@ public final class GameCameraManager extends CameraManager {
 		}
 	}
 
-	private void setTarget(float x, float y) {
+	public void setTarget(float x, float y) {
+		clearPan();
 		this.target.x = x;
 		this.target.y = y;
 	}

@@ -86,15 +86,42 @@ public class MdxModel extends com.etheller.warsmash.viewer5.Model<MdxHandler> {
 		}
 	}
 
+	private static final ThreadLocal<ByteBuffer> SCRATCH_MDX_BUFFER = ThreadLocal
+			.withInitial(() -> ByteBuffer.allocateDirect(1024 * 1024 * 2)); // 2MB reusable native direct buffer
+	private static final ThreadLocal<byte[]> CHUNK_BUFFER = ThreadLocal.withInitial(() -> new byte[16384]); // 16KB chunk
+
+	private static ByteBuffer readStreamToDirectBuffer(final InputStream in) throws IOException {
+		ByteBuffer buffer = SCRATCH_MDX_BUFFER.get();
+		buffer.clear();
+		final byte[] chunk = CHUNK_BUFFER.get();
+		int bytesRead;
+		while ((bytesRead = in.read(chunk)) != -1) {
+			if (buffer.remaining() < bytesRead) {
+				final int newCapacity = Math.max(buffer.capacity() * 2, buffer.capacity() + bytesRead * 2);
+				final ByteBuffer newBuffer = ByteBuffer.allocateDirect(newCapacity);
+				buffer.flip();
+				newBuffer.put(buffer);
+				buffer = newBuffer;
+				SCRATCH_MDX_BUFFER.set(buffer);
+			}
+			buffer.put(chunk, 0, bytesRead);
+		}
+		buffer.flip();
+		return buffer;
+	}
+
 	public void load(final Object bufferOrParser) throws IOException {
 		MdlxModel parser;
 
 		if (bufferOrParser instanceof MdlxModel) {
 			parser = (MdlxModel) bufferOrParser;
 		}
+		else if (bufferOrParser instanceof ByteBuffer) {
+			parser = new MdlxModel((ByteBuffer) bufferOrParser);
+		}
 		else {
-			System.err.println("Wasting memory with conversion from InputStream to buffer in MdxModel");
-			parser = new MdlxModel(ByteBuffer.wrap(IOUtils.toByteArray((InputStream) bufferOrParser)));
+			final ByteBuffer buffer = readStreamToDirectBuffer((InputStream) bufferOrParser);
+			parser = new MdlxModel(buffer);
 		}
 
 		final ModelViewer viewer = this.viewer;

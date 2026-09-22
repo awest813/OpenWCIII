@@ -24,6 +24,7 @@ public class CompoundDataSource implements DataSource {
 	}
 
 	Map<String, File> cache = new HashMap<>();
+	private final Map<String, Boolean> hasCache = new java.util.concurrent.ConcurrentHashMap<>();
 
 	@Override
 	public File getFile(final String filepath) {
@@ -103,15 +104,25 @@ public class CompoundDataSource implements DataSource {
 
 	@Override
 	public boolean has(final String filepath) {
+		if (filepath == null) {
+			return false;
+		}
+		final Boolean cached = this.hasCache.get(filepath);
+		if (cached != null) {
+			return cached;
+		}
 		if (this.cache.containsKey(filepath)) {
+			this.hasCache.put(filepath, Boolean.TRUE);
 			return true;
 		}
 		for (int i = this.mpqList.size() - 1; i >= 0; i--) {
 			final DataSource mpq = this.mpqList.get(i);
 			if (mpq.has(filepath)) {
+				this.hasCache.put(filepath, Boolean.TRUE);
 				return true;
 			}
 		}
+		this.hasCache.put(filepath, Boolean.FALSE);
 		return false;
 	}
 
@@ -128,6 +139,7 @@ public class CompoundDataSource implements DataSource {
 			}
 		}
 		this.cache.clear();
+		this.hasCache.clear();
 		this.mpqList.clear();
 		if (dataSourceDescriptors != null) {
 			for (final DataSourceDescriptor descriptor : dataSourceDescriptors) {

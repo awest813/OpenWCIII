@@ -3529,8 +3529,15 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		}
 
 		public boolean process() throws IOException {
-			final LoadMapTask nextTask = this.loadMapTasks.pollFirst();
-			nextTask.run();
+			final long budgetNanos = 250_000_000L; // 250ms frame budget reduces frame dispatch overhead for faster map loads
+			final long frameStart = System.nanoTime();
+			while (!this.loadMapTasks.isEmpty()) {
+				final LoadMapTask nextTask = this.loadMapTasks.pollFirst();
+				nextTask.run();
+				if ((System.nanoTime() - frameStart) >= budgetNanos) {
+					break;
+				}
+			}
 			return this.loadMapTasks.isEmpty();
 		}
 

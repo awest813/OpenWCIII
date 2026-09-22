@@ -2644,9 +2644,39 @@ public class CUnit extends CWidget {
 	}
 
 	public void setPlayerIndex(final CSimulation simulation, final int playerIndex, final boolean changeColor) {
-		this.playerIndex = playerIndex;
-		if (changeColor) {
-			simulation.changeUnitColor(this, playerIndex);
+		final int oldPlayerIndex = this.playerIndex;
+		if (oldPlayerIndex != playerIndex) {
+			final CPlayer oldPlayer = simulation.getPlayer(oldPlayerIndex);
+			final CPlayer newPlayer = simulation.getPlayer(playerIndex);
+
+			if (oldPlayer != null && newPlayer != null) {
+				if (this.foodMade != 0) {
+					oldPlayer.setUnitFoodMade(this, 0);
+					newPlayer.setUnitFoodMade(this, this.foodMade);
+				}
+				if (this.foodUsed != 0) {
+					oldPlayer.setUnitFoodUsed(this, 0);
+					newPlayer.setUnitFoodUsed(this, this.foodUsed);
+				}
+				if (getHeroData() == null) {
+					if (this.constructing) {
+						oldPlayer.removeTechtreeInProgress(this.unitType.getTypeId());
+						newPlayer.addTechtreeInProgress(this.unitType.getTypeId());
+					}
+					else {
+						oldPlayer.removeTechtreeUnlocked(simulation, this.unitType.getTypeId());
+						newPlayer.addTechtreeUnlocked(simulation, this.unitType.getTypeId());
+					}
+				}
+				else {
+					oldPlayer.getHeroes().remove(this);
+					newPlayer.getHeroes().add(this);
+				}
+			}
+			this.playerIndex = playerIndex;
+			if (changeColor) {
+				simulation.changeUnitColor(this, playerIndex);
+			}
 		}
 	}
 

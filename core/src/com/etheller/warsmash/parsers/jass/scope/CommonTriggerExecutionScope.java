@@ -603,6 +603,16 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		return scope;
 	}
 
+	public static CommonTriggerExecutionScope playerUnitSelectionScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit unit, final CPlayerJass player) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = unit;
+		scope.triggeringUnit = unit;
+		scope.triggeringPlayer = player;
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
 	public static CommonTriggerExecutionScope unitDeathScope(final JassGameEventsWar3 triggerEventId,
 			final Trigger trigger, final CUnit dyingUnit, final CUnit killingUnit, final CPlayerJass player) {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
@@ -722,6 +732,48 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		scope.triggerWidget = constructedStructure;
 		scope.triggeringUnit = constructedStructure;
 		scope.constructedStructure = constructedStructure;
+		scope.constructingStructure = constructedStructure;
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope unitConstructStartScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit constructingStructure, final CUnit constructingUnit) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = constructingStructure;
+		scope.triggeringUnit = constructingStructure;
+		scope.constructingStructure = constructingStructure;
+		scope.constructedStructure = constructingStructure;
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope unitConstructCancelScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit cancelledStructure) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = cancelledStructure;
+		scope.triggeringUnit = cancelledStructure;
+		scope.cancelledStructure = cancelledStructure;
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope unitTrainStartScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit trainingUnit, final War3ID trainedUnitType) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = trainingUnit;
+		scope.triggeringUnit = trainingUnit;
+		scope.trainedUnitType = trainedUnitType.getValue();
+		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope unitTrainCancelScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit trainingUnit, final War3ID trainedUnitType) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = trainingUnit;
+		scope.triggeringUnit = trainingUnit;
+		scope.trainedUnitType = trainedUnitType.getValue();
 		scope.triggerEventId = triggerEventId;
 		return scope;
 	}
@@ -734,6 +786,30 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		scope.trainedUnit = trainedUnit;
 		scope.trainedUnitType = trainedUnit.getUnitType().getTypeId().getValue();
 		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope unitResearchStartScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit researchingUnit, final War3ID researched, final CPlayerJass player) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = researchingUnit;
+		scope.triggeringUnit = researchingUnit;
+		scope.researchingUnit = researchingUnit;
+		scope.researched = researched.getValue();
+		scope.triggerEventId = triggerEventId;
+		scope.triggeringPlayer = player;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope unitResearchCancelScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit researchingUnit, final War3ID researched, final CPlayerJass player) {
+		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
+		scope.triggerWidget = researchingUnit;
+		scope.triggeringUnit = researchingUnit;
+		scope.researchingUnit = researchingUnit;
+		scope.researched = researched.getValue();
+		scope.triggerEventId = triggerEventId;
+		scope.triggeringPlayer = player;
 		return scope;
 	}
 

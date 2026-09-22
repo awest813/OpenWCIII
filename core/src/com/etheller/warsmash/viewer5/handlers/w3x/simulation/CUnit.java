@@ -4158,6 +4158,7 @@ public class CUnit extends CWidget {
 			else {
 				player.chargeFor(unitType);
 			}
+			player.fireTrainStartEvents(this, game, rawcode);
 		}
 	}
 
@@ -4195,6 +4196,7 @@ public class CUnit extends CWidget {
 			final CPlayer player = game.getPlayer(this.playerIndex);
 			final CUpgradeType upgradeType = game.getUpgradeData().getType(rawcode);
 			player.chargeFor(upgradeType);
+			player.fireResearchStartEvents(this, game, rawcode);
 		}
 	}
 

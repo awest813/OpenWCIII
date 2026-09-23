@@ -161,7 +161,13 @@ public class CItem extends CWidget {
 		final float oldY = getY();
 		setX(outputX);
 		setY(outputY);
-		game.getWorldCollision().translate(this, outputX - oldX, outputY - oldY);
+		if (this.registeredEnumRectangle != null) {
+			this.registeredEnumRectangle.set(outputX - COLLISION_SIZE, outputY - COLLISION_SIZE,
+					COLLISION_SIZE * 2, COLLISION_SIZE * 2);
+		}
+		if ((this.containedInventory == null) && !isDead() && !isHidden()) {
+			game.getWorldCollision().translate(this, outputX - oldX, outputY - oldY);
+		}
 	}
 
 	@Override

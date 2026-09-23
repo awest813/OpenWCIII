@@ -58,4 +58,21 @@ class QuadtreeTest {
 		}
 	}
 
+	@Test
+	void testTranslateAndRemoveMissingObject() {
+		final Quadtree<Thing> myQuadtree = new Quadtree<>(new Rectangle(-8192, -8192, 16284, 16284));
+		final Thing unaddedThing = new Thing("Unadded", new Rectangle(100, 100, 32, 32));
+
+		// Translating an object not yet in the tree must not corrupt the tree with null nodes
+		myQuadtree.translate(unaddedThing, unaddedThing.bounds, 50, 50);
+
+		// Adding another object and removing it must not throw NullPointerException
+		final Thing addedThing = new Thing("Added", new Rectangle(200, 200, 32, 32));
+		myQuadtree.add(addedThing, addedThing.bounds);
+		myQuadtree.remove(addedThing, addedThing.bounds);
+
+		// Removing an object not in the tree must not throw
+		myQuadtree.remove(unaddedThing, unaddedThing.bounds);
+	}
+
 }

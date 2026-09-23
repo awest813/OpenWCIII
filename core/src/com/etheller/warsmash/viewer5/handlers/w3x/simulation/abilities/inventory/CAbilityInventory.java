@@ -129,7 +129,12 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 			cItem.setCharges(updatedCharges);
 			if (updatedCharges == 0) {
 				if (cItem.getItemType().isPerishable()) {
-					dropItem(game, caster, slot, caster.getX(), caster.getY(), false);
+					this.itemsHeld[slot] = null;
+					for (final CAbility ability : this.itemsHeldAbilities[slot]) {
+						caster.remove(game, ability);
+					}
+					this.itemsHeldAbilities[slot].clear();
+					cItem.setContainedInventory(null, null);
 					game.removeItem(cItem);
 				}
 			}
@@ -411,6 +416,60 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 		} else {
 			receiver.useOk();
 		}
+	}
+
+	public static boolean giveAutoItem(final CSimulation simulation, final CUnit unit, final CItem item) {
+		if ((item != null) && !item.isDead() && !item.isHidden()) {
+			final CItemType itemType = item.getItemType();
+			if (itemType.isUseAutomaticallyWhenAcquired()) {
+				if (itemType.isActivelyUsed()) {
+					item.setLife(simulation, 0);
+					item.setHidden(true);
+					simulation.removeItem(item);
+					final List<CAbility> addedAbilities = new ArrayList<>();
+					for (final War3ID abilityId : item.getItemType().getAbilityList()) {
+						final CAbilityType<?> abilityType = simulation.getAbilityData().getAbilityType(abilityId);
+						if (abilityType != null) {
+							final CAbility abilityFromItem = abilityType
+									.createAbility(simulation.getHandleIdAllocator().createId());
+							abilityFromItem.setIconShowing(false);
+							abilityFromItem.setItemAbility(item, -1);
+							unit.add(simulation, abilityFromItem);
+							if (abilityFromItem instanceof SingleOrderAbility) {
+								final int baseOrderId = ((SingleOrderAbility) abilityFromItem).getBaseOrderId();
+
+								final BooleanAbilityTargetCheckReceiver<CWidget> booleanUnitTargetReceiver = BooleanAbilityTargetCheckReceiver
+										.<CWidget>getInstance().reset();
+								abilityFromItem.checkCanTarget(simulation, unit, baseOrderId, unit, booleanUnitTargetReceiver);
+								if (booleanUnitTargetReceiver.isTargetable()) {
+									unit.order(simulation,
+											new COrderTargetWidget(abilityFromItem.getHandleId(), baseOrderId, unit.getHandleId(), false), false);
+								} else {
+									final BooleanAbilityTargetCheckReceiver<AbilityPointTarget> booleanTargetReceiver = BooleanAbilityTargetCheckReceiver
+											.<AbilityPointTarget>getInstance().reset();
+									AbilityPointTarget tar = new AbilityPointTarget(unit.getX(), unit.getY());
+									abilityFromItem.checkCanTarget(simulation, unit, baseOrderId, tar, booleanTargetReceiver);
+									if (booleanTargetReceiver.isTargetable()) {
+										unit.order(simulation,
+												new COrderTargetPoint(abilityFromItem.getHandleId(), baseOrderId, tar, false), false);
+									} else {
+										unit.order(simulation,
+												new COrderNoTarget(abilityFromItem.getHandleId(), baseOrderId, false), false);
+									}
+								}
+							}
+							addedAbilities.add(abilityFromItem);
+						}
+					}
+					unit.onPickUpItem(simulation, item, true);
+					for (final CAbility ability : addedAbilities) {
+						unit.remove(simulation, ability);
+					}
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	public int giveItem(final CSimulation simulation, final CUnit hero, final CItem item,

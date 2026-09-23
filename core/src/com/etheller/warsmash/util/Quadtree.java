@@ -36,14 +36,16 @@ public class Quadtree<T> {
 		final Node<T> node = remove(object, prevBoundsToUpdate, null);
 		prevBoundsToUpdate.x += xShift;
 		prevBoundsToUpdate.y += yShift;
-		add(node, 0);
+		if (node != null) {
+			add(node, 0);
+		}
 	}
 
 	public boolean intersect(final Rectangle bounds, final QuadtreeIntersector<T> intersector) {
 		if (this.leaf) {
 			for (int i = 0; i < this.nodes.size; i++) {
 				final Node<T> node = this.nodes.get(i);
-				if (node.bounds.overlaps(bounds)) {
+				if ((node != null) && node.bounds.overlaps(bounds)) {
 					if (intersector.onIntersect(node.object)) {
 						return true;
 					}
@@ -80,7 +82,7 @@ public class Quadtree<T> {
 		if (this.leaf) {
 			for (int i = 0; i < this.nodes.size; i++) {
 				final Node<T> node = this.nodes.get(i);
-				if (node.bounds.contains(x, y)) {
+				if ((node != null) && node.bounds.contains(x, y)) {
 					if (intersector.onIntersect(node.object)) {
 						return true;
 					}
@@ -114,6 +116,9 @@ public class Quadtree<T> {
 	}
 
 	private void add(final Node<T> node, final int depth) {
+		if (node == null) {
+			return;
+		}
 		if (this.leaf) {
 			if ((this.nodes.size >= SPLIT_THRESHOLD) && (depth < MAX_DEPTH)) {
 				split(depth);
@@ -167,7 +172,8 @@ public class Quadtree<T> {
 		Node<T> returnValue = null;
 		if (this.leaf) {
 			for (int i = 0; i < this.nodes.size; i++) {
-				if (this.nodes.get(i).object == object) {
+				final Node<T> node = this.nodes.get(i);
+				if ((node != null) && (node.object == object)) {
 					returnValue = this.nodes.removeIndex(i);
 					break;
 				}
@@ -230,7 +236,9 @@ public class Quadtree<T> {
 
 		@Override
 		public void accept(final Node<T> node) {
-			add(node, this.splitDepth);
+			if (node != null) {
+				add(node, this.splitDepth);
+			}
 		}
 	}
 
@@ -242,6 +250,9 @@ public class Quadtree<T> {
 
 		@Override
 		public void accept(final Node<T> node) {
+			if (node == null) {
+				return;
+			}
 			for (int i = 0; i < Quadtree.this.nodes.size; i++) {
 				if (Quadtree.this.nodes.get(i) == node) {
 					return;

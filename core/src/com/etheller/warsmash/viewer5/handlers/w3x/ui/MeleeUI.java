@@ -2039,25 +2039,30 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			}
 			else {
 				final int simulationUnitPlayerIndex = simulationUnit.getPlayerIndex();
-				final boolean neutralHostile = simulationUnitPlayerIndex == (WarsmashConstants.MAX_PLAYERS - 4);
-				final boolean neutralPassive = simulationUnitPlayerIndex == (WarsmashConstants.MAX_PLAYERS - 1);
+				final boolean neutralHostile = (simulationUnitPlayerIndex == (WarsmashConstants.MAX_PLAYERS - 4))
+						|| (simulationUnitPlayerIndex == 12);
+				final boolean neutralPassive = (simulationUnitPlayerIndex == (WarsmashConstants.MAX_PLAYERS - 1))
+						|| (simulationUnitPlayerIndex == 15);
 				String returnValue = "";
 				if ((simulationUnitPlayerIndex != this.localPlayer.getId())
+						&& !neutralHostile && !neutralPassive
 						&& (simulationUnitPlayerIndex < (WarsmashConstants.MAX_PLAYERS - 4))) {
 					final boolean ally = simulationUnit.isUnitAlly(this.localPlayer);
 					final CPlayer unitPlayer = game.getPlayer(simulationUnitPlayerIndex);
-					final String name = unitPlayer.getName();
-					if (name != null) {
-						if (ally) {
-							if (unitPlayer.hasAlliance(this.localPlayer.getId(), CAllianceType.SHARED_CONTROL)) {
-								returnValue = "|CFF00FF00" + name;
+					if (unitPlayer != null) {
+						final String name = unitPlayer.getName();
+						if (name != null && !name.trim().isEmpty() && !"null".equalsIgnoreCase(name.trim())) {
+							if (ally) {
+								if (unitPlayer.hasAlliance(this.localPlayer.getId(), CAllianceType.SHARED_CONTROL)) {
+									returnValue = "|CFF00FF00" + name;
+								}
+								else {
+									returnValue = "|CFFFFFF00" + name;
+								}
 							}
 							else {
-								returnValue = "|CFFFFFF00" + name;
+								returnValue = "|CFFFF0000" + name;
 							}
-						}
-						else {
-							returnValue = "|CFFFF0000" + name;
 						}
 					}
 				}

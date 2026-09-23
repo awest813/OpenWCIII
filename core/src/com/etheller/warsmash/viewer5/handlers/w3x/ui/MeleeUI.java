@@ -3176,6 +3176,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	}
 
 	public void selectUnit(RenderUnit unit) {
+		final RenderUnit prevUnit = this.selectedUnit;
 		this.subMenuOrderIdStack.clear();
 		if ((unit != null) && unit.getSimulationUnit().isDead()) {
 			unit = null;
@@ -3228,6 +3229,20 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		else {
 			unit.getSimulationUnit().addStateListener(this);
 			reloadSelectedUnitUI(unit);
+		}
+		if (this.selectedUnits == null || this.selectedUnits.isEmpty() || this.selectedUnits.size() == 1) {
+			if (prevUnit != unit) {
+				final int localPlayer = this.war3MapViewer.getLocalPlayerIndex();
+				final CPlayer player = this.war3MapViewer.simulation.getPlayer(localPlayer);
+				if (player != null) {
+					if (prevUnit != null && prevUnit.getSimulationUnit() != null) {
+						player.fireUnitDeselectedEvents(prevUnit.getSimulationUnit());
+					}
+					if (unit != null && unit.getSimulationUnit() != null) {
+						player.fireUnitSelectedEvents(unit.getSimulationUnit());
+					}
+				}
+			}
 		}
 	}
 
@@ -4763,6 +4778,22 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			}
 			if (playedNewSound) {
 				portraitTalk(USAudio);
+			}
+			if (prevSelectedUnits != null && (prevSelectedUnits != selectedUnits)) {
+				final int localPlayer = this.war3MapViewer.getLocalPlayerIndex();
+				final CPlayer player = this.war3MapViewer.simulation.getPlayer(localPlayer);
+				if (player != null) {
+					for (final RenderUnit prev : prevSelectedUnits) {
+						if (!selectedUnits.contains(prev) && (prev != null) && (prev.getSimulationUnit() != null)) {
+							player.fireUnitDeselectedEvents(prev.getSimulationUnit());
+						}
+					}
+					for (final RenderUnit cur : selectedUnits) {
+						if (!prevSelectedUnits.contains(cur) && (cur != null) && (cur.getSimulationUnit() != null)) {
+							player.fireUnitSelectedEvents(cur.getSimulationUnit());
+						}
+					}
+				}
 			}
 		}
 		else {

@@ -122,6 +122,7 @@ public class CBehaviorUndeadBuild extends CAbstractRangedBehavior {
 						this.target.getY() + ((deltaY / delta) * unitTypeToCreate.getCollisionSize()), simulation);
 				simulation.unitRepositioned(this.unit);
 				simulation.getPlayer(playerIndex).addTechtreeInProgress(this.orderId);
+				simulation.getPlayer(playerIndex).fireConstructStartEvents(constructedStructure, simulation, constructedStructure);
 				simulation.unitConstructedEvent(this.unit, constructedStructure);
 				this.doneTick = simulation.getGameTurnTick() + delayAnimationTicks;
 			}

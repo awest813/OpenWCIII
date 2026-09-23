@@ -356,6 +356,26 @@ public class CPlayer extends CBasePlayer {
 		}
 	}
 
+	public void fireUnitSelectedEvents(final CUnit unit) {
+		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_SELECTED);
+		if (eventList != null) {
+			for (final CPlayerEvent event : eventList) {
+				event.fire(unit, CommonTriggerExecutionScope.playerUnitSelectionScope(
+						JassGameEventsWar3.EVENT_PLAYER_UNIT_SELECTED, event.getTrigger(), unit, this));
+			}
+		}
+	}
+
+	public void fireUnitDeselectedEvents(final CUnit unit) {
+		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_DESELECTED);
+		if (eventList != null) {
+			for (final CPlayerEvent event : eventList) {
+				event.fire(unit, CommonTriggerExecutionScope.playerUnitSelectionScope(
+						JassGameEventsWar3.EVENT_PLAYER_UNIT_DESELECTED, event.getTrigger(), unit, this));
+			}
+		}
+	}
+
 	public void fireHeroLevelEvents(final CUnit hero) {
 		firePlayerUnitEvents(hero, CommonTriggerExecutionScope::playerHeroLevelScope,
 				JassGameEventsWar3.EVENT_PLAYER_HERO_LEVEL);
@@ -431,12 +451,42 @@ public class CPlayer extends CBasePlayer {
 		}
 	}
 
+	public void fireConstructStartEvents(final CUnit unit, final CSimulation game, final CUnit constructingStructure) {
+		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_CONSTRUCT_START);
+		if (eventList != null) {
+			for (final CPlayerEvent event : eventList) {
+				event.fire(unit, CommonTriggerExecutionScope.unitConstructStartScope(
+						JassGameEventsWar3.EVENT_PLAYER_UNIT_CONSTRUCT_START, event.getTrigger(), constructingStructure, unit));
+			}
+		}
+	}
+
+	public void fireTrainStartEvents(final CUnit unit, final CSimulation game, final War3ID trainedUnitType) {
+		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_TRAIN_START);
+		if (eventList != null) {
+			for (final CPlayerEvent event : eventList) {
+				event.fire(unit, CommonTriggerExecutionScope.unitTrainStartScope(
+						JassGameEventsWar3.EVENT_PLAYER_UNIT_TRAIN_START, event.getTrigger(), unit, trainedUnitType));
+			}
+		}
+	}
+
 	public void fireTrainFinishEvents(final CUnit unit, final CSimulation game, final CUnit trainedUnit) {
 		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_TRAIN_FINISH);
 		if (eventList != null) {
 			for (final CPlayerEvent event : eventList) {
 				event.fire(unit, CommonTriggerExecutionScope.unitTrainFinishScope(
 						JassGameEventsWar3.EVENT_PLAYER_UNIT_TRAIN_FINISH, event.getTrigger(), unit, trainedUnit));
+			}
+		}
+	}
+
+	public void fireResearchStartEvents(final CUnit unit, final CSimulation game, final War3ID researched) {
+		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_RESEARCH_START);
+		if (eventList != null) {
+			for (final CPlayerEvent event : eventList) {
+				event.fire(unit, CommonTriggerExecutionScope.unitResearchStartScope(
+						JassGameEventsWar3.EVENT_PLAYER_UNIT_RESEARCH_START, event.getTrigger(), unit, researched, this));
 			}
 		}
 	}

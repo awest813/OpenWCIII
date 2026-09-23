@@ -69,6 +69,9 @@ public class Trigger implements CHandle {
 	}
 
 	public boolean evaluate(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
+		if (!this.enabled) {
+			return false;
+		}
 		for (final TriggerBooleanExpression condition : this.conditions) {
 			if (!condition.evaluate(globalScope, triggerScope)) {
 				return false;
@@ -78,6 +81,10 @@ public class Trigger implements CHandle {
 	}
 
 	public void execute(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
+		if (!this.enabled) {
+			return;
+		}
+		this.execCount++;
 		for (final JassFunction action : this.actions) {
 			try {
 				action.call(Collections.emptyList(), globalScope, triggerScope);
@@ -130,6 +137,10 @@ public class Trigger implements CHandle {
 
 		public JassThreadActionFunc(final CodeJassValue codeJassValue) {
 			this.codeJassValue = codeJassValue;
+		}
+
+		public CodeJassValue getCodeJassValue() {
+			return this.codeJassValue;
 		}
 
 		@Override

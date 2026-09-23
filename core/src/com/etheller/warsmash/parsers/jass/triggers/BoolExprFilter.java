@@ -19,8 +19,11 @@ public class BoolExprFilter implements TriggerBooleanExpression {
 	public boolean evaluate(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
 		final JassValue jassReturnValue = this.takesNothingReturnsBooleanFunction.callAndExecuteCapturingReturnValue(
 				globalScope, triggerScope, "BoolExprFilter", BooleanJassValue.FALSE);
+		if (jassReturnValue == null || jassReturnValue instanceof com.etheller.interpreter.ast.value.DummyJassValue) {
+			return true;
+		}
 		final Boolean booleanReturnValue = jassReturnValue.visit(BooleanJassValueVisitor.getInstance());
-		return booleanReturnValue.booleanValue();
+		return (booleanReturnValue != null) && booleanReturnValue.booleanValue();
 	}
 
 }

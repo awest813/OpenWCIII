@@ -18,12 +18,12 @@ public abstract class CameraManager {
 	public float horizontalAngle;
 	public float verticalAngle;
 	public float distance;
-	protected Vector3 position;
-	public Vector3 target;
-	protected Vector3 worldUp;
-	protected Vector3 vecHeap;
-	protected Quaternion quatHeap;
-	protected Quaternion quatHeap2;
+	protected Vector3 position = new Vector3();
+	public Vector3 target = new Vector3();
+	protected Vector3 worldUp = new Vector3(0, 0, 1);
+	protected Vector3 vecHeap = new Vector3();
+	protected Quaternion quatHeap = new Quaternion();
+	protected Quaternion quatHeap2 = new Quaternion();
 
 	public CameraManager() {
 	}

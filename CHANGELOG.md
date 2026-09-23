@@ -20,6 +20,13 @@ Changes are grouped by category:
 ## [Unreleased]
 
 ### fix
+- **Camera pan destination cleared on arrival**: when `panToTimed` (cinematics,
+  scripted dialogues, or map events) moved the camera, `panDestination` was
+  never cleared upon reaching the destination. As a result, mouse edge panning
+  and middle-mouse dragging were overwritten every frame, locking the camera in
+  place until keyboard arrow keys were pressed. The pan destination is now
+  cleared once the camera reaches the destination, on minimap clicks, or on
+  mouse dragging, covered by `GameCameraManagerTest`.
 - **Ability Builder configs load again on Java 17**: Gson eagerly builds an
   adapter for every reachable field type, and the pooled enum functions added
   for spatial-query performance hold a `CSimulation` reference. The walk

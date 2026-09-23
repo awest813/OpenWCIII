@@ -6,8 +6,9 @@
 **P0 progression spine is largely landed** (`ChangeLevel` + score Continue,
 dialog buttons, selection, hero carry-over, menu restore, availability store,
 score/boards MVP, transmission VO + named anims, cine filters, volume groups,
-hero natives, AI assault MVP). Still missing for full parity: real movie
-decode, competitive build AI, sky mesh, full RoC/TFT soak.
+hero natives, AI assault MVP, player-state events, mission restart, shop
+stock, ffmpeg-backed movie playback). Still missing for full parity:
+competitive build AI, sky mesh, full RoC/TFT soak.
 
 ## Measuring parity
 
@@ -21,7 +22,18 @@ engine does not implement. Re-run it after native work; the current output is
 ```
 
 Across all 85 retail campaign maps, reachable-but-unimplemented natives went
-from 79 to 37 across the 2026-09-10 and 2026-09-13 passes.
+from 79 to 37 across the 2026-09-10 and 2026-09-13 passes. The 37 have since
+been implemented in `Jass2` (gameplay-real where the sim supports it:
+buff removal, cooldown reset, sleep, timed life, `IsUnitIdType`, blight rect,
+item-slot removal, sound cutoff; accepted-and-ignored where no system exists
+yet: doodad/destructable visuals, minimap icons, weather, terrain deformation,
+transports). Follow-ups have since landed too: `TriggerRegisterPlayerStateEvent`
+fires on the rising edge via `CPlayerStateEvent` (with `GetEventPlayerState`),
+`RestartGame` reloads the running map through the `ChangeLevel` path, and shop
+stock is tracked (`CAbilitySellItems` catalog + counts with out-of-stock
+purchase gating; mercenary counts on the `CUnit` ledger). Re-run
+`campaignNativeAudit` against owned archives to confirm the report reads 0
+for the previously missing set.
 
 ## First soak on retail disc data (2026-09-10)
 
@@ -117,9 +129,17 @@ building a competitive economy.
 - **Status:** **DONE** — `StoredUnitData` + gamecache v2 + restore path.
 
 ### 7. Movie / intro cinematic playback
-- **Status:** **MVP DONE** — `PlayCinematic` shows overlay and blocks the
-  calling JASS thread (~5s / ESC skip). Real SMK/BIK/video decode still TODO.
-  `PlayModelCinematic` / `SetIntroShot*` registered as stubs.
+- **Status:** **DONE (ffmpeg-backed)** — `PlayCinematic` resolves the movie
+  through the data sources (`Movies\*.mpq` AVI files, `.avi`, `.mp4`), decodes
+  video via a user-provided `ffmpeg` pipe (`MoviePlayer.Session`, backpressure-paced
+  raw RGB frames uploaded to a centered, aspect-ratio-preserved texture) and
+  streams the audio track to PCM output, ducking in-game music/ambient sounds.
+  The JASS thread sleeps for the decoded duration, and ESC / Space / Enter skips
+  playback cleanly. No codec is bundled (no MIT pure-Java MPEG-4 Part 2 decoder exists);
+  without `ffmpeg` or the movie file it falls back to the skippable title overlay.
+  `MenuUI` also exposes campaign intro and ending cinematics as mission select
+  buttons tied to `CampaignProgressStore`. `PlayModelCinematic` / `SetIntroShot*`
+  remain stubs.
 
 ### 8. Campaign AI bootstrap
 - **Status:** **MVP DONE** — `StartCampaignAI`/`StartMeleeAI` load scripts into

@@ -58,6 +58,10 @@ public interface CPlayerJass {
 
 	String getName();
 
+	void setPlayerState(CPlayerState whichPlayerState, int value);
+
+	int getPlayerState(CPlayerState whichPlayerState);
+
 	RemovableTriggerEvent addEvent(final GlobalScope globalScope, final Trigger whichTrigger,
 			final JassGameEventsWar3 eventType);
 

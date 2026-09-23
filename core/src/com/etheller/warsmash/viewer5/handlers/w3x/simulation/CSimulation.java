@@ -74,6 +74,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CPla
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegionManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.state.FalseTimeOfDay;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.CPlayerStateEvent;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.CUnitInRangeEvent;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CEffectType;
@@ -126,6 +127,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	private final CRegionManager regionManager;
 	private final List<TimeOfDayEvent> timeOfDayVariableEvents = new ArrayList<>();
 	private final List<CUnitInRangeEvent> unitInRangeEvents = new ArrayList<>();
+	private final List<CPlayerStateEvent> playerStateEvents = new ArrayList<>();
 	private final EnumMap<JassGameEventsWar3, List<CGlobalEvent>> eventTypeToEvents = new EnumMap<>(
 			JassGameEventsWar3.class);
 	private boolean timeOfDaySuspended;
@@ -573,6 +575,9 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		for (int i = 0; i < this.unitInRangeEvents.size(); i++) {
 			this.unitInRangeEvents.get(i).update(this);
 		}
+		for (int i = 0; i < this.playerStateEvents.size(); i++) {
+			this.playerStateEvents.get(i).update(this);
+		}
 		this.gameTurnTick++;
 		final float timeOfDayBefore = getGameTimeOfDay();
 		if (this.falseTimeOfDay != null) {
@@ -979,6 +984,25 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 			@Override
 			public void remove() {
 				CSimulation.this.unitInRangeEvents.remove(unitInRangeEvent);
+			}
+		};
+	}
+
+	/**
+	 * Registers a TriggerRegisterPlayerStateEvent watch. Player states are
+	 * re-checked every simulation tick, so the trigger fires when the state's
+	 * value starts satisfying the limit comparison.
+	 */
+	public RemovableTriggerEvent registerPlayerStateEvent(final GlobalScope globalScope, final Trigger trigger,
+			final CPlayer player, final CPlayerState state, final CLimitOp opcode, final double limitval) {
+		final CPlayerStateEvent playerStateEvent = new CPlayerStateEvent(globalScope, trigger, player, state, opcode,
+				limitval);
+		playerStateEvent.captureInitial(this);
+		this.playerStateEvents.add(playerStateEvent);
+		return new RemovableTriggerEvent(trigger) {
+			@Override
+			public void remove() {
+				CSimulation.this.playerStateEvents.remove(playerStateEvent);
 			}
 		};
 	}

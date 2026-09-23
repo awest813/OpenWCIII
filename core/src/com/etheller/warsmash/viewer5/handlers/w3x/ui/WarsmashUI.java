@@ -114,13 +114,27 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 	void requestChangeLevel(String newLevel, boolean doScoreScreen);
 
 	/**
-	 * Play a campaign movie / cinematic stub. Blocks the calling JASS thread for a
-	 * short duration (or until skipped). Real video decode is not yet available.
+	 * Play a campaign movie. When the movie file decodes, real video frames are
+	 * shown and the calling JASS thread sleeps for the movie duration (or until
+	 * skipped); otherwise a timed text overlay is shown as a fallback.
 	 */
 	void playCinematic(String moviePath);
 
+	/**
+	 * Length of the currently playing movie in seconds, or 0 when no movie is
+	 * decoding (timed-overlay fallback).
+	 */
+	default float getMovieDurationSeconds() {
+		return 0f;
+	}
+
 	/** Associates the sleeping JASS thread with the current movie overlay. */
 	void bindMovieSleepThread(com.etheller.interpreter.ast.execution.JassThread thread);
+
+	/** Associates the sleep timer with the current movie overlay so it can be cancelled on skip. */
+	default void bindMovieSleepTimer(
+			com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimerSleepAction timer) {
+	}
 
 	/** Controls whether ESC can skip the current {@link #playCinematic} overlay. */
 	void setCinematicSkipButtonVisible(boolean visible);

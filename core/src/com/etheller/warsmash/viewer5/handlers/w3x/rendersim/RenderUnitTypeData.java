@@ -1,8 +1,10 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.rendersim;
 
 import java.awt.image.BufferedImage;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.badlogic.gdx.math.Vector3;
@@ -140,11 +142,24 @@ public class RenderUnitTypeData extends RenderWidgetTypeData<RenderUnitType> {
 		if ("_".equals(buildingShadow)) {
 			buildingShadow = null;
 		}
-		final String requiredAnimationNamesForAttachmentsString = row.getFieldAsString(ATTACHMENT_ANIM_PROPS, 0);
+		List<String> requiredAnimationNamesForAttachmentsList = row.getFieldAsList(ATTACHMENT_ANIM_PROPS);
+		if (requiredAnimationNamesForAttachmentsList == null || requiredAnimationNamesForAttachmentsList.isEmpty()) {
+			final String single = row.getFieldAsString(ATTACHMENT_ANIM_PROPS, 0);
+			if (single != null && !single.isEmpty()) {
+				requiredAnimationNamesForAttachmentsList = Collections.singletonList(single);
+			}
+		}
 		final EnumSet<SecondaryTag> requiredAnimationNamesForAttachments = parseSecondaryTags(
-				requiredAnimationNamesForAttachmentsString);
-		final String requireAnimationNamesString = row.getFieldAsString(ANIM_PROPS, 0);
-		final EnumSet<SecondaryTag> requiredAnimationNames = parseSecondaryTags(requireAnimationNamesString);
+				requiredAnimationNamesForAttachmentsList);
+
+		List<String> requireAnimationNamesList = row.getFieldAsList(ANIM_PROPS);
+		if (requireAnimationNamesList == null || requireAnimationNamesList.isEmpty()) {
+			final String single = row.getFieldAsString(ANIM_PROPS, 0);
+			if (single != null && !single.isEmpty()) {
+				requireAnimationNamesList = Collections.singletonList(single);
+			}
+		}
+		final EnumSet<SecondaryTag> requiredAnimationNames = parseSecondaryTags(requireAnimationNamesList);
 
 		final float red = row.getFieldAsInteger(RED, 0) / 255f;
 		final float green = row.getFieldAsInteger(GREEN, 0) / 255f;
@@ -167,17 +182,35 @@ public class RenderUnitTypeData extends RenderWidgetTypeData<RenderUnitType> {
 				orientationInterpolation, blendTime);
 	}
 
-	private EnumSet<SecondaryTag> parseSecondaryTags(final String requiredAnimationNamesForAttachmentsString) {
-		final EnumSet<SecondaryTag> requiredAnimationNamesForAttachments = EnumSet.noneOf(SecondaryTag.class);
-		TokenLoop: for (final String animationName : requiredAnimationNamesForAttachmentsString.split(",")) {
-			final String upperCaseToken = animationName.toUpperCase();
-			for (final SecondaryTag secondaryTag : SecondaryTag.values()) {
-				if (upperCaseToken.equals(secondaryTag.name())) {
-					requiredAnimationNamesForAttachments.add(secondaryTag);
-					continue TokenLoop;
+	public static EnumSet<SecondaryTag> parseSecondaryTags(final List<String> tagStrings) {
+		final EnumSet<SecondaryTag> result = EnumSet.noneOf(SecondaryTag.class);
+		if (tagStrings == null || tagStrings.isEmpty()) {
+			return result;
+		}
+		for (final String tagString : tagStrings) {
+			if (tagString == null) {
+				continue;
+			}
+			TokenLoop: for (final String animationName : tagString.split(",")) {
+				final String upperCaseToken = animationName.trim().toUpperCase();
+				if (upperCaseToken.isEmpty() || upperCaseToken.equals("-") || upperCaseToken.equals("_")) {
+					continue;
+				}
+				for (final SecondaryTag secondaryTag : SecondaryTag.values()) {
+					if (upperCaseToken.equals(secondaryTag.name())) {
+						result.add(secondaryTag);
+						continue TokenLoop;
+					}
 				}
 			}
 		}
-		return requiredAnimationNamesForAttachments;
+		return result;
+	}
+
+	public static EnumSet<SecondaryTag> parseSecondaryTags(final String requiredAnimationNamesString) {
+		if (requiredAnimationNamesString == null) {
+			return EnumSet.noneOf(SecondaryTag.class);
+		}
+		return parseSecondaryTags(Collections.singletonList(requiredAnimationNamesString));
 	}
 }

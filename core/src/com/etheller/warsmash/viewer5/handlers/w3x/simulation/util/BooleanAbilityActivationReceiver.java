@@ -6,6 +6,11 @@ public class BooleanAbilityActivationReceiver implements AbilityActivationReceiv
 	public static final BooleanAbilityActivationReceiver INSTANCE = new BooleanAbilityActivationReceiver();
 	private boolean ok;
 
+	public BooleanAbilityActivationReceiver reset() {
+		this.ok = false;
+		return this;
+	}
+
 	@Override
 	public void useOk() {
 		this.ok = true;

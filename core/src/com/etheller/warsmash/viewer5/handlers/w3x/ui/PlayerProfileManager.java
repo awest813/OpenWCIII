@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore;
 
 public class PlayerProfileManager {
 	private static final String CURRENT_PROFILE = "CurrentProfile";
@@ -37,6 +38,7 @@ public class PlayerProfileManager {
 		this.preferences = preferences;
 		this.profiles = profiles;
 		this.currentProfile = currentProfile;
+		CampaignProgressStore.get().loadProfile(preferences, currentProfile);
 	}
 
 	public List<PlayerProfile> getProfiles() {
@@ -54,6 +56,7 @@ public class PlayerProfileManager {
 
 	public void setCurrentProfile(final String currentProfile) {
 		this.currentProfile = currentProfile;
+		CampaignProgressStore.get().loadProfile(this.preferences, currentProfile);
 		this.preferences.putString(CURRENT_PROFILE, this.currentProfile);
 		this.preferences.flush();
 	}
@@ -87,6 +90,7 @@ public class PlayerProfileManager {
 	}
 
 	public void removeProfile(final PlayerProfile profileToRemove) {
+		CampaignProgressStore.removeProfile(this.preferences, profileToRemove.getName());
 		this.profiles.remove(profileToRemove);
 		saveAll();
 	}

@@ -37,7 +37,39 @@ task campaignNativeAudit(dependsOn: classes, type: JavaExec) {
     mainClass = "com.etheller.warsmash.desktop.tools.CampaignNativeAudit"
     classpath = sourceSets.main.runtimeClasspath
     workingDir = project.rootDir
-    ignoreExitValue = true
+    args cmdargs.split()
+}
+
+task campaignCinematicRefs(dependsOn: classes, type: JavaExec) {
+    description = "Dumps cinematic asset refs (sky/camera/model-cinematic) in retail campaign scripts and validates them against the archives."
+    mainClass = "com.etheller.warsmash.desktop.tools.CampaignCinematicRefs"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
+    args cmdargs.split()
+}
+
+task campaignBackingAudit(dependsOn: classes, type: JavaExec) {
+    description = "Audits Warcraft III 3D and 2D menu backing screens, cameras, sequences, and skin resolution against retail archives."
+    mainClass = "com.etheller.warsmash.desktop.tools.CampaignBackingScreensAudit"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
+    args cmdargs.split()
+}
+
+task campaignProgressionAudit(dependsOn: classes, type: JavaExec) {
+    description = "Audits Warcraft III single-player campaign progression, ChangeLevel map chaining, and gamecache continuity against retail archives."
+    mainClass = "com.etheller.warsmash.desktop.tools.CampaignProgressionAudit"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
+    args cmdargs.split()
+}
+
+task campaignSoakAudit(dependsOn: classes, type: JavaExec) {
+    description = "Executes an automated headless soak test across all 85 retail campaign maps, stepping 300 simulation ticks each."
+    mainClass = "com.etheller.warsmash.desktop.tools.CampaignSoakTestRunner"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
+    maxHeapSize = "3072m"
     args cmdargs.split()
 }
 

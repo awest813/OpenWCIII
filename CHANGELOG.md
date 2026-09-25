@@ -20,6 +20,70 @@ Changes are grouped by category:
 ## [Unreleased]
 
 ### fix
+- Campaign hero carryover restores equipment before reconciling bonus stats, avoiding
+  doubled item bonuses and duplicate techtree counts. Saved unit snapshots include
+  this tick's creations and exclude pending removals.
+- Human hero skill implementations are registered as fallbacks; script overrides
+  invalidate cached ability types. Ability definitions load from launcher, test,
+  and repository working directories, with deterministic ordering.
+- Original campaign attack auras use legacy targeting defaults when expansion
+  fields are absent; explicit map values still override those defaults.
+- Interleaved movement searches keep separate scores and predecessor chains while
+  sharing grid coordinates. Improved queue priorities are reordered correctly and
+  resumed searches restore their collision size.
+- JASS accepts unary-plus expressions used by the final Undead campaign AI.
+  Script parsing failures now propagate instead of masquerading as loaded AI.
+- Save format v5 preserves primitive script arrays and null strings while still
+  reading v1–v4 saves. Restores reuse existing arrays and clear post-save entries.
+  Saves write through a temporary file so serialization failures retain the last
+  good save; malformed counts, value tags, array entries and trailing data are
+  rejected. Main-menu load now waits for the queued map startup script to finish
+  before applying saved state, preventing startup from overwriting it.
+- Music honors fade-in duration, resumes the paused track, safely handles empty
+  or missing playlists and invalid track indexes, and disposes replaced tracks.
+- Campaign progress now persists per player profile without menu defaults erasing
+  unlocks. Profile switching and deletion isolate progress.
+- Closing a campaign map preserves shared game archives for the next chapter.
+  Failed chapter transitions recover the menu, and in-place loads reject saves
+  from other maps instead of applying unrelated globals/resources.
+- Campaign audits propagate failures to Gradle, reject empty progression/soak
+  runs, and report previously swallowed AI/object load errors. Corrected map
+  override priority and unit-facing conversion in the soak runner. Removed the
+  unsupported full-parity claim; complete mission resume and playthrough
+  verification remain outstanding.
+- **Gamecache in-session sharing and paired binary serialization**: `CommonEnvironment`
+  now manages an in-memory gamecache registry `openGameCaches` (`InitGameCache`,
+  `SaveGameCache`, `CachePlayerHeroData`, `ReloadGameCachesFromDisk`), guaranteeing
+  that mutations in one trigger are immediately visible to subsequent triggers
+  querying the cache within the mission session before writing to disk.
+  `CGameCache.save()` now iterates directly over mission entries, eliminating
+  binary key/value misalignment, and adds null safety for hero proper names and
+  attributes. Covered by `CampaignHeroCarryoverTest`.
+- **Default campaign difficulty parity**: `War3MapConfig.gameDifficulty` now defaults
+  to `CMapDifficulty.NORMAL` (was previously `null`), and `GetGameDifficulty` in
+  `Jass2.java` safely falls back to `NORMAL`. This guarantees correct script
+  evaluations across 371 retail campaign script call sites checking
+  `GetGameDifficulty() == MAP_DIFFICULTY_NORMAL`.
+- **Campaign mission launch transition**: `MenuUI.launchCampaignMission` now
+  sets `menuState = MenuState.GOING_TO_MAP` and triggers `campaignFade.setSequence("Birth")`
+  so the fade-to-black animation runs cleanly prior to loading screen presentation.
+  `startMap` and mission launches now provide a default fallback to slot 0 when no
+  explicit W3I USER controller slot is flagged.
+- **Versioned skin resolution precedence**: `GameUI.hasSkinField`, `getSkinField`,
+  and `trySkinField` now check `file + "_V" + WarsmashConstants.GAME_VERSION`
+  ahead of unversioned defaults. This resolves a long-standing defect where
+  The Frozen Throne (`GAME_VERSION == 1`) always resolved Reign of Chaos
+  defaults (`MainMenu3D.mdl`, `HumanCampaign3D.mdl`) because unversioned keys
+  were evaluated first, preventing expansion backing screens from displaying.
+  Covered by `GameUISkinResolutionTest`.
+- **Menu backing screens camera FOV and animation polish**: accurate trigonometry
+  calculates vertical FOV from horizontal MDX camera FOV based on actual viewport
+  aspect ratio; non-birth backing screens start `Stand` with `MODEL_LOOP`
+  without looping hitches; Battle.net door open/close transitions use
+  `Stand Alternate` and `Morph Alternate` states; active campaign backdrops
+  restore according to `CampaignProgressStore.campaignMenuRace`. Continuous
+  verification provided by `BackingScreensRetailAuditTest` and
+  `task campaignBackingAudit`.
 - **Camera pan destination cleared on arrival**: when `panToTimed` (cinematics,
   scripted dialogues, or map events) moved the camera, `panDestination` was
   never cleared upon reaching the destination. As a result, mouse edge panning
@@ -45,8 +109,65 @@ Changes are grouped by category:
 - **Unparseable object data tables no longer abort map load**: a table whose
   layout does not match the parser is skipped with a warning, which is what
   already happened for tables that failed the end-marker check.
+- **Cinematic presentation state tracked**: `SetSkyModel`,
+  `SetCinematicCamera`, `PlayModelCinematic`, `SetIntroShotText` and
+  `SetIntroShotModel` now persist normalized paths/values in the new
+  `CinematicPresentationState` (exposed via `WarsmashUI`, stored by `MeleeUI`).
+  `PlayModelCinematic` no longer routes through ffmpeg movie decoding and shows
+  its own skippable letterbox overlay instead; sky-mesh swap and MDX
+  camera-track playback remain pending. Covered by
+  `CinematicPresentationStateTest`.
+- **Thematic music on its own layer**: `PlayThematicMusic` / `Ex`,
+  `PlayThematic`, `EndThematic(Music)` and `SetThematicMusicPlayPosition` now
+  drive `MeleeUI` thematic methods backed by the new `ThematicMusicState`, so
+  the map-music default survives thematic playback and end-thematic drops back
+  to it. Fade intents are recorded; transitions still apply immediately.
+  Covered by `ThematicMusicStateTest`.
+- **SaveGame v2 records clock + camera**: saves now persist the time-of-day
+  clock/scale and the local camera target alongside globals and resources, and
+  `LoadGame`/`ReloadGame` restore them through a shared
+  `restoreSaveGameState` helper. v1 files still load (new fields read as
+  absent). Covered by new `CGameSaveTest` roundtrip and back-compat tests.
+- **Real sky-mesh swap**: `SetSkyModel` now loads the sky model into the world
+  scene (`War3MapViewer.setSkyModel`), loops its stand sequence, and re-centers
+  it on the game camera every frame. Empty paths clear the sky; unresolvable
+  paths keep the previous one so bad script calls cannot strand a mission
+  skyless. All 13 retail sky paths validated present and parsing via the new
+  `:desktop:campaignCinematicRefs` tool (0 missing across 85 maps).
+- **MDX camera-track playback**: `SetCinematicCamera` models with a camera
+  track now drive the world camera each frame (base + `KCTR`/`KTTR` offsets via
+  the pure, unit-tested `CinematicCameraPlayer`; authored FOV/near/far; RTS
+  motion suppressed while active; ESC ends the track and restores the game
+  camera). Empty/missing/trackless models keep the previous stop-pans baseline.
+  Retail validation found 0 campaign call sites, so this serves custom maps;
+  `KCRL` roll stays ignored. Covered by `CinematicCameraPlayerTest`.
+- **Main-menu Load Saved**: the retail `LoadSavedGameScreen` lists
+  `~/.warsmash/saves/*.w3s`; selecting a save reloads its recorded map and
+  `WarsmashGdxMapScreen` re-applies globals/resources/clock/camera after
+  scripts boot. Saves record their map (`CGameSave` v3; pre-v3 saves are
+  refused with a message rather than guessed), and QuickSave now records
+  map/clock/camera like JASS saves. Corrupt saves and missing map assets reuse
+  the existing error paths. Covered by new `CGameSaveTest` v3 roundtrip,
+  back-compat, and save-listing tests.
+- **Main-menu Credits**: launches the retail credits map
+  (`WarCraftIIICredits.w3m`, falling back to `BonusCredits.w3m`) through the
+  normal map path; the button stays disabled when neither map is in the data.
+- **Main-menu Options, first pass**: the retail `OptionsMenu.fdf` opens with
+  working Gameplay/Video/Sound tabs and OK/Cancel draft semantics; every
+  slider and checkbox persists to `~/.warsmash/options.properties` via the new
+  `OptionsSettingsStore` (covered by `OptionsSettingsStoreTest`). Music volume
+  and toggle apply live to menu music and to missions at boot; the subtitles
+  toggle applies to missions at boot through the new
+  `setCinematicSubtitlesEnabled` (which also fixed the `|| true` that made
+  subtitles unmutable). Sound/scroll/gamma/video-popup backends are still
+  pending and documented in the parity audit.
 
 ### qol
+- **Campaign progression spine audit**: Added `:desktop:campaignProgressionAudit`
+  and CLI tool `CampaignProgressionAudit.java`, auditing all 85 retail campaign
+  maps across Reign of Chaos and The Frozen Throne. 100% of all 70 distinct
+  `ChangeLevel` / `SetNextLevelBJ` map progression links resolve to valid,
+  readable map archives, backed by continuous verification in `CampaignLoadingTest`.
 - **Campaign native coverage audit**: `./gradlew :desktop:campaignNativeAudit`
   extracts every retail campaign script from your own archives, walks the call
   graph through Blizzard.j, and reports which `common.j` natives the campaigns

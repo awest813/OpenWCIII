@@ -39,6 +39,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.C
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CAbilityHero;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilityNeutralBuilding;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellItems;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellUnits;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.jass.CAbilityJass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.nightelf.root.CAbilityRoot;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityQueue;
@@ -621,6 +622,29 @@ public class CommandCardPopulatingAbilityVisitor implements CAbilityVisitor<Void
 							0, false, false, goldCost, lumberCost, 0, 0, -1);
 				}
 				itemIndex++;
+			}
+		}
+		return null;
+	}
+
+	@Override
+	public Void accept(final CAbilitySellUnits ability) {
+		if ((this.menuBaseOrderId == 0) && ability.isIconShowing()) {
+			int unitIndex = 1;
+			for (final War3ID unitType : ability.getUnitsSold()) {
+				final IconUI unitUI = this.abilityDataUI.getUnitUI(unitType);
+				if (unitUI != null) {
+					final CUnitType simulationUnitType = this.game.getUnitData().getUnitType(unitType);
+					if (simulationUnitType != null) {
+						final int goldCost = simulationUnitType.getGoldCost();
+						final int lumberCost = simulationUnitType.getLumberCost();
+						final int foodCost = simulationUnitType.getFoodUsed();
+						addCommandButton(ability, unitUI, ability.getHandleId(),
+								this.localPlayerIndex | (unitIndex << 8), 0, false, false, goldCost, lumberCost,
+								foodCost, 0, -1);
+					}
+				}
+				unitIndex++;
 			}
 		}
 		return null;

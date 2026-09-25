@@ -76,7 +76,7 @@
 			}]
 		}
 	},{
-		"ids": [{"id":"AEar"},{"id":"AOac"},{"id":"Aakb"}],
+		"ids": [{"id":"AOac"},{"id":"Aakb"}],
 		"type": "TEMPLATE",
 		"templateFields": {
 			"templateType": "AURA_STATS",
@@ -84,6 +84,23 @@
 				"type": "ATK",
 				"dataField": "A",
 				"flatBooleanField": "D",
+				"targetMeleeDefault": true,
+				"targetRangeDefault": true,
+				"targetMeleeField": "B",
+				"targetRangeField": "C"
+			}]
+		}
+		},{
+		"ids": [{"id":"AEar"}],
+		"type": "TEMPLATE",
+		"templateFields": {
+			"templateType": "AURA_STATS",
+			"statBuffsFromDataFields": [{
+				"type": "ATK",
+				"dataField": "A",
+				"flatBooleanField": "D",
+				"targetMeleeDefault": false,
+				"targetRangeDefault": true,
 				"targetMeleeField": "B",
 				"targetRangeField": "C"
 			}]

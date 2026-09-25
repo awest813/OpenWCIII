@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.EnumSet;
+import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -80,6 +81,10 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	public WarsmashGdxMenuScreen(final DataTable warsmashIni, final WarsmashGdxMultiScreenGame game) {
 		this.warsmashIni = warsmashIni;
 		this.game = game;
+	}
+
+	public MenuUI getMenuUI() {
+		return this.menuUI;
 	}
 
 	@Override
@@ -289,21 +294,37 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 				return new SolvedPath(src, src.substring(src.lastIndexOf('.')), true);
 			}
 		}, null);
+		if (model2 == null) {
+			this.mainInstance = null;
+			this.mainModel = null;
+			return;
+		}
 
 		final MdxComplexInstance instance3 = (MdxComplexInstance) model2.addInstance(0);
 
 		instance3.setScene(scene);
 
-		int animIndex = 0;
-		for (final Sequence s : model2.getSequences()) {
-			if (s.getName().toLowerCase().startsWith(animName)) {
-				animIndex = model2.getSequences().indexOf(s);
-				break;
+		int animIndex = -1;
+		final List<Sequence> sequences = model2.getSequences();
+		if (sequences != null) {
+			for (int i = 0; i < sequences.size(); i++) {
+				final Sequence s = sequences.get(i);
+				if (s.getName().toLowerCase().startsWith(animName)) {
+					animIndex = i;
+					break;
+				}
 			}
 		}
-		instance3.setSequence(animIndex);
-
-		instance3.setSequenceLoopMode(SequenceLoopMode.NEVER_LOOP);
+		if (animIndex != -1) {
+			instance3.setSequence(animIndex);
+			instance3.setSequenceLoopMode(SequenceLoopMode.NEVER_LOOP);
+			this.hasPlayedStandHack = false;
+		}
+		else {
+			SequenceUtils.randomSequence(instance3, PrimaryTag.STAND, this.tags, true);
+			instance3.setSequenceLoopMode(SequenceLoopMode.MODEL_LOOP);
+			this.hasPlayedStandHack = true;
+		}
 		this.mainInstance = instance3;
 		this.mainModel = model2;
 	}
@@ -320,20 +341,17 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 		}
 		else {
 			singleModelScene(this.scene, path, "birth");
-			if (!WarsmashGdxMenuScreen.this.mainModel.cameras.isEmpty()) {
-				WarsmashGdxMenuScreen.this.modelCamera = WarsmashGdxMenuScreen.this.mainModel.cameras.get(0);
+			if ((this.mainModel != null) && !this.mainModel.cameras.isEmpty()) {
+				this.modelCamera = this.mainModel.cameras.get(0);
 			}
 			else {
-				WarsmashGdxMenuScreen.this.mainInstance.detach();
-				WarsmashGdxMenuScreen.this.mainInstance.setLocation(0, 0, 1024);
-				WarsmashGdxMenuScreen.this.mainInstance.setScene(WarsmashGdxMenuScreen.this.uiScene);
+				this.modelCamera = null;
+				if (this.mainInstance != null) {
+					this.mainInstance.detach();
+					this.mainInstance.setLocation(0, 0, 1024);
+					this.mainInstance.setScene(this.uiScene);
+				}
 			}
-			// this hack is because we only have the queued animation system in RenderWidget
-			// which is stupid and back and needs to get moved to the model instance
-			// itself... our model instance class is a
-			// hacky replica of a model viewer tool with a bunch of irrelevant loop type
-			// settings instead of what it should be
-			this.hasPlayedStandHack = false;
 		}
 		if (fogSettings != null) {
 			this.scene.fogSettings.style = fogSettings.style;
@@ -341,12 +359,6 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 			this.scene.fogSettings.density = fogSettings.density;
 			this.scene.fogSettings.start = fogSettings.start;
 			this.scene.fogSettings.end = fogSettings.end;
-//			if (this.modelCamera != null) {
-//				this.scene.fogSettings.start = (fogSettings.start - this.modelCamera.nearClippingPlane)
-//						/ (this.modelCamera.farClippingPlane - this.modelCamera.nearClippingPlane);
-//				this.scene.fogSettings.end = (fogSettings.end - this.modelCamera.nearClippingPlane)
-//						/ (this.modelCamera.farClippingPlane - this.modelCamera.nearClippingPlane);
-//			}
 		}
 
 	}
@@ -355,8 +367,9 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	public void alternateModelToBattlenet() {
 		if (this.mainInstance != null) {
 			SequenceUtils.randomSequence(this.mainInstance, PrimaryTag.STAND, SequenceUtils.ALTERNATE, true);
+			this.mainInstance.setSequenceLoopMode(SequenceLoopMode.MODEL_LOOP);
 			this.tags = SequenceUtils.ALTERNATE;
-			this.hasPlayedStandHack = false;
+			this.hasPlayedStandHack = true;
 		}
 	}
 
@@ -364,6 +377,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	public void unAlternateModelBackToNormal() {
 		if (this.mainInstance != null) {
 			SequenceUtils.randomSequence(this.mainInstance, PrimaryTag.MORPH, SequenceUtils.ALTERNATE, true);
+			this.mainInstance.setSequenceLoopMode(SequenceLoopMode.NEVER_LOOP);
 			this.tags = SequenceUtils.EMPTY;
 			this.hasPlayedStandHack = false;
 		}
@@ -566,11 +580,16 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 		Gdx.gl30.glBindVertexArray(WarsmashGdxGame.VAO);
 		this.cameraManager.updateCamera();
 		this.menuUI.update(deltaTime);
-		if ((this.mainInstance != null) && this.mainInstance.sequenceEnded
-				&& (((this.mainModel.getSequences().get(this.mainInstance.sequence).getFlags() & 0x1) == 0)
-						|| !this.hasPlayedStandHack)) {
-			SequenceUtils.randomSequence(this.mainInstance, PrimaryTag.STAND, this.tags, true);
-			this.hasPlayedStandHack = true;
+		if ((this.mainInstance != null) && this.mainInstance.sequenceEnded) {
+			final int seqIdx = this.mainInstance.sequence;
+			final List<Sequence> sequences = (this.mainModel != null) ? this.mainModel.getSequences() : null;
+			if ((sequences != null) && (seqIdx >= 0) && (seqIdx < sequences.size())) {
+				if (((sequences.get(seqIdx).getFlags() & 0x1) == 0) || !this.hasPlayedStandHack) {
+					SequenceUtils.randomSequence(this.mainInstance, PrimaryTag.STAND, this.tags, true);
+					this.mainInstance.setSequenceLoopMode(SequenceLoopMode.MODEL_LOOP);
+					this.hasPlayedStandHack = true;
+				}
+			}
 		}
 		this.viewer.updateAndRender();
 
@@ -683,31 +702,34 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 			this.position.scl(this.distance);
 			this.position = this.position.add(this.target);
 			if (WarsmashGdxMenuScreen.this.modelCamera != null) {
+				final int seq = (WarsmashGdxMenuScreen.this.mainInstance != null)
+						? WarsmashGdxMenuScreen.this.mainInstance.sequence
+						: 0;
+				final int frm = (WarsmashGdxMenuScreen.this.mainInstance != null)
+						? WarsmashGdxMenuScreen.this.mainInstance.frame
+						: 0;
+				final int cnt = (WarsmashGdxMenuScreen.this.mainInstance != null)
+						? WarsmashGdxMenuScreen.this.mainInstance.counter
+						: 0;
 				WarsmashGdxMenuScreen.this.modelCamera.getPositionTranslation(
-						WarsmashGdxMenuScreen.this.cameraPositionTemp, WarsmashGdxMenuScreen.this.mainInstance.sequence,
-						WarsmashGdxMenuScreen.this.mainInstance.frame, WarsmashGdxMenuScreen.this.mainInstance.counter);
-				WarsmashGdxMenuScreen.this.modelCamera.getTargetTranslation(WarsmashGdxMenuScreen.this.cameraTargetTemp,
-						WarsmashGdxMenuScreen.this.mainInstance.sequence, WarsmashGdxMenuScreen.this.mainInstance.frame,
-						WarsmashGdxMenuScreen.this.mainInstance.counter);
+						WarsmashGdxMenuScreen.this.cameraPositionTemp, seq, frm, cnt);
+				WarsmashGdxMenuScreen.this.modelCamera.getTargetTranslation(
+						WarsmashGdxMenuScreen.this.cameraTargetTemp, seq, frm, cnt);
 
 				this.position.set(WarsmashGdxMenuScreen.this.modelCamera.position);
 				this.target.set(WarsmashGdxMenuScreen.this.modelCamera.targetPosition);
-//				this.vecHeap2.set(this.target);
-//				this.vecHeap2.sub(this.position);
-//				this.vecHeap.set(this.vecHeap2);
-//				this.vecHeap.crs(this.worldUp);
-//				this.vecHeap.crs(this.vecHeap2);
-//				this.vecHeap.nor();
-//				this.vecHeap.scl(this.camera.rect.height / 2f);
-//				this.position.add(this.vecHeap);
 
 				this.position.add(WarsmashGdxMenuScreen.this.cameraPositionTemp[0],
 						WarsmashGdxMenuScreen.this.cameraPositionTemp[1],
 						WarsmashGdxMenuScreen.this.cameraPositionTemp[2]);
 				this.target.add(WarsmashGdxMenuScreen.this.cameraTargetTemp[0],
-						WarsmashGdxMenuScreen.this.cameraTargetTemp[1], WarsmashGdxMenuScreen.this.cameraTargetTemp[2]);
-				this.camera.perspective(WarsmashGdxMenuScreen.this.modelCamera.fieldOfView * 0.6f,
-						this.camera.rect.width / this.camera.rect.height,
+						WarsmashGdxMenuScreen.this.cameraTargetTemp[1],
+						WarsmashGdxMenuScreen.this.cameraTargetTemp[2]);
+				final float aspect = (this.camera.rect.height > 0)
+						? (this.camera.rect.width / this.camera.rect.height)
+						: (4f / 3f);
+				final float fovY = (float) (2.0 * Math.atan(Math.tan(WarsmashGdxMenuScreen.this.modelCamera.fieldOfView / 2.0) / aspect));
+				this.camera.perspective(fovY, aspect,
 						WarsmashGdxMenuScreen.this.modelCamera.nearClippingPlane,
 						WarsmashGdxMenuScreen.this.modelCamera.farClippingPlane);
 			}

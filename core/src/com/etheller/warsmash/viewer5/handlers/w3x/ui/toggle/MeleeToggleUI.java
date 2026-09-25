@@ -274,8 +274,18 @@ public class MeleeToggleUI implements WarsmashUI {
 	}
 
 	@Override
-	public void forceCinematicSubtitles(boolean value) {
+	public void forceCinematicSubtitles(final boolean value) {
 		this.meleeUI.forceCinematicSubtitles(value);
+	}
+
+	@Override
+	public void setCinematicSubtitlesEnabled(final boolean enabled) {
+		this.meleeUI.setCinematicSubtitlesEnabled(enabled);
+	}
+
+	@Override
+	public boolean isCinematicSubtitlesEnabled() {
+		return this.meleeUI.isCinematicSubtitlesEnabled();
 	}
 
 	@Override
@@ -342,6 +352,102 @@ public class MeleeToggleUI implements WarsmashUI {
 	@Override
 	public void endPlayCinematic() {
 		this.meleeUI.endPlayCinematic();
+	}
+
+	@Override
+	public void setSkyModel(final String modelPath) {
+		this.meleeUI.setSkyModel(modelPath);
+	}
+
+	@Override
+	public String getSkyModel() {
+		return this.meleeUI.getSkyModel();
+	}
+
+	@Override
+	public void setCinematicCameraModel(final String cameraModelFile) {
+		this.meleeUI.setCinematicCameraModel(cameraModelFile);
+	}
+
+	@Override
+	public String getCinematicCameraModel() {
+		return this.meleeUI.getCinematicCameraModel();
+	}
+
+	@Override
+	public boolean isCinematicCameraPlaying() {
+		return this.meleeUI.isCinematicCameraPlaying();
+	}
+
+	@Override
+	public void endCinematicCamera() {
+		this.meleeUI.endCinematicCamera();
+	}
+
+	@Override
+	public void playModelCinematic(final String modelPath) {
+		this.meleeUI.playModelCinematic(modelPath);
+	}
+
+	@Override
+	public String getModelCinematic() {
+		return this.meleeUI.getModelCinematic();
+	}
+
+	@Override
+	public boolean isModelCinematicPlaying() {
+		return this.meleeUI.isModelCinematicPlaying();
+	}
+
+	@Override
+	public void setIntroShotText(final String text) {
+		this.meleeUI.setIntroShotText(text);
+	}
+
+	@Override
+	public String getIntroShotText() {
+		return this.meleeUI.getIntroShotText();
+	}
+
+	@Override
+	public void setIntroShotModel(final String modelPath) {
+		this.meleeUI.setIntroShotModel(modelPath);
+	}
+
+	@Override
+	public String getIntroShotModel() {
+		return this.meleeUI.getIntroShotModel();
+	}
+
+	@Override
+	public void playThematicMusic(final String musicField, final boolean random, final int index) {
+		this.meleeUI.playThematicMusic(musicField, random, index);
+	}
+
+	@Override
+	public void playThematicMusicEx(final String musicField, final boolean random, final int index,
+			final int fromMSecs, final int fadeInMSecs) {
+		this.meleeUI.playThematicMusicEx(musicField, random, index, fromMSecs, fadeInMSecs);
+	}
+
+	@Override
+	public void endThematicMusic() {
+		this.meleeUI.endThematicMusic();
+	}
+
+	@Override
+	public void setThematicMusicPlayPosition(final int millisecs) {
+		this.meleeUI.setThematicMusicPlayPosition(millisecs);
+	}
+
+	@Override
+	public String getThematicMusicTrack() {
+		return this.meleeUI.getThematicMusicTrack();
+	}
+
+	@Override
+	public boolean isThematicMusicPlaying() {
+		return this.meleeUI.isThematicMusicPlaying();
 	}
 
 	@Override

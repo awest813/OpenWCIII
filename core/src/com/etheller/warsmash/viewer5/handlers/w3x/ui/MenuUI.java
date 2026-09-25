@@ -9,7 +9,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Locale;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.zip.CRC32C;
 
 import com.badlogic.gdx.Gdx;
@@ -39,7 +42,10 @@ import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.parsers.fdf.datamodel.AnchorDefinition;
 import com.etheller.warsmash.parsers.fdf.datamodel.FramePoint;
 import com.etheller.warsmash.parsers.fdf.datamodel.TextJustify;
+import com.etheller.warsmash.parsers.fdf.frames.AbstractUIFrame;
+import com.etheller.warsmash.parsers.fdf.frames.CheckBoxFrame;
 import com.etheller.warsmash.parsers.fdf.frames.EditBoxFrame;
+import com.etheller.warsmash.parsers.fdf.frames.ScrollBarFrame;
 import com.etheller.warsmash.parsers.fdf.frames.GlueButtonFrame;
 import com.etheller.warsmash.parsers.fdf.frames.GlueTextButtonFrame;
 import com.etheller.warsmash.parsers.fdf.frames.ListBoxFrame;
@@ -70,6 +76,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.SequenceUtils;
 import com.etheller.warsmash.viewer5.handlers.w3x.UnitSound;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer.AsyncMapLoader;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CGameSave;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.ai.AIDifficulty;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.CBasePlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig;
@@ -205,6 +212,23 @@ public class MenuUI {
 	private CampaignMenuData[] campaignDatas;
 	/** When set, {@link #onReturnFromGame()} loads this map instead of restoring menu chrome. */
 	private String pendingChangeLevel;
+	/** When set, the next map screen applies this save file after its scripts boot. */
+	private File pendingSaveFile;
+
+	// Main-menu Load Saved screen (retail LoadSavedGameScreen.fdf when present)
+	private UIFrame loadSavedScreen;
+	private ListBoxFrame saveListBox;
+	private GlueTextButtonFrame loadSaveOKButton;
+	private GlueTextButtonFrame loadSaveCancelButton;
+	private final List<String> listedSaveNames = new ArrayList<>();
+
+	// Main-menu Options screen (retail OptionsMenu.fdf when present)
+	private UIFrame optionsMenu;
+	private UIFrame gameplayPanel;
+	private UIFrame videoPanel;
+	private UIFrame soundPanel;
+	private boolean creditsAvailable;
+	private final OptionsSettingsStore optionsDraft = new OptionsSettingsStore();
 
 	// BattleNet
 	private BattleNetUI battleNetUI;
@@ -742,7 +766,13 @@ public class MenuUI {
 						MenuUI.this.campaignWarcraftIIILogo.setVisible(false);
 						MenuUI.this.campaignRootMenuUI.setVisible(false);
 						MenuUI.this.currentMissionSelectMenuUI.setVisible(false);
-						MenuUI.this.skirmish.setVisible(false);
+		MenuUI.this.skirmish.setVisible(false);
+		if (MenuUI.this.loadSavedScreen != null) {
+			MenuUI.this.loadSavedScreen.setVisible(false);
+		}
+		if (MenuUI.this.optionsMenu != null) {
+			MenuUI.this.optionsMenu.setVisible(false);
+		}
 						MenuUI.this.battleNetUI.hideCurrentScreen();
 						playCurrentBattleNetGlueSpriteDeath();
 						MenuUI.this.beginGameInformation = new BeginGameInformation();
@@ -780,6 +810,7 @@ public class MenuUI {
 		// =================================
 		this.rootFrame = new GameUI(this.dataSource, GameUI.loadSkin(this.dataSource, WarsmashConstants.GAME_VERSION),
 				this.uiViewport, this.uiScene, this.viewer, 0, WTS.DO_NOTHING);
+		OptionsSettingsStore.get().load(OptionsSettingsStore.optionsFile());
 
 		this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"), this.menuFogSettings);
 		this.rootFrameListener.onCreate(this.rootFrame);
@@ -895,8 +926,186 @@ public class MenuUI {
 		}
 
 		this.localAreaNetworkButton.setEnabled(true);
-		this.optionsButton.setEnabled(false);
-		this.creditsButton.setEnabled(false);
+		if (this.optionsButton != null) {
+			this.optionsButton.setEnabled(false);
+		}
+		if (this.creditsButton != null) {
+			this.creditsButton.setEnabled(false);
+		}
+
+		if (this.creditsButton != null) {
+			this.creditsButton.setOnClick(new Runnable() {
+				@Override
+				public void run() {
+					playCredits();
+				}
+			});
+		}
+
+		// Main-menu Options (retail OptionsMenu.fdf when the UI data ships it).
+		// Sliders and checkboxes persist into OptionsSettingsStore; music volume
+		// and the music toggle apply live, the rest await engine backends.
+		this.creditsAvailable = hasCampaignMap("Maps\\Campaign\\WarCraftIIICredits.w3m")
+				|| hasCampaignMap("Maps\\Campaign\\BonusCredits.w3m");
+		try {
+			this.optionsMenu = this.rootFrame.createFrame("OptionsMenu", this.rootFrame, 0, 0);
+			this.optionsMenu.setVisible(false);
+			this.gameplayPanel = findFrameIn(this.optionsMenu, "GameplayPanel");
+			this.videoPanel = findFrameIn(this.optionsMenu, "VideoPanel");
+			this.soundPanel = findFrameIn(this.optionsMenu, "SoundPanel");
+			wireOptionsTab("GameplayButton");
+			wireOptionsTab("VideoButton");
+			wireOptionsTab("SoundButton");
+			wireOptionsSlider("MouseScrollSlider", new IntConsumer() {
+				@Override
+				public void accept(final int value) {
+					MenuUI.this.optionsDraft.setMouseScrollSpeed(value);
+				}
+			});
+			wireOptionsSlider("KeyScrollSlider", new IntConsumer() {
+				@Override
+				public void accept(final int value) {
+					MenuUI.this.optionsDraft.setKeyScrollSpeed(value);
+				}
+			});
+			wireOptionsSlider("GammaSlider", new IntConsumer() {
+				@Override
+				public void accept(final int value) {
+					MenuUI.this.optionsDraft.setGamma(value);
+				}
+			});
+			wireOptionsSlider("SoundVolumeSlider", new IntConsumer() {
+				@Override
+				public void accept(final int value) {
+					MenuUI.this.optionsDraft.setSoundVolume(value);
+				}
+			});
+			wireOptionsSlider("MusicVolumeSlider", new IntConsumer() {
+				@Override
+				public void accept(final int value) {
+					MenuUI.this.optionsDraft.setMusicVolume(value);
+					applyMenuMusicVolume(MenuUI.this.optionsDraft.getEffectiveMusicVolume());
+				}
+			});
+			wireOptionsCheckBox("MouseScrollDisableCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setMouseScrollDisabled(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("TooltipsCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setTooltips(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("InputSprocketCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setMultibuttonMouse(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("SoundCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setSoundEnabled(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("MusicCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setMusicEnabled(value.booleanValue());
+					applyMenuMusicVolume(MenuUI.this.optionsDraft.getEffectiveMusicVolume());
+				}
+			});
+			wireOptionsCheckBox("AmbientCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setAmbientSounds(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("MovementCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setMovementSounds(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("SubtitlesCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setSubtitles(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("UnitCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setUnitSounds(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("EnviroCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setEnvironmentalAudio(value.booleanValue());
+				}
+			});
+			wireOptionsCheckBox("PositionalCheckBox", new Consumer<Boolean>() {
+				@Override
+				public void accept(final Boolean value) {
+					MenuUI.this.optionsDraft.setPositionalAudio(value.booleanValue());
+				}
+			});
+			final UIFrame optionsOK = findFrameIn(this.optionsMenu, "OKButton");
+			if (optionsOK instanceof GlueTextButtonFrame) {
+				((GlueTextButtonFrame) optionsOK).setOnClick(new Runnable() {
+					@Override
+					public void run() {
+						OptionsSettingsStore.get().copyFrom(MenuUI.this.optionsDraft);
+						try {
+							OptionsSettingsStore.get().save(OptionsSettingsStore.optionsFile());
+						}
+						catch (final IOException e) {
+							System.err.println("Options: failed to save " + e.getMessage());
+						}
+						applyStoredMusicVolume();
+						if (MenuUI.this.optionsMenu != null) {
+							MenuUI.this.optionsMenu.setVisible(false);
+						}
+						MenuUI.this.menuState = MenuState.MAIN_MENU;
+					}
+				});
+			}
+			final UIFrame optionsCancel = findFrameIn(this.optionsMenu, "CancelButton");
+			if (optionsCancel instanceof GlueTextButtonFrame) {
+				((GlueTextButtonFrame) optionsCancel).setOnClick(new Runnable() {
+					@Override
+					public void run() {
+						if (MenuUI.this.optionsMenu != null) {
+							MenuUI.this.optionsMenu.setVisible(false);
+						}
+						// Discard the draft, including any live music preview.
+						applyStoredMusicVolume();
+						MenuUI.this.menuState = MenuState.MAIN_MENU;
+					}
+				});
+			}
+		}
+		catch (final RuntimeException e) {
+			// Older UI data without the retail options screen: leave the button disabled.
+			System.err.println("OptionsMenu unavailable: " + e.getMessage());
+			this.optionsMenu = null;
+			this.gameplayPanel = null;
+			this.videoPanel = null;
+			this.soundPanel = null;
+		}
+
+		if (this.optionsButton != null) {
+			this.optionsButton.setOnClick(new Runnable() {
+				@Override
+				public void run() {
+					openOptions();
+				}
+			});
+		}
 
 		this.exitButton.setOnClick(new Runnable() {
 			@Override
@@ -1102,6 +1311,77 @@ public class MenuUI {
 				MenuUI.this.glueSpriteLayerTopRight.setSequence("SinglePlayer Death");
 				MenuUI.this.singlePlayerMenu.setVisible(false);
 				MenuUI.this.menuState = MenuState.GOING_TO_MAIN_MENU;
+			}
+		});
+
+		// Main-menu Load Saved (retail LoadSavedGameScreen.fdf when the UI data ships it)
+		try {
+			this.loadSavedScreen = this.rootFrame.createFrame("LoadSavedGameScreen", this.rootFrame, 0, 0);
+			this.loadSavedScreen.setVisible(false);
+			final UIFrame fileListFrame = findFrameIn(this.loadSavedScreen, "FileListFrame");
+			if (fileListFrame instanceof SimpleFrame) {
+				final SimpleFrame saveListContainer = (SimpleFrame) fileListFrame;
+				this.saveListBox = (ListBoxFrame) this.rootFrame.createFrameByType("LISTBOX", "ListBoxWar3",
+						saveListContainer, "WITHCHILDREN", 0);
+				this.saveListBox.setSetAllPoints(true);
+				this.saveListBox.setFrameFont(profileListText.getFrameFont());
+				saveListContainer.add(this.saveListBox);
+				this.saveListBox.setSelectionListener(new ListBoxSelelectionListener() {
+					@Override
+					public void onSelectionChanged(final int newSelectedIndex, final String newSelectedItem) {
+						if (MenuUI.this.loadSaveOKButton != null) {
+							MenuUI.this.loadSaveOKButton.setEnabled(newSelectedItem != null);
+						}
+					}
+				});
+			}
+			final UIFrame okButton = findFrameIn(this.loadSavedScreen, "OKButton");
+			if (okButton instanceof GlueTextButtonFrame) {
+				this.loadSaveOKButton = (GlueTextButtonFrame) okButton;
+			}
+			final UIFrame cancelButton = findFrameIn(this.loadSavedScreen, "CancelButton");
+			if (cancelButton instanceof GlueTextButtonFrame) {
+				this.loadSaveCancelButton = (GlueTextButtonFrame) cancelButton;
+			}
+			if (this.loadSaveOKButton != null) {
+				this.loadSaveOKButton.setEnabled(false);
+				this.loadSaveOKButton.setOnClick(new Runnable() {
+					@Override
+					public void run() {
+						loadSelectedSave();
+					}
+				});
+			}
+			if (this.loadSaveCancelButton != null) {
+				this.loadSaveCancelButton.setOnClick(new Runnable() {
+					@Override
+					public void run() {
+						if (MenuUI.this.loadSavedScreen != null) {
+							MenuUI.this.loadSavedScreen.setVisible(false);
+						}
+						MenuUI.this.menuState = MenuState.SINGLE_PLAYER;
+					}
+				});
+			}
+		}
+		catch (final RuntimeException e) {
+			// Older UI data without the retail load screen: leave the button disabled.
+			System.err.println("LoadSavedGameScreen unavailable: " + e.getMessage());
+			this.loadSavedScreen = null;
+			this.saveListBox = null;
+			this.loadSaveOKButton = null;
+			this.loadSaveCancelButton = null;
+		}
+
+		this.loadSavedButton.setOnClick(new Runnable() {
+			@Override
+			public void run() {
+				if (MenuUI.this.loadSavedScreen == null) {
+					return;
+				}
+				refreshSaveList();
+				setSinglePlayerButtonsEnabled(false);
+				MenuUI.this.menuState = MenuState.GOING_TO_SINGLE_PLAYER_LOAD_SAVED;
 			}
 		});
 
@@ -1316,7 +1596,7 @@ public class MenuUI {
 				if (campaign != null) {
 					// Seed availability from DefaultOpen so non-default campaigns stay locked
 					// until SetCampaignAvailable / progress natives unlock them.
-					CampaignProgressStore.get().setCampaignAvailable(campaignIdx, campaign.isDefaultOpen());
+					CampaignProgressStore.get().seedCampaignAvailable(campaignIdx, campaign.isDefaultOpen());
 					final CampaignMenuUI missionSelectMenuUI = new CampaignMenuUI(null, this.campaignMenu,
 							this.rootFrame, this.uiViewport);
 					missionSelectMenuUI.setVisible(false);
@@ -1387,6 +1667,7 @@ public class MenuUI {
 							if (!CampaignProgressStore.get().isCampaignAvailable(campaignIdx)) {
 								return;
 							}
+							CampaignProgressStore.get().setCampaignMenuRace(campaignIdx);
 							if (campaign != MenuUI.this.currentCampaign) {
 								MenuUI.this.campaignMenu.setVisible(false);
 								MenuUI.this.campaignBackButton.setVisible(false);
@@ -1782,10 +2063,11 @@ public class MenuUI {
 		return string;
 	}
 
-	public void startMap(final String mapFilename) {
+	public boolean startMap(final String mapFilename) {
 		if (!tryLoadAndCacheMapConfigs(mapFilename)) {
-			this.mainMenuFrame.setVisible(true);
-			return;
+			this.pendingSaveFile = null;
+			this.beginGameInformation = null;
+			return false;
 		}
 
 		this.mainMenuFrame.setVisible(false);
@@ -1815,6 +2097,14 @@ public class MenuUI {
 				}
 			}
 		}
+		if (localPlayerIndex == -1) {
+			localPlayerIndex = 0;
+			final CBasePlayer player0 = this.currentMapConfig.getPlayer(0);
+			if (player0 != null) {
+				player0.setSlotState(CPlayerSlotState.PLAYING);
+				player0.setName(MenuUI.this.profileManager.getCurrentProfile());
+			}
+		}
 		MenuUI.this.beginGameInformation.localPlayerIndex = localPlayerIndex;
 		if (this.currentCampaign != null) {
 			MenuUI.this.menuState = MenuState.MISSION_SELECT;
@@ -1822,6 +2112,7 @@ public class MenuUI {
 		else {
 			MenuUI.this.menuState = MenuState.GOING_TO_MAP;
 		}
+		return true;
 	}
 
 	private void loadAndCacheMapConfigs(final String mapFilename) throws IOException {
@@ -1853,13 +2144,21 @@ public class MenuUI {
 
 	private void setCurrentProfile(final String selectedProfileName) {
 		this.profileManager.setCurrentProfile(selectedProfileName);
+		if (this.campaignDatas != null) {
+			for (int i = 0; i < this.campaignDatas.length; i++) {
+				if (this.campaignDatas[i] != null) {
+					CampaignProgressStore.get().seedCampaignAvailable(i, this.campaignDatas[i].isDefaultOpen());
+				}
+			}
+		}
+		refreshCampaignAvailability();
 		this.rootFrame.setText(MenuUI.this.profileNameText, selectedProfileName);
 	}
 
 	protected void setSinglePlayerButtonsEnabled(final boolean b) {
 		this.profileButton.setEnabled(b);
 		this.campaignButton.setEnabled(b);
-		this.loadSavedButton.setEnabled(b && ENABLE_NOT_YET_IMPLEMENTED_BUTTONS);
+		this.loadSavedButton.setEnabled(b && (this.loadSavedScreen != null));
 		this.viewReplayButton.setEnabled(b && ENABLE_NOT_YET_IMPLEMENTED_BUTTONS);
 		if (this.customCampaignButton != null) {
 			this.customCampaignButton.setEnabled(b && ENABLE_NOT_YET_IMPLEMENTED_BUTTONS);
@@ -1868,13 +2167,249 @@ public class MenuUI {
 		this.singlePlayerCancelButton.setEnabled(b);
 	}
 
+	private static File saveGameDir() {
+		return new File(System.getProperty("user.home") + File.separator + ".warsmash" + File.separator + "saves");
+	}
+
+	/**
+	 * Scoped frame search inside a screen subtree. The global
+	 * {@code getFrameByName} map can collide across screens (several retail
+	 * screens define {@code OKButton}), so the load screen resolves its own
+	 * children instead.
+	 */
+	private static UIFrame findFrameIn(final UIFrame root, final String name) {
+		if (root == null) {
+			return null;
+		}
+		if (name.equals(root.getName())) {
+			return root;
+		}
+		if (root instanceof AbstractUIFrame) {
+			final ListIterator<UIFrame> it = ((AbstractUIFrame) root).getChildIterator();
+			while (it.hasNext()) {
+				final UIFrame found = findFrameIn(it.next(), name);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		return null;
+	}
+
+	private void refreshSaveList() {
+		this.listedSaveNames.clear();
+		if (this.saveListBox != null) {
+			this.saveListBox.removeAllItems();
+			this.listedSaveNames.addAll(CGameSave.listSaves(saveGameDir()));
+			for (final String saveName : this.listedSaveNames) {
+				this.saveListBox.addItem(saveName, this.rootFrame, this.uiViewport);
+			}
+			this.saveListBox.setSelectedIndex(-1);
+		}
+		if (this.loadSaveOKButton != null) {
+			this.loadSaveOKButton.setEnabled(false);
+		}
+	}
+
+	private void loadSelectedSave() {
+		if ((this.saveListBox == null) || this.listedSaveNames.isEmpty()) {
+			return;
+		}
+		final int selectedIndex = this.saveListBox.getSelectedIndex();
+		if ((selectedIndex < 0) || (selectedIndex >= this.listedSaveNames.size())) {
+			return;
+		}
+		final String saveName = this.listedSaveNames.get(selectedIndex);
+		final File saveFile = new File(saveGameDir(), saveName);
+		final CGameSave save = CGameSave.tryLoad(saveFile);
+		if (save == null) {
+			this.dialog.showError("NETERROR_MAPFILEINCOMPLETE", null);
+			return;
+		}
+		final String mapPath = (save.savedMapPath != null) ? save.savedMapPath : "";
+		if (mapPath.isEmpty()) {
+			this.dialog.showError("This save does not record its map (pre-v3 save).", null);
+			return;
+		}
+		if (!startMap(mapPath)) {
+			return;
+		}
+		this.pendingSaveFile = saveFile;
+		if (this.loadSavedScreen != null) {
+			this.loadSavedScreen.setVisible(false);
+		}
+		MenuUI.this.singlePlayerMenu.setVisible(false);
+	}
+
+	public void setPendingSaveFile(final File saveFile) {
+		this.pendingSaveFile = saveFile;
+	}
+
+	public File consumePendingSaveFile() {
+		final File saveFile = this.pendingSaveFile;
+		this.pendingSaveFile = null;
+		return saveFile;
+	}
+
+	private boolean hasCampaignMap(final String path) {
+		try {
+			return (this.dataSource != null) && this.dataSource.has(path);
+		}
+		catch (final RuntimeException e) {
+			return false;
+		}
+	}
+
+	private void applyMenuMusicVolume(final int percent) {
+		if (this.currentMusics != null) {
+			final float volume = Math.max(0, Math.min(100, percent)) / 100f;
+			for (final Music music : this.currentMusics) {
+				if (music != null) {
+					music.setVolume(volume);
+				}
+			}
+		}
+	}
+
+	private void wireOptionsTab(final String buttonName) {
+		final UIFrame button = findFrameIn(this.optionsMenu, buttonName);
+		if (button instanceof GlueTextButtonFrame) {
+			((GlueTextButtonFrame) button).setOnClick(new Runnable() {
+				@Override
+				public void run() {
+					if ("GameplayButton".equals(buttonName)) {
+						showOptionsPanel(MenuUI.this.gameplayPanel);
+					}
+					else if ("VideoButton".equals(buttonName)) {
+						showOptionsPanel(MenuUI.this.videoPanel);
+					}
+					else {
+						showOptionsPanel(MenuUI.this.soundPanel);
+					}
+				}
+			});
+		}
+	}
+
+	private void showOptionsPanel(final UIFrame panel) {
+		if (this.gameplayPanel != null) {
+			this.gameplayPanel.setVisible(panel == this.gameplayPanel);
+		}
+		if (this.videoPanel != null) {
+			this.videoPanel.setVisible(panel == this.videoPanel);
+		}
+		if (this.soundPanel != null) {
+			this.soundPanel.setVisible(panel == this.soundPanel);
+		}
+	}
+
+	private void wireOptionsSlider(final String sliderName, final IntConsumer onChange) {
+		final UIFrame frame = findFrameIn(this.optionsMenu, sliderName);
+		if (frame instanceof ScrollBarFrame) {
+			((ScrollBarFrame) frame).setChangeListener(new ScrollBarFrame.ScrollBarChangeListener() {
+				@Override
+				public void onChange(final GameUI gameUI, final Viewport uiViewport, final int newValue) {
+					onChange.accept(newValue);
+				}
+			});
+		}
+	}
+
+	private void wireOptionsCheckBox(final String checkBoxName, final Consumer<Boolean> onChange) {
+		final UIFrame frame = findFrameIn(this.optionsMenu, checkBoxName);
+		if (frame instanceof CheckBoxFrame) {
+			((CheckBoxFrame) frame).setOnClick(new Runnable() {
+				@Override
+				public void run() {
+					onChange.accept(Boolean.valueOf(((CheckBoxFrame) frame).isChecked()));
+				}
+			});
+		}
+	}
+
+	private void setOptionsSlider(final String sliderName, final int percent) {
+		final UIFrame frame = findFrameIn(this.optionsMenu, sliderName);
+		if (frame instanceof ScrollBarFrame) {
+			((ScrollBarFrame) frame).setValue(this.rootFrame, this.uiViewport, percent);
+		}
+	}
+
+	private void setOptionsCheckBox(final String checkBoxName, final boolean checked) {
+		final UIFrame frame = findFrameIn(this.optionsMenu, checkBoxName);
+		if (frame instanceof CheckBoxFrame) {
+			((CheckBoxFrame) frame).setChecked(checked);
+		}
+	}
+
+	private void pushOptionsDraftToControls() {
+		setOptionsSlider("MouseScrollSlider", this.optionsDraft.getMouseScrollSpeed());
+		setOptionsSlider("KeyScrollSlider", this.optionsDraft.getKeyScrollSpeed());
+		setOptionsSlider("GammaSlider", this.optionsDraft.getGamma());
+		setOptionsSlider("SoundVolumeSlider", this.optionsDraft.getSoundVolume());
+		setOptionsSlider("MusicVolumeSlider", this.optionsDraft.getMusicVolume());
+		setOptionsCheckBox("MouseScrollDisableCheckBox", this.optionsDraft.isMouseScrollDisabled());
+		setOptionsCheckBox("TooltipsCheckBox", this.optionsDraft.isTooltips());
+		setOptionsCheckBox("InputSprocketCheckBox", this.optionsDraft.isMultibuttonMouse());
+		setOptionsCheckBox("SoundCheckBox", this.optionsDraft.isSoundEnabled());
+		setOptionsCheckBox("MusicCheckBox", this.optionsDraft.isMusicEnabled());
+		setOptionsCheckBox("AmbientCheckBox", this.optionsDraft.isAmbientSounds());
+		setOptionsCheckBox("MovementCheckBox", this.optionsDraft.isMovementSounds());
+		setOptionsCheckBox("SubtitlesCheckBox", this.optionsDraft.isSubtitles());
+		setOptionsCheckBox("UnitCheckBox", this.optionsDraft.isUnitSounds());
+		setOptionsCheckBox("EnviroCheckBox", this.optionsDraft.isEnvironmentalAudio());
+		setOptionsCheckBox("PositionalCheckBox", this.optionsDraft.isPositionalAudio());
+	}
+
+	private void openOptions() {
+		if (this.optionsMenu == null) {
+			return;
+		}
+		this.optionsDraft.copyFrom(OptionsSettingsStore.get());
+		pushOptionsDraftToControls();
+		showOptionsPanel(this.gameplayPanel);
+		setMainMenuButtonsEnabled(false);
+		this.optionsMenu.setVisible(true);
+		this.menuState = MenuState.GOING_TO_OPTIONS;
+	}
+
+	/**
+	 * Plays the credits: retail ships them as campaign maps, so launch the first
+	 * one present in the data sources through the normal map path.
+	 */
+	private void playCredits() {
+		final String[] candidates = { "Maps\\Campaign\\WarCraftIIICredits.w3m",
+				"Maps\\Campaign\\BonusCredits.w3m", };
+		String creditsMap = null;
+		for (final String candidate : candidates) {
+			if ((this.dataSource != null) && this.dataSource.has(candidate)) {
+				creditsMap = candidate;
+				break;
+			}
+		}
+		if (creditsMap == null) {
+			this.dialog.showError("NETERROR_MAPFILEINCOMPLETE", null);
+			return;
+		}
+		if (!tryLoadAndCacheMapConfigs(creditsMap)) {
+			return;
+		}
+		MenuUI.this.glueSpriteLayerTopLeft.setSequence("MainMenu Death");
+		MenuUI.this.glueSpriteLayerTopRight.setSequence("MainMenu Death");
+		setMainMenuVisible(false);
+		startMap(creditsMap);
+	}
+
 	private void setMainMenuButtonsEnabled(final boolean b) {
 		this.singlePlayerButton.setEnabled(b);
 		this.battleNetButton.setEnabled(b);
 		this.realmButton.setEnabled(b);
 		this.localAreaNetworkButton.setEnabled(b && ENABLE_NOT_YET_IMPLEMENTED_BUTTONS);
-		this.optionsButton.setEnabled(b && ENABLE_NOT_YET_IMPLEMENTED_BUTTONS);
-		this.creditsButton.setEnabled(b && ENABLE_NOT_YET_IMPLEMENTED_BUTTONS);
+		if (this.optionsButton != null) {
+			this.optionsButton.setEnabled(b && (this.optionsMenu != null));
+		}
+		if (this.creditsButton != null) {
+			this.creditsButton.setEnabled(b && this.creditsAvailable);
+		}
 		this.exitButton.setEnabled(b);
 		if (this.editionButton != null) {
 			this.editionButton.setEnabled(b);
@@ -2228,7 +2763,15 @@ public class MenuUI {
 				this.glueSpriteLayerTopLeft.setSequence("SinglePlayerSkirmish Stand");
 				this.glueSpriteLayerTopRight.setSequence("SinglePlayerSkirmish Stand");
 				break;
-			case GOING_TO_CAMPAIGN:
+			case GOING_TO_CAMPAIGN: {
+				final int storedRace = CampaignProgressStore.get().getCampaignMenuRace();
+				if ((this.campaignDatas != null) && (storedRace >= 0) && (storedRace < this.campaignDatas.length)
+						&& (this.campaignDatas[storedRace] != null)) {
+					this.currentCampaign = this.campaignDatas[storedRace];
+					if (this.campaignMissionSelectUIs != null) {
+						this.currentMissionSelectMenuUI = this.campaignMissionSelectUIs[storedRace];
+					}
+				}
 				this.glueSpriteLayerTopLeft.setSequence("Death");
 				this.glueSpriteLayerTopRight.setSequence("Death");
 				this.campaignMenu.setVisible(true);
@@ -2236,6 +2779,7 @@ public class MenuUI {
 				this.campaignFade.setSequence("Birth");
 				this.menuState = MenuState.GOING_TO_CAMPAIGN_PART2;
 				break;
+			}
 			case GOING_TO_CAMPAIGN_PART2: {
 				final String currentCampaignBackgroundModel = getCurrentBackgroundModel();
 				final String currentCampaignAmbientSound = this.rootFrame
@@ -2288,16 +2832,34 @@ public class MenuUI {
 				this.glueSpriteLayerTopLeft.setSequence("RealmSelection Birth");
 				this.menuState = MenuState.SINGLE_PLAYER_PROFILE;
 				break;
-			case SINGLE_PLAYER_PROFILE:
-				this.profilePanel.setVisible(true);
-				setSinglePlayerButtonsEnabled(true);
-				this.glueSpriteLayerTopLeft.setSequence("RealmSelection Stand");
-				// TODO the below should probably be some generic focusing thing when we enter a
-				// new view?
-				if ((this.newProfileEditBox != null) && this.newProfileEditBox.isFocusable()) {
-					setFocusFrame(this.newProfileEditBox);
-				}
-				break;
+		case SINGLE_PLAYER_PROFILE:
+			this.profilePanel.setVisible(true);
+			setSinglePlayerButtonsEnabled(true);
+			this.glueSpriteLayerTopLeft.setSequence("RealmSelection Stand");
+			// TODO the below should probably be some generic focusing thing when we enter a
+			// new view?
+			if ((this.newProfileEditBox != null) && this.newProfileEditBox.isFocusable()) {
+				setFocusFrame(this.newProfileEditBox);
+			}
+			break;
+		case GOING_TO_SINGLE_PLAYER_LOAD_SAVED:
+			this.menuState = MenuState.SINGLE_PLAYER_LOAD_SAVED;
+			break;
+		case SINGLE_PLAYER_LOAD_SAVED:
+			if (this.loadSavedScreen != null) {
+				this.loadSavedScreen.setVisible(true);
+			}
+			setSinglePlayerButtonsEnabled(false);
+			break;
+		case GOING_TO_OPTIONS:
+			this.menuState = MenuState.OPTIONS;
+			break;
+		case OPTIONS:
+			if (this.optionsMenu != null) {
+				this.optionsMenu.setVisible(true);
+			}
+			setMainMenuButtonsEnabled(false);
+			break;
 			case QUITTING:
 				Gdx.app.exit();
 				break;
@@ -2516,6 +3078,10 @@ public class MenuUI {
 		CAMPAIGN,
 		GOING_TO_SINGLE_PLAYER_PROFILE,
 		SINGLE_PLAYER_PROFILE,
+		GOING_TO_SINGLE_PLAYER_LOAD_SAVED,
+		SINGLE_PLAYER_LOAD_SAVED,
+		GOING_TO_OPTIONS,
+		OPTIONS,
 		GOING_TO_LOADING_SCREEN,
 		QUITTING,
 		RESTARTING,
@@ -2580,8 +3146,10 @@ public class MenuUI {
 		if (this.pendingChangeLevel != null) {
 			final String nextMap = this.pendingChangeLevel;
 			this.pendingChangeLevel = null;
-			startMap(nextMap);
-			return;
+			if (startMap(nextMap)) {
+				return;
+			}
+			// A missing next chapter must leave an interactive menu behind the error.
 		}
 		refreshCampaignAvailability();
 		switch (this.menuState) {
@@ -2599,7 +3167,15 @@ public class MenuUI {
 		case GOING_TO_CAMPAIGN:
 		case GOING_TO_CAMPAIGN_PART2:
 		case GOING_TO_MISSION_SELECT:
-		case GOING_TO_MAP:
+		case GOING_TO_MAP: {
+			final int raceIndex = CampaignProgressStore.get().getCampaignMenuRace();
+			if ((this.campaignDatas != null) && (raceIndex >= 0) && (raceIndex < this.campaignDatas.length)
+					&& (this.campaignDatas[raceIndex] != null)) {
+				this.currentCampaign = this.campaignDatas[raceIndex];
+				if (this.campaignMissionSelectUIs != null) {
+					this.currentMissionSelectMenuUI = this.campaignMissionSelectUIs[raceIndex];
+				}
+			}
 			if (this.currentCampaign != null) {
 				final String currentCampaignBackgroundModel = getCurrentBackgroundModel();
 				final String currentCampaignAmbientSound = this.rootFrame
@@ -2611,6 +3187,18 @@ public class MenuUI {
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
+			}
+			else {
+				// Standalone map with no campaign (skirmish, credits, loaded
+				// save): campaign chrome would be wrong, so go to main menu.
+				this.glueScreenLoop.stop();
+				this.glueScreenLoop = this.mainMenuGlueScreenLoop;
+				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"),
+						this.menuFogSettings);
+				this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));
+				this.menuState = MenuState.GOING_TO_MAIN_MENU;
+				break;
 			}
 			// Restore campaign mission-select chrome after leaving a mission
 			this.campaignMenu.setVisible(true);
@@ -2639,6 +3227,7 @@ public class MenuUI {
 				this.menuState = MenuState.MISSION_SELECT;
 			}
 			break;
+		}
 		case BATTLE_NET_CUSTOM_GAME_LOBBY: {
 			this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"), this.menuFogSettings);
 			MenuUI.this.menuScreen.alternateModelToBattlenet();
@@ -2664,7 +3253,9 @@ public class MenuUI {
 		this.campaignWarcraftIIILogo.setVisible(false);
 		this.campaignRootMenuUI.setVisible(false);
 		this.currentMissionSelectMenuUI.setVisible(false);
+		this.campaignFade.setVisible(true);
 		this.campaignFade.setSequence("Birth");
+		this.menuState = MenuState.GOING_TO_MAP;
 		int localPlayerIndex = -1;
 		for (int i = 0; i < WarsmashConstants.MAX_PLAYERS; i++) {
 			final CBasePlayer player = this.currentMapConfig.getPlayer(i);
@@ -2674,6 +3265,14 @@ public class MenuUI {
 				if (localPlayerIndex == -1) {
 					localPlayerIndex = i;
 				}
+			}
+		}
+		if (localPlayerIndex == -1) {
+			localPlayerIndex = 0;
+			final CBasePlayer player0 = this.currentMapConfig.getPlayer(0);
+			if (player0 != null) {
+				player0.setSlotState(CPlayerSlotState.PLAYING);
+				player0.setName(this.profileManager.getCurrentProfile());
 			}
 		}
 		this.beginGameInformation = new BeginGameInformation();
@@ -2729,12 +3328,23 @@ public class MenuUI {
 	}
 
 	private String getCurrentBackgroundModel() {
-		final String background = this.currentCampaign.getBackground();
-		final String versionedBackground = background;
-		if (this.rootFrame.hasSkinField(versionedBackground)) {
-			return this.rootFrame.getSkinField(versionedBackground);
+		if (this.currentCampaign == null) {
+			return this.rootFrame.getSkinField("GlueSpriteLayerBackground");
 		}
-		return this.rootFrame.getSkinField(background);
+		final String background = this.currentCampaign.getBackground();
+		if ((background == null) || background.isEmpty()) {
+			return this.rootFrame.getSkinField("GlueSpriteLayerBackground");
+		}
+		if (this.rootFrame.hasSkinField(background)) {
+			return this.rootFrame.getSkinField(background);
+		}
+		final String mdxPath = background.endsWith(".mdl")
+				? background.substring(0, background.length() - 4) + ".mdx"
+				: background;
+		if (this.dataSource.has(mdxPath) || this.dataSource.has(background)) {
+			return background;
+		}
+		return this.rootFrame.getSkinField("GlueSpriteLayerBackground");
 	}
 
 	private static final class LoadingMap {
@@ -2764,6 +3374,18 @@ public class MenuUI {
 		}
 	}
 
+	/** Re-applies the stored music volume to whatever menu music is playing. */
+	public void applyStoredMusicVolume() {
+		if (this.currentMusics != null) {
+			final float volume = OptionsSettingsStore.get().getEffectiveMusicVolume() / 100f;
+			for (final Music music : this.currentMusics) {
+				if (music != null) {
+					music.setVolume(volume);
+				}
+			}
+		}
+	}
+
 	public Music playMusic(final String musicField, final boolean random, int index) {
 		if (WarsmashConstants.ENABLE_MUSIC) {
 			stopMusic();
@@ -2789,7 +3411,7 @@ public class MenuUI {
 				if (this.viewer.dataSource.has(musics[i])) {
 					final Music newMusic = Gdx.audio
 							.newMusic(new DataSourceFileHandle(this.viewer.dataSource, musics[i]));
-					newMusic.setVolume(1.0f);
+					newMusic.setVolume(OptionsSettingsStore.get().getEffectiveMusicVolume() / 100f);
 					this.currentMusics[i] = newMusic;
 					validMusicCount++;
 				}

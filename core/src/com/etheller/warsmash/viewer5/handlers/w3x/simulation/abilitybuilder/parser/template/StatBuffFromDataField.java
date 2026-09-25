@@ -12,6 +12,8 @@ public class StatBuffFromDataField {
 	private Boolean percentageOverride;
 	private DataFieldLetter targetMeleeField;
 	private DataFieldLetter targetRangeField;
+	private boolean targetMeleeDefault;
+	private boolean targetRangeDefault;
 	
 	private transient NonStackingStatBuff buff;
 	private transient NonStackingStatBuff secondAtkBuff;
@@ -24,6 +26,8 @@ public class StatBuffFromDataField {
 		this.percentageOverride = statBuff.isPercentageOverride();
 		this.targetMeleeField = statBuff.getTargetMeleeField();
 		this.targetRangeField = statBuff.getTargetRangeField();
+		this.targetMeleeDefault = statBuff.targetMeleeDefault;
+		this.targetRangeDefault = statBuff.targetRangeDefault;
 	}
 	public StatBuffType getType() {
 		return type;
@@ -102,20 +106,25 @@ public class StatBuffFromDataField {
 			}
 		}
 		if (this.getType() == StatBuffType.ATK) {
-			boolean targetMelee = false;
-			boolean targetRange = false;
+			boolean targetMelee = this.targetMeleeDefault;
+			boolean targetRange = this.targetRangeDefault;
 			if (this.getTargetMeleeField() != null) {
-				targetMelee = Integer.parseInt(
-						abilityData.getData().get(this.getTargetMeleeField().getIndex())) == 1;
+				targetMelee = readTargetFlag(abilityData, this.getTargetMeleeField(), targetMelee);
 			}
 			if (this.getTargetRangeField() != null) {
-				targetRange = Integer.parseInt(
-						abilityData.getData().get(this.getTargetRangeField().getIndex())) == 1;
+				targetRange = readTargetFlag(abilityData, this.getTargetRangeField(), targetRange);
 			}
 
 			return this.getType().toAtkNonStackingStatBuffType(percentage, targetMelee, targetRange);
 		} else {
 			return this.getType().toNonStackingStatBuffType(percentage);
 		}
+	}
+
+	private static boolean readTargetFlag(CAbilityTypeAbilityBuilderLevelData data, DataFieldLetter field,
+			boolean legacyDefault) {
+		final String value = data.getData().get(field.getIndex()).trim();
+		// Original campaign data predates these configurable aura target flags.
+		return value.isEmpty() || "-".equals(value) ? legacyDefault : Integer.parseInt(value) == 1;
 	}
 }

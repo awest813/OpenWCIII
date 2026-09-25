@@ -129,6 +129,10 @@ public class CGameplayConstants {
 	private final float chanceToMiss;
 	private final float missDamageReduction;
 
+	private final int[] upkeepUsage;
+	private final float[] upkeepGoldTax;
+	private final float[] upkeepLumberTax;
+
 	public CGameplayConstants(final DataTable parsedDataTable) {
 		final Element miscData = parsedDataTable.get("Misc");
 		// TODO use radians for half angle
@@ -314,6 +318,14 @@ public class CGameplayConstants {
 
 		this.chanceToMiss = miscData.getFieldFloatValue("ChanceToMiss");
 		this.missDamageReduction = miscData.getFieldFloatValue("MissDamageReduction");
+
+		this.upkeepUsage = miscData.hasField("UpkeepUsage") ? parseIntArray(miscData.getField("UpkeepUsage"))
+				: new int[] { 50, 80, 10000 };
+		this.upkeepGoldTax = miscData.hasField("UpkeepGoldTax") ? parseFloatArray(miscData.getField("UpkeepGoldTax"))
+				: new float[] { 0.0f, 0.30f, 0.60f };
+		this.upkeepLumberTax = miscData.hasField("UpkeepLumberTax")
+				? parseFloatArray(miscData.getField("UpkeepLumberTax"))
+				: new float[] { 0.0f, 0.0f, 0.0f };
 	}
 
 	public float getAttackHalfAngle() {
@@ -640,5 +652,50 @@ public class CGameplayConstants {
 			result[i] = Integer.parseInt(splitTxt[i]);
 		}
 		return result;
+	}
+
+	private static float[] parseFloatArray(final String txt) {
+		if ((txt == null) || txt.isEmpty()) {
+			return new float[0];
+		}
+		final String[] splitTxt = txt.split(",");
+		final float[] result = new float[splitTxt.length];
+		for (int i = 0; i < splitTxt.length; i++) {
+			result[i] = Float.parseFloat(splitTxt[i].trim());
+		}
+		return result;
+	}
+
+	public int[] getUpkeepUsage() {
+		return this.upkeepUsage;
+	}
+
+	public float[] getUpkeepGoldTax() {
+		return this.upkeepGoldTax;
+	}
+
+	public float[] getUpkeepLumberTax() {
+		return this.upkeepLumberTax;
+	}
+
+	public int getGoldUpkeepRate(final int foodUsed) {
+		if ((this.upkeepUsage == null) || (this.upkeepGoldTax == null) || (this.upkeepUsage.length == 0)) {
+			if (foodUsed > 80) {
+				return 60;
+			}
+			if (foodUsed > 50) {
+				return 30;
+			}
+			return 0;
+		}
+		for (int i = 0; (i < this.upkeepUsage.length) && (i < this.upkeepGoldTax.length); i++) {
+			if (foodUsed <= this.upkeepUsage[i]) {
+				return Math.round(this.upkeepGoldTax[i] * 100f);
+			}
+		}
+		if (this.upkeepGoldTax.length > 0) {
+			return Math.round(this.upkeepGoldTax[this.upkeepGoldTax.length - 1] * 100f);
+		}
+		return 0;
 	}
 }

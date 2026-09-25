@@ -75,6 +75,7 @@ public class CPlayer extends CBasePlayer {
 	private float handicapXP = 1.0f;
 	private float handicap = 0.9f;
 	private final CPlayerFogOfWar fogOfWar;
+	private transient CSimulation simulation;
 
 	public CPlayer(final CRace race, final float[] startLocation, final CBasePlayer configPlayer,
 			final CPlayerFogOfWar fogOfWar) {
@@ -86,6 +87,41 @@ public class CPlayer extends CBasePlayer {
 		for (final Map.Entry<CPlayerState, Integer> entry : configPlayer.getPlayerStates().entrySet()) {
 			setPlayerState(null, entry.getKey(), entry.getValue());
 		}
+	}
+
+	public void setSimulation(final CSimulation simulation) {
+		this.simulation = simulation;
+		recalculateUpkeep();
+	}
+
+	public void recalculateUpkeep() {
+		final int newRate;
+		if ((this.simulation != null) && (this.simulation.getGameplayConstants() != null)) {
+			newRate = this.simulation.getGameplayConstants().getGoldUpkeepRate(this.foodUsed);
+		}
+		else {
+			if (this.foodUsed > 80) {
+				newRate = 60;
+			}
+			else if (this.foodUsed > 50) {
+				newRate = 30;
+			}
+			else {
+				newRate = 0;
+			}
+		}
+		if (newRate != this.goldUpkeepRate) {
+			this.goldUpkeepRate = newRate;
+			this.stateNotifier.upkeepChanged();
+		}
+	}
+
+	public int getGoldUpkeepRate() {
+		return this.goldUpkeepRate;
+	}
+
+	public int getLumberUpkeepRate() {
+		return this.lumberUpkeepRate;
 	}
 
 	public CPlayerFogOfWar getFogOfWar() {
@@ -163,6 +199,7 @@ public class CPlayer extends CBasePlayer {
 
 	public void setFoodUsed(final int foodUsed) {
 		this.foodUsed = foodUsed;
+		recalculateUpkeep();
 		this.stateNotifier.foodChanged();
 	}
 
@@ -304,6 +341,7 @@ public class CPlayer extends CBasePlayer {
 
 	public void setUnitFoodUsed(final CUnit unit, final int foodUsed) {
 		this.foodUsed += unit.setFoodUsed(foodUsed);
+		recalculateUpkeep();
 		this.stateNotifier.foodChanged();
 	}
 
@@ -631,9 +669,11 @@ public class CPlayer extends CBasePlayer {
 			break;
 		case GOLD_UPKEEP_RATE:
 			this.goldUpkeepRate = value;
+			this.stateNotifier.upkeepChanged();
 			break;
 		case LUMBER_UPKEEP_RATE:
 			this.lumberUpkeepRate = value;
+			this.stateNotifier.upkeepChanged();
 			break;
 		case GOLD_GATHERED:
 			this.goldGathered = value;

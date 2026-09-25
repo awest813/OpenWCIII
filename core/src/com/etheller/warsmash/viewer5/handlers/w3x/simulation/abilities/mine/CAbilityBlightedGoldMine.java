@@ -89,9 +89,11 @@ public class CAbilityBlightedGoldMine extends CAbilityOverlayedMine {
 			if ((currentTurnTick >= nextIncomeTick) && (parentGoldMineAbility != null) && (totalGoldAvailable > 0)) {
 				this.lastIncomeTick = currentTurnTick;
 				final CPlayer player = game.getPlayer(unit.getPlayerIndex());
-				final int goldGained = Math.min(totalGoldAvailable, this.goldPerInterval);
+				final int goldMined = Math.min(totalGoldAvailable, this.goldPerInterval);
+				final int goldTax = Math.round(goldMined * (player.getGoldUpkeepRate() / 100.0f));
+				final int goldGained = goldMined - goldTax;
 				player.addGold(goldGained);
-				parentGoldMineAbility.setGold(totalGoldAvailable - goldGained);
+				parentGoldMineAbility.setGold(totalGoldAvailable - goldMined);
 				game.unitGainResourceEvent(unit, player.getId(), ResourceType.GOLD, goldGained);
 			}
 		}

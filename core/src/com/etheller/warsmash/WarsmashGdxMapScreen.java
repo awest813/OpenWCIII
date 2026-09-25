@@ -1,8 +1,8 @@
 package com.etheller.warsmash;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+import java.io.InputStream;import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
@@ -24,6 +24,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.etheller.interpreter.ast.scope.GlobalScope;
 import com.etheller.warsmash.datasources.CascDataSourceDescriptor;
 import com.etheller.warsmash.datasources.CompoundDataSource;
 import com.etheller.warsmash.datasources.CompoundDataSourceDescriptor;
@@ -54,7 +55,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.CameraPreset;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.CameraRates;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListener;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CGameSave;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.MeleeUI;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.WarsmashUI;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.toggle.MeleeToggleUI;
 
@@ -83,6 +86,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 	private final WarsmashGdxMenuScreen menuScreen;
 	private final CPlayerUnitOrderListener uiOrderListener;
 	private CommonEnvironment commonEnv;
+	private File pendingSaveFile;
 
 	public WarsmashGdxMapScreen(final War3MapViewer mapViewer, final WarsmashGdxMultiScreenGame screenManager,
 			final WarsmashGdxMenuScreen menuScreen, final CPlayerUnitOrderListener uiOrderListener) {
@@ -205,6 +209,10 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		});
 		final MeleeToggleUI toggleUI = new MeleeToggleUI(baseMeleeUI, Arrays.asList(baseMeleeUI));
 		this.meleeUI = toggleUI;
+		final OptionsSettingsStore options = OptionsSettingsStore.get();
+		options.load(OptionsSettingsStore.optionsFile());
+		baseMeleeUI.setMusicVolume((options.getEffectiveMusicVolume() * 127) / 100);
+		baseMeleeUI.setCinematicSubtitlesEnabled(options.isSubtitles());
 		this.viewer.getCommandErrorListener().setDelegate(this.meleeUI);
 		final ModelInstance libgdxContentInstance = new LibGDXContentLayerModel(null, this.viewer, "",
 				this.viewer.mapPathSolver, "").addInstance();
@@ -226,6 +234,35 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.commonEnv = Jass2.loadCommon(this.viewer.mapMpq, this.uiViewport, this.uiScene, this.viewer, this.meleeUI,
 				WarsmashConstants.JASS_FILE_LIST);
 		this.commonEnv.main();
+		if ((this.menuScreen != null) && (this.menuScreen.getMenuUI() != null)) {
+			this.pendingSaveFile = this.menuScreen.getMenuUI().consumePendingSaveFile();
+		}
+	}
+
+	/**
+	 * Applies a save handed off by main-menu Load Saved: the map was just booted
+	 * fresh, so wait for its queued main script to finish before re-applying
+	 * globals/arrays, resources, clock and camera. Unit positions are not restored (see
+	 * {@code CGameSave}).
+	 */
+	private void applyPendingSave() {
+		if ((this.pendingSaveFile == null) || (this.commonEnv == null) || !this.commonEnv.isInitializationComplete()) {
+			return;
+		}
+		final File saveFile = this.pendingSaveFile;
+		this.pendingSaveFile = null;
+		final CGameSave save = CGameSave.tryLoad(saveFile);
+		if (save == null) {
+			System.err.println("LoadSaved: no valid save in " + saveFile);
+			return;
+		}
+		final GlobalScope globals = this.viewer.simulation.getGlobalScope();
+		if (globals == null) {
+			System.err.println("LoadSaved: simulation globals not ready");
+			return;
+		}
+		Jass2.CommonEnvironment.restoreSaveGameState(save, globals, this.viewer.simulation, this.meleeUI);
+		System.out.println("LoadSaved: restored " + save.globals.size() + " globals from " + saveFile.getName());
 	}
 
 	public static DataSource parseDataSources(final DataTable warsmashIni) {
@@ -293,6 +330,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		Gdx.gl30.glBindVertexArray(WarsmashGdxGame.VAO);
 		this.meleeUI.update(deltaTime);
 		this.viewer.updateAndRender();
+		applyPendingSave();
 
 		Gdx.gl30.glDisable(GL30.GL_SCISSOR_TEST);
 

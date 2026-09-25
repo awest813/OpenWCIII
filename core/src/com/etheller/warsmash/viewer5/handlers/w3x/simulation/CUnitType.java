@@ -64,6 +64,7 @@ public class CUnitType {
 	private final List<War3ID> upgradesTo;
 	private final List<War3ID> itemsSold;
 	private final List<War3ID> itemsMade;
+	private final List<War3ID> unitsSold;
 	private final CUnitRace unitRace;
 	private final int goldCost;
 	private final int lumberCost;
@@ -123,7 +124,8 @@ public class CUnitType {
 			final float minimumAttackRange, final List<War3ID> structuresBuilt, final List<War3ID> unitsTrained,
 			final List<War3ID> researchesAvailable, final List<War3ID> upgradesUsed,
 			final EnumMap<CUpgradeClass, War3ID> upgradeClassToType, final List<War3ID> upgradesTo,
-			final List<War3ID> itemsSold, final List<War3ID> itemsMade, final CUnitRace unitRace, final int goldCost,
+			final List<War3ID> itemsSold, final List<War3ID> itemsMade, final List<War3ID> unitsSold,
+			final CUnitRace unitRace, final int goldCost,
 			final int lumberCost, final int foodUsed, final int foodMade, final int buildTime, final int goldRepairCost,
 			final int lumberRepairCost, final int repairTime, final EnumSet<CBuildingPathingType> preventedPathingTypes,
 			final EnumSet<CBuildingPathingType> requiredPathingTypes, final float propWindow, final float turnRate,
@@ -176,6 +178,7 @@ public class CUnitType {
 		this.upgradesTo = upgradesTo;
 		this.itemsSold = itemsSold;
 		this.itemsMade = itemsMade;
+		this.unitsSold = unitsSold;
 		this.unitRace = unitRace;
 		this.goldCost = goldCost;
 		this.lumberCost = lumberCost;
@@ -377,6 +380,10 @@ public class CUnitType {
 
 	public List<War3ID> getItemsMade() {
 		return this.itemsMade;
+	}
+
+	public List<War3ID> getUnitsSold() {
+		return this.unitsSold;
 	}
 
 	public CUnitRace getRace() {

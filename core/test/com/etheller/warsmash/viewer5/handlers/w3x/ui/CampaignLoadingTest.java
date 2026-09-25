@@ -30,6 +30,22 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignPr
 import mpq.MPQArchive;
 
 class CampaignLoadingTest {
+	@Test
+	void closingMapDoesNotCloseSharedGameArchives(@org.junit.jupiter.api.io.TempDir final java.nio.file.Path dir)
+			throws Exception {
+		final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+		final DataSource shared = (DataSource) java.lang.reflect.Proxy.newProxyInstance(
+				DataSource.class.getClassLoader(), new Class<?>[] { DataSource.class }, (proxy, method, args) -> {
+					if (method.getName().equals("close")) {
+						closed.set(true);
+					}
+					return null;
+				});
+		try (War3Map map = new War3Map(shared, dir.toFile())) {
+			assertNotNull(map);
+		}
+		assertFalse(closed.get(), "Returning from a chapter must retain shared game assets");
+	}
 
 	@Test
 	void testStringWithWtsSafety() throws Exception {
@@ -243,6 +259,12 @@ class CampaignLoadingTest {
 			int mapsTested = 0;
 			int aiScriptsTested = 0;
 
+			final java.util.regex.Pattern changeLevelPattern = java.util.regex.Pattern.compile(
+					"(?:ChangeLevel|ChangeLevelBJ|SetNextLevelBJ|SaveAndChangeLevelBJ)\\s*\\(\\s*\"([^\"]+)\"");
+			final java.util.regex.Pattern setChangeLevelMapPattern = java.util.regex.Pattern.compile(
+					"set\\s+bj_changeLevelMapName\\s*=\\s*\"([^\"]+)\"");
+			final java.util.Set<String> changeLevelTargets = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
 			for (final String mapPath : campaignMaps) {
 				War3Map map = null;
 				try {
@@ -275,13 +297,32 @@ class CampaignLoadingTest {
 									aiScriptsTested++;
 								}
 							}
+							final java.util.regex.Matcher m1 = changeLevelPattern.matcher(line);
+							while (m1.find()) {
+								changeLevelTargets.add(m1.group(1).replace("\\\\", "\\"));
+							}
+							final java.util.regex.Matcher m2 = setChangeLevelMapPattern.matcher(line);
+							while (m2.find()) {
+								changeLevelTargets.add(m2.group(1).replace("\\\\", "\\"));
+							}
 						}
 					}
 				}
 			}
+
+			int changeLevelResolved = 0;
+			for (final String targetPath : changeLevelTargets) {
+				final War3Map targetMap = War3MapViewer.beginLoadingMap(compound, targetPath);
+				assertNotNull(targetMap, "ChangeLevel target map should resolve: " + targetPath);
+				assertNotNull(targetMap.readMapInformation(), "W3I should load for: " + targetPath);
+				changeLevelResolved++;
+			}
+
 			System.out.println("Total campaign maps tested: " + mapsTested);
 			System.out.println("Total campaign AI scripts verified: " + aiScriptsTested);
+			System.out.println("Total ChangeLevel target maps verified: " + changeLevelResolved);
 			assertTrue(mapsTested > 0, "Should have tested campaign maps");
+			assertTrue(changeLevelResolved > 0, "Should have verified ChangeLevel targets");
 		}
 		finally {
 			for (final MpqDataSource source : mpqSources) {
@@ -292,6 +333,5 @@ class CampaignLoadingTest {
 			}
 		}
 	}
+
 }
-
-

@@ -70,8 +70,11 @@ public class CBehaviorReturnResources extends CAbstractRangedBehavior implements
 					switch (this.abilityHarvest.getCarriedResourceType()) {
 					case FOOD:
 						throw new IllegalStateException("Unit used Harvest skill to carry FOOD resource!");
-					case GOLD:
-						player.setGold(player.getGold() + this.abilityHarvest.getCarriedResourceAmount());
+					case GOLD: {
+						final int goldMined = this.abilityHarvest.getCarriedResourceAmount();
+						final int goldTax = Math.round(goldMined * (player.getGoldUpkeepRate() / 100.0f));
+						final int goldGained = goldMined - goldTax;
+						player.setGold(player.getGold() + goldGained);
 						if (this.unit.getUnitAnimationListener().removeSecondaryTag(SecondaryTag.GOLD)) {
 							this.unit.getUnitAnimationListener().forceResetCurrentAnimation();
 						}
@@ -82,9 +85,15 @@ public class CBehaviorReturnResources extends CAbstractRangedBehavior implements
 						else {
 							nextTarget = findNearestMine(this.unit, this.simulation);
 						}
+						this.simulation.unitGainResourceEvent(this.unit, player.getId(),
+								this.abilityHarvest.getCarriedResourceType(), goldGained);
 						break;
-					case LUMBER:
-						player.setLumber(player.getLumber() + this.abilityHarvest.getCarriedResourceAmount());
+					}
+					case LUMBER: {
+						final int lumberHarvested = this.abilityHarvest.getCarriedResourceAmount();
+						final int lumberTax = Math.round(lumberHarvested * (player.getLumberUpkeepRate() / 100.0f));
+						final int lumberGained = lumberHarvested - lumberTax;
+						player.setLumber(player.getLumber() + lumberGained);
 						if (this.unit.getUnitAnimationListener().removeSecondaryTag(SecondaryTag.LUMBER)) {
 							this.unit.getUnitAnimationListener().forceResetCurrentAnimation();
 						}
@@ -101,11 +110,11 @@ public class CBehaviorReturnResources extends CAbstractRangedBehavior implements
 						else {
 							nextTarget = findNearestTree(this.unit, this.abilityHarvest, this.simulation, this.unit);
 						}
+						this.simulation.unitGainResourceEvent(this.unit, player.getId(),
+								this.abilityHarvest.getCarriedResourceType(), lumberGained);
 						break;
 					}
-					this.simulation.unitGainResourceEvent(this.unit, player.getId(),
-							this.abilityHarvest.getCarriedResourceType(),
-							this.abilityHarvest.getCarriedResourceAmount());
+					}
 					this.abilityHarvest.setCarriedResources(this.abilityHarvest.getCarriedResourceType(), 0);
 					if (nextTarget != null) {
 						return this.abilityHarvest.getBehaviorHarvest().reset(this.simulation, nextTarget);

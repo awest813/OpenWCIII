@@ -251,92 +251,101 @@ public final class CGameCache implements CHandle {
 			out.writeInt(FILE_VERSION);
 
 			// integers
-			final List<int[]> intEntries = flattenTyped(this.integers);
-			final List<String[]> intKeys = flattenKeys(this.integers);
-			out.writeInt(intKeys.size());
-			for (int i = 0; i < intKeys.size(); i++) {
-				out.writeUTF(intKeys.get(i)[0]);
-				out.writeUTF(intKeys.get(i)[1]);
-				out.writeInt(intEntries.get(i)[0]);
+			int totalInts = 0;
+			for (final Map<String, Integer> map : this.integers.values()) {
+				totalInts += map.size();
+			}
+			out.writeInt(totalInts);
+			for (final Map.Entry<String, Map<String, Integer>> missionEntry : this.integers.entrySet()) {
+				for (final Map.Entry<String, Integer> entry : missionEntry.getValue().entrySet()) {
+					out.writeUTF(missionEntry.getKey());
+					out.writeUTF(entry.getKey());
+					out.writeInt(entry.getValue());
+				}
 			}
 
 			// reals
-			final List<float[]> realEntries = flattenTypedFloat(this.reals);
-			final List<String[]> realKeys = flattenKeys(this.reals);
-			out.writeInt(realKeys.size());
-			for (int i = 0; i < realKeys.size(); i++) {
-				out.writeUTF(realKeys.get(i)[0]);
-				out.writeUTF(realKeys.get(i)[1]);
-				out.writeFloat(realEntries.get(i)[0]);
+			int totalReals = 0;
+			for (final Map<String, Float> map : this.reals.values()) {
+				totalReals += map.size();
+			}
+			out.writeInt(totalReals);
+			for (final Map.Entry<String, Map<String, Float>> missionEntry : this.reals.entrySet()) {
+				for (final Map.Entry<String, Float> entry : missionEntry.getValue().entrySet()) {
+					out.writeUTF(missionEntry.getKey());
+					out.writeUTF(entry.getKey());
+					out.writeFloat(entry.getValue());
+				}
 			}
 
 			// booleans
-			final List<boolean[]> boolEntries = flattenTypedBool(this.booleans);
-			final List<String[]> boolKeys = flattenKeys(this.booleans);
-			out.writeInt(boolKeys.size());
-			for (int i = 0; i < boolKeys.size(); i++) {
-				out.writeUTF(boolKeys.get(i)[0]);
-				out.writeUTF(boolKeys.get(i)[1]);
-				out.writeBoolean(boolEntries.get(i)[0]);
+			int totalBools = 0;
+			for (final Map<String, Boolean> map : this.booleans.values()) {
+				totalBools += map.size();
+			}
+			out.writeInt(totalBools);
+			for (final Map.Entry<String, Map<String, Boolean>> missionEntry : this.booleans.entrySet()) {
+				for (final Map.Entry<String, Boolean> entry : missionEntry.getValue().entrySet()) {
+					out.writeUTF(missionEntry.getKey());
+					out.writeUTF(entry.getKey());
+					out.writeBoolean(entry.getValue());
+				}
 			}
 
 			// strings
-			final List<String[]> strEntries = new ArrayList<>();
-			final List<String[]> strKeys = new ArrayList<>();
+			int totalStrings = 0;
+			for (final Map<String, String> map : this.strings.values()) {
+				totalStrings += map.size();
+			}
+			out.writeInt(totalStrings);
 			for (final Map.Entry<String, Map<String, String>> missionEntry : this.strings.entrySet()) {
 				for (final Map.Entry<String, String> entry : missionEntry.getValue().entrySet()) {
-					strKeys.add(new String[] { missionEntry.getKey(), entry.getKey() });
-					strEntries.add(new String[] { entry.getValue() });
+					out.writeUTF(missionEntry.getKey());
+					out.writeUTF(entry.getKey());
+					out.writeUTF(entry.getValue() != null ? entry.getValue() : "");
 				}
-			}
-			out.writeInt(strKeys.size());
-			for (int i = 0; i < strKeys.size(); i++) {
-				out.writeUTF(strKeys.get(i)[0]);
-				out.writeUTF(strKeys.get(i)[1]);
-				out.writeUTF(strEntries.get(i)[0]);
 			}
 
 			// units
-			final List<String[]> unitKeys = flattenKeys(this.units);
-			final List<StoredUnitData> unitEntries = new ArrayList<>();
-			for (final Map.Entry<String, Map<String, StoredUnitData>> missionEntry : this.units.entrySet()) {
-				for (final StoredUnitData data : missionEntry.getValue().values()) {
-					unitEntries.add(data);
-				}
+			int totalUnits = 0;
+			for (final Map<String, StoredUnitData> map : this.units.values()) {
+				totalUnits += map.size();
 			}
-			out.writeInt(unitKeys.size());
-			for (int i = 0; i < unitKeys.size(); i++) {
-				final StoredUnitData data = unitEntries.get(i);
-				out.writeUTF(unitKeys.get(i)[0]);
-				out.writeUTF(unitKeys.get(i)[1]);
-				out.writeInt(data.unitTypeId.getValue());
-				out.writeInt(data.xp);
-				out.writeInt(data.skillPoints);
-				out.writeInt(data.strengthBase);
-				out.writeInt(data.agilityBase);
-				out.writeInt(data.intelligenceBase);
-				out.writeInt(data.strengthBonus);
-				out.writeInt(data.agilityBonus);
-				out.writeInt(data.intelligenceBonus);
-				out.writeUTF(data.properName);
-				final int itemCount = countNonNullItems(data.items);
-				out.writeInt(itemCount);
-				if (data.items != null) {
-					for (int slot = 0; slot < data.items.length; slot++) {
-						final StoredItemData item = data.items[slot];
-						if (item != null) {
-							out.writeInt(slot);
-							out.writeInt(item.typeId.getValue());
-							out.writeInt(item.charges);
+			out.writeInt(totalUnits);
+			for (final Map.Entry<String, Map<String, StoredUnitData>> missionEntry : this.units.entrySet()) {
+				for (final Map.Entry<String, StoredUnitData> entry : missionEntry.getValue().entrySet()) {
+					final StoredUnitData data = entry.getValue();
+					out.writeUTF(missionEntry.getKey());
+					out.writeUTF(entry.getKey());
+					out.writeInt(data.unitTypeId.getValue());
+					out.writeInt(data.xp);
+					out.writeInt(data.skillPoints);
+					out.writeInt(data.strengthBase);
+					out.writeInt(data.agilityBase);
+					out.writeInt(data.intelligenceBase);
+					out.writeInt(data.strengthBonus);
+					out.writeInt(data.agilityBonus);
+					out.writeInt(data.intelligenceBonus);
+					out.writeUTF(data.properName != null ? data.properName : "");
+					final int itemCount = countNonNullItems(data.items);
+					out.writeInt(itemCount);
+					if (data.items != null) {
+						for (int slot = 0; slot < data.items.length; slot++) {
+							final StoredItemData item = data.items[slot];
+							if (item != null) {
+								out.writeInt(slot);
+								out.writeInt(item.typeId.getValue());
+								out.writeInt(item.charges);
+							}
 						}
 					}
-				}
-				final int abilityCount = data.abilities != null ? data.abilities.length : 0;
-				out.writeInt(abilityCount);
-				if (data.abilities != null) {
-					for (final StoredAbilityData ability : data.abilities) {
-						out.writeInt(ability.abilityId.getValue());
-						out.writeInt(ability.level);
+					final int abilityCount = data.abilities != null ? data.abilities.length : 0;
+					out.writeInt(abilityCount);
+					if (data.abilities != null) {
+						for (final StoredAbilityData ability : data.abilities) {
+							out.writeInt(ability.abilityId.getValue());
+							out.writeInt(ability.level);
+						}
 					}
 				}
 			}
@@ -460,46 +469,6 @@ public final class CGameCache implements CHandle {
 			parent.put(key, child);
 		}
 		return child;
-	}
-
-	private static <V> List<String[]> flattenKeys(final Map<String, Map<String, V>> outer) {
-		final List<String[]> result = new ArrayList<>();
-		for (final Map.Entry<String, Map<String, V>> missionEntry : outer.entrySet()) {
-			for (final String key : missionEntry.getValue().keySet()) {
-				result.add(new String[] { missionEntry.getKey(), key });
-			}
-		}
-		return result;
-	}
-
-	private static List<int[]> flattenTyped(final Map<String, Map<String, Integer>> outer) {
-		final List<int[]> result = new ArrayList<>();
-		for (final Map.Entry<String, Map<String, Integer>> missionEntry : outer.entrySet()) {
-			for (final Integer v : missionEntry.getValue().values()) {
-				result.add(new int[] { v });
-			}
-		}
-		return result;
-	}
-
-	private static List<float[]> flattenTypedFloat(final Map<String, Map<String, Float>> outer) {
-		final List<float[]> result = new ArrayList<>();
-		for (final Map.Entry<String, Map<String, Float>> missionEntry : outer.entrySet()) {
-			for (final Float v : missionEntry.getValue().values()) {
-				result.add(new float[] { v });
-			}
-		}
-		return result;
-	}
-
-	private static List<boolean[]> flattenTypedBool(final Map<String, Map<String, Boolean>> outer) {
-		final List<boolean[]> result = new ArrayList<>();
-		for (final Map.Entry<String, Map<String, Boolean>> missionEntry : outer.entrySet()) {
-			for (final Boolean v : missionEntry.getValue().values()) {
-				result.add(new boolean[] { v });
-			}
-		}
-		return result;
 	}
 
 	private static int countNonNullItems(final StoredItemData[] items) {

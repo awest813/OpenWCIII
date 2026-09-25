@@ -76,8 +76,25 @@ public class JassAIEnvironment {
 	private float captainY;
 	private boolean captainAtHome = true;
 	private final List<CUnit> assaultGroup = new ArrayList<>();
+	private float nextExpansionX = 0f;
+	private float nextExpansionY = 0f;
 
-	private JassAIEnvironment(final JassProgram jassProgramVisitor, final DataSource dataSource,
+	private static final class GuardPost {
+		final War3ID unitId;
+		final float x;
+		final float y;
+		CUnit assignedUnit;
+
+		GuardPost(final War3ID unitId, final float x, final float y) {
+			this.unitId = unitId;
+			this.x = x;
+			this.y = y;
+		}
+	}
+
+	private final List<GuardPost> guardPosts = new ArrayList<>();
+
+	JassAIEnvironment(final JassProgram jassProgramVisitor, final DataSource dataSource,
 			final Viewport uiViewport, final Scene uiScene, final GameUI gameUI, final War3MapConfig mapConfig,
 			final CSimulation simulation, final int aiPlayerIndex) {
 		this.jassProgramVisitor = jassProgramVisitor;
@@ -342,19 +359,68 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> IntegerJassValue
 						.of(countEnemyUnitsOfType(0)));
 		jassProgramVisitor.getJassNativeManager().createNative("TownCount",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> {
+					if (arguments.isEmpty()) {
+						return IntegerJassValue.of(townHasHall(0) ? 1 : 0);
+					}
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					return IntegerJassValue.of(unitId == 0 ? (townHasHall(0) ? 1 : 0)
+							: countUnitsOfType(this.aiPlayerIndex, unitId, false));
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("TownCountDone",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> {
+					if (arguments.isEmpty()) {
+						return IntegerJassValue.of(townHasHall(0) ? 1 : 0);
+					}
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					return IntegerJassValue.of(unitId == 0 ? (townHasHall(0) ? 1 : 0) : countUnitsOfTypeDone(unitId));
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("TownCountEx",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final boolean onlyDone = (arguments.size() > 1)
+							&& arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+					return IntegerJassValue.of(onlyDone ? countUnitsOfTypeDone(unitId)
+							: countUnitsOfType(this.aiPlayerIndex, unitId, false));
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("TownWithGreatestNeed",
 				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
 		jassProgramVisitor.getJassNativeManager().createNative("GetNextExpansion",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(-1));
+				(arguments, globalScope, triggerScope) -> {
+					final CUnit mine = findNextExpansionMine();
+					if (mine != null) {
+						this.nextExpansionX = mine.getX();
+						this.nextExpansionY = mine.getY();
+						return IntegerJassValue.of(1);
+					}
+					return IntegerJassValue.of(-1);
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetExpansionX",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.of((int) getTownCenterX()));
+				(arguments, globalScope, triggerScope) -> {
+					if ((this.nextExpansionX != 0f) || (this.nextExpansionY != 0f)) {
+						return IntegerJassValue.of((int) this.nextExpansionX);
+					}
+					final CUnit mine = findNextExpansionMine();
+					if (mine != null) {
+						this.nextExpansionX = mine.getX();
+						this.nextExpansionY = mine.getY();
+						return IntegerJassValue.of((int) this.nextExpansionX);
+					}
+					return IntegerJassValue.of((int) getTownCenterX());
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetExpansionY",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.of((int) getTownCenterY()));
+				(arguments, globalScope, triggerScope) -> {
+					if ((this.nextExpansionX != 0f) || (this.nextExpansionY != 0f)) {
+						return IntegerJassValue.of((int) this.nextExpansionY);
+					}
+					final CUnit mine = findNextExpansionMine();
+					if (mine != null) {
+						this.nextExpansionX = mine.getX();
+						this.nextExpansionY = mine.getY();
+						return IntegerJassValue.of((int) this.nextExpansionY);
+					}
+					return IntegerJassValue.of((int) getTownCenterY());
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("SetProduce",
 				(arguments, globalScope, triggerScope) -> {
 					final int qty = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
@@ -366,7 +432,7 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> {
 					final CUnit peon = nullable(arguments, 0, ObjectJassValueVisitor.<CUnit>getInstance());
 					final int unitId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
-					return BooleanJassValue.of(setProduce(1, unitId, -1));
+					return BooleanJassValue.of(setExpansion(peon, unitId));
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("SetUpgrade",
 				(arguments, globalScope, triggerScope) -> {
@@ -555,7 +621,17 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("RemoveSiege",
 				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("GetCreepCamp",
-				(arguments, globalScope, triggerScope) -> unitType.getNullValue());
+				(arguments, globalScope, triggerScope) -> {
+					final int minLevel = !arguments.isEmpty()
+							? arguments.get(0).visit(IntegerJassValueVisitor.getInstance()) : 0;
+					final int maxLevel = (arguments.size() > 1)
+							? arguments.get(1).visit(IntegerJassValueVisitor.getInstance()) : 100;
+					final CUnit creep = findCreepTarget(minLevel, maxLevel);
+					if (creep != null) {
+						return new HandleJassValue(this.unitType, creep);
+					}
+					return this.unitType.getNullValue();
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("StartGetEnemyBase",
 				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("WaitGetEnemyBase",
@@ -563,11 +639,23 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("SetStagePoint",
 				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("AddGuardPost",
-				(arguments, globalScope, triggerScope) -> null);
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final float x = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
+					final float y = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
+					this.guardPosts.add(new GuardPost(unitId != 0 ? new War3ID(unitId) : null, x, y));
+					return null;
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("FillGuardPosts",
-				(arguments, globalScope, triggerScope) -> null);
+				(arguments, globalScope, triggerScope) -> {
+					fillGuardPosts();
+					return null;
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("ReturnGuardPosts",
-				(arguments, globalScope, triggerScope) -> null);
+				(arguments, globalScope, triggerScope) -> {
+					returnGuardPosts();
+					return null;
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("CreateCaptains",
 				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("TeleportCaptain",
@@ -577,7 +665,7 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("IgnoredUnits",
 				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
 		jassProgramVisitor.getJassNativeManager().createNative("CreepsOnMap",
-				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.of(creepsOnMap()));
 		jassProgramVisitor.getJassNativeManager().createNative("GetMegaTarget",
 				(arguments, globalScope, triggerScope) -> unitType.getNullValue());
 		jassProgramVisitor.getJassNativeManager().createNative("GetEnemyPower",
@@ -1320,6 +1408,228 @@ public class JassAIEnvironment {
 		return false;
 	}
 
+	private CUnit findNextExpansionMine() {
+		if (this.simulation == null) {
+			return null;
+		}
+		final float cx = getTownCenterX();
+		final float cy = getTownCenterY();
+		CUnit closestMine = null;
+		float closestDistSq = Float.MAX_VALUE;
+
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit == null) || unit.isDead()) {
+				continue;
+			}
+			boolean isGoldMine = false;
+			int gold = 0;
+			for (final CAbility a : unit.getAbilities()) {
+				if (a instanceof CAbilityGoldMine) {
+					isGoldMine = true;
+					gold = ((CAbilityGoldMine) a).getGold();
+					break;
+				}
+				else if (a instanceof CAbilityGoldMinable) {
+					isGoldMine = true;
+					gold = 10000;
+					break;
+				}
+			}
+			if (!isGoldMine || (gold <= 0)) {
+				continue;
+			}
+			final float dx = unit.getX() - cx;
+			final float dy = unit.getY() - cy;
+			final float distSq = (dx * dx) + (dy * dy);
+			if (distSq < (1500f * 1500f)) {
+				continue;
+			}
+			boolean claimed = false;
+			for (final CUnit other : this.simulation.getUnits()) {
+				if ((other != null) && !other.isDead()
+						&& other.getClassifications().contains(CUnitClassification.TOWNHALL)) {
+					final float ox = other.getX() - unit.getX();
+					final float oy = other.getY() - unit.getY();
+					if (((ox * ox) + (oy * oy)) < (1200f * 1200f)) {
+						claimed = true;
+						break;
+					}
+				}
+			}
+			if (claimed) {
+				continue;
+			}
+			if (distSq < closestDistSq) {
+				closestDistSq = distSq;
+				closestMine = unit;
+			}
+		}
+		return closestMine;
+	}
+
+	private boolean setExpansion(CUnit peon, final int unitIdInt) {
+		if (this.simulation == null) {
+			return false;
+		}
+		if (peon == null) {
+			peon = getExpansionPeon();
+		}
+		if (peon == null) {
+			return false;
+		}
+		final War3ID unitId = new War3ID(unitIdInt);
+		final CPlayer player = this.simulation.getPlayer(this.aiPlayerIndex);
+		if (player == null) {
+			return false;
+		}
+		final CUnitType unitType = this.simulation.getUnitData().getUnitType(unitId);
+		if (unitType == null) {
+			return false;
+		}
+		if ((player.getGold() < unitType.getGoldCost()) || (player.getLumber() < unitType.getLumberCost())) {
+			return false;
+		}
+		float targetX = this.nextExpansionX;
+		float targetY = this.nextExpansionY;
+		if ((targetX == 0f) && (targetY == 0f)) {
+			final CUnit mine = findNextExpansionMine();
+			if (mine != null) {
+				targetX = mine.getX();
+				targetY = mine.getY();
+			}
+			else {
+				return false;
+			}
+		}
+		final AbilityPointTarget target = findBuildLocation(unitType, targetX, targetY);
+		if (target == null) {
+			return false;
+		}
+		for (final CAbility ability : peon.getAbilities()) {
+			if (ability instanceof AbstractCAbilityBuild) {
+				final AbstractCAbilityBuild buildAbil = (AbstractCAbilityBuild) ability;
+				if (buildAbil.getStructuresBuilt().contains(unitId)) {
+					final CPlayerUnitOrderExecutor executor = this.simulation
+							.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
+					if (executor != null) {
+						executor.issuePointOrder(peon.getHandleId(), buildAbil.getHandleId(), unitIdInt,
+								target.getX(), target.getY(), false);
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	private void fillGuardPosts() {
+		if (this.simulation == null) {
+			return;
+		}
+		for (final GuardPost post : this.guardPosts) {
+			if ((post.assignedUnit != null) && !post.assignedUnit.isDead()) {
+				continue;
+			}
+			post.assignedUnit = null;
+			for (final CUnit unit : this.simulation.getUnits()) {
+				if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+					continue;
+				}
+				if (unit.isBuilding() || this.assaultGroup.contains(unit)) {
+					continue;
+				}
+				boolean alreadyAssigned = false;
+				for (final GuardPost other : this.guardPosts) {
+					if (other.assignedUnit == unit) {
+						alreadyAssigned = true;
+						break;
+					}
+				}
+				if (alreadyAssigned) {
+					continue;
+				}
+				if ((post.unitId != null) && (unit.getTypeId().getValue() != post.unitId.getValue())) {
+					continue;
+				}
+				post.assignedUnit = unit;
+				issuePointOrder(unit, post.x, post.y, OrderIds.move);
+				break;
+			}
+		}
+	}
+
+	private void returnGuardPosts() {
+		if (this.simulation == null) {
+			return;
+		}
+		for (final GuardPost post : this.guardPosts) {
+			if ((post.assignedUnit != null) && !post.assignedUnit.isDead()) {
+				final float dx = post.assignedUnit.getX() - post.x;
+				final float dy = post.assignedUnit.getY() - post.y;
+				if (((dx * dx) + (dy * dy)) > (600f * 600f)) {
+					issuePointOrder(post.assignedUnit, post.x, post.y, OrderIds.move);
+				}
+			}
+		}
+	}
+
+	private boolean creepsOnMap() {
+		if (this.simulation == null) {
+			return false;
+		}
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit == null) || unit.isDead() || unit.isBuilding()) {
+				continue;
+			}
+			if (unit.getPlayerIndex() >= 12) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private CUnit findCreepTarget(final int minLevel, final int maxLevel) {
+		if (this.simulation == null) {
+			return null;
+		}
+		final float cx = getTownCenterX();
+		final float cy = getTownCenterY();
+		CUnit bestCreep = null;
+		float bestDistSq = Float.MAX_VALUE;
+
+		for (final CUnit unit : this.simulation.getUnits()) {
+			if ((unit == null) || unit.isDead() || unit.isBuilding() || (unit.getPlayerIndex() < 12)) {
+				continue;
+			}
+			final int level = (unit.getUnitType() != null) ? unit.getUnitType().getLevel() : 1;
+			if (((minLevel > 0) && (level < minLevel)) || ((maxLevel > 0) && (level > maxLevel))) {
+				continue;
+			}
+			final float dx = unit.getX() - cx;
+			final float dy = unit.getY() - cy;
+			final float distSq = (dx * dx) + (dy * dy);
+			if (distSq < bestDistSq) {
+				bestDistSq = distSq;
+				bestCreep = unit;
+			}
+		}
+		if (bestCreep == null) {
+			for (final CUnit unit : this.simulation.getUnits()) {
+				if ((unit == null) || unit.isDead() || unit.isBuilding() || (unit.getPlayerIndex() < 12)) {
+					continue;
+				}
+				final float dx = unit.getX() - cx;
+				final float dy = unit.getY() - cy;
+				final float distSq = (dx * dx) + (dy * dy);
+				if (distSq < bestDistSq) {
+					bestDistSq = distSq;
+					bestCreep = unit;
+				}
+			}
+		}
+		return bestCreep;
+	}
+
 	public void main() {
 		try {
 			final JassThread mainThread = this.jassProgramVisitor.getGlobals().createThread("main",
@@ -1362,6 +1672,7 @@ public class JassAIEnvironment {
 				}
 				catch (final Exception e) {
 					System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
+					return null;
 				}
 			}
 		}
@@ -1383,6 +1694,7 @@ public class JassAIEnvironment {
 				}
 				catch (final Exception e) {
 					System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
+					return null;
 				}
 			}
 		}

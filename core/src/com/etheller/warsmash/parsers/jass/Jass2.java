@@ -135,11 +135,13 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.C
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CAbilityHero;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellItems;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellUnits;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.jass.CAbilityJass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.jass.CAbilityOrderButtonJass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.jass.CBuffJass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityBlightedGoldMine;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.neutral.CAbilityWayGate;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityRally;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.util.CBuffStun;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.util.CBuffTimedLife;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
@@ -217,6 +219,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CMIDISound;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CSound;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CSoundFilename;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CSoundFromLabel;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.StackedSoundManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.state.CGameState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.state.CUnitState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
@@ -258,6 +261,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ResourceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.SimulationRenderComponentLightning;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.SimulationRenderComponentLightningMovable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.TextTagConfigType;
+import com.etheller.warsmash.viewer5.handlers.w3x.environment.WeatherEffect;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.WarsmashUI;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.dialog.CLeaderboard;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.dialog.CScriptDialog;
@@ -429,8 +433,8 @@ public class Jass2 {
 			}
 		}
 		catch (final Exception e) {
-			e.printStackTrace();
 			JassLog.report(e);
+			throw new IllegalStateException("Could not parse JASS file: " + jassFile, e);
 		}
 	}
 
@@ -677,6 +681,12 @@ public class Jass2 {
 	}
 
 	public static final class CommonEnvironment {
+		private JassThread initializationThread;
+
+		/** The queued map main function must finish before applying a loaded save. */
+		public boolean isInitializationComplete() {
+			return (this.initializationThread != null) && (this.initializationThread.instructionPtr == -1);
+		}
 
 		private GameUI gameUI;
 		private Element skin;
@@ -687,6 +697,23 @@ public class Jass2 {
 		private String lastSaveBasicFilename = "";
 		private final java.util.EnumMap<CGameState, Integer> integerGameStates = new java.util.EnumMap<>(CGameState.class);
 		private final Map<Integer, JassAIEnvironment> aiEnvironmentsByPlayer = new HashMap<>();
+		private final Map<String, CGameCache> openGameCaches = new HashMap<>();
+		private final StackedSoundManager stackedSoundManager = new StackedSoundManager();
+
+		private CGameCache getOrCreateGameCache(final String name) {
+			final String safeName = name != null ? name : "";
+			final String key = safeName.toLowerCase();
+			CGameCache cache = this.openGameCaches.get(key);
+			if (cache == null) {
+				final File cacheFile = gamecacheFileFor(this.gamecacheDir, safeName);
+				cache = CGameCache.tryLoadFromFile(cacheFile, safeName);
+				if (cache == null) {
+					cache = new CGameCache(safeName);
+				}
+				this.openGameCaches.put(key, cache);
+			}
+			return cache;
+		}
 
 		private CommonEnvironment(final JassProgram jassProgramVisitor, final DataSource dataSource,
 				final Viewport uiViewport, final Scene uiScene, final War3MapViewer war3MapViewer,
@@ -2670,7 +2697,7 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final String musicName = arguments.get(0).visit(StringJassValueVisitor.getInstance());
 						final String musicField = CommonEnvironment.this.gameUI.trySkinField(musicName);
-						meleeUI.playMusic(musicField, true, 0);
+						meleeUI.playThematicMusic(musicField, true, 0);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("PlayThematicMusicEx",
@@ -2678,13 +2705,12 @@ public class Jass2 {
 						final String musicName = arguments.get(0).visit(StringJassValueVisitor.getInstance());
 						final String musicField = CommonEnvironment.this.gameUI.trySkinField(musicName);
 						final int frommsecs = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
-						meleeUI.playMusicEx(musicField, true, 0, frommsecs, -1);
+						meleeUI.playThematicMusicEx(musicField, true, 0, frommsecs, -1);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("EndThematicMusic",
 					(arguments, globalScope, triggerScope) -> {
-						meleeUI.stopMusic(false);
-						meleeUI.playMapMusic();
+						meleeUI.endThematicMusic();
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetMusicVolume",
@@ -2702,7 +2728,7 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("SetThematicMusicPlayPosition",
 					(arguments, globalScope, triggerScope) -> {
 						final int millisecs = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
-						meleeUI.setMusicPlayPosition(millisecs);
+						meleeUI.setThematicMusicPlayPosition(millisecs);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("GetSoundDuration",
@@ -2794,12 +2820,28 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("RegisterStackedSound",
 					(arguments, globalScope, triggerScope) -> {
-						// stacked-sound (ambient layer) system not implemented
+						final CSound whichSound = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final boolean byPosition = (arguments.size() > 1)
+								&& arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+						final float rectWidth = (arguments.size() > 2)
+								? arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue() : 0f;
+						final float rectHeight = (arguments.size() > 3)
+								? arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue() : 0f;
+						CommonEnvironment.this.stackedSoundManager.register(whichSound, byPosition, rectWidth,
+								rectHeight);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("UnregisterStackedSound",
 					(arguments, globalScope, triggerScope) -> {
-						// stacked-sound (ambient layer) system not implemented
+						final CSound whichSound = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final boolean byPosition = (arguments.size() > 1)
+								&& arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+						final float rectWidth = (arguments.size() > 2)
+								? arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue() : 0f;
+						final float rectHeight = (arguments.size() > 3)
+								? arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue() : 0f;
+						CommonEnvironment.this.stackedSoundManager.unregister(whichSound, byPosition, rectWidth,
+								rectHeight);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("VolumeGroupSetVolume",
@@ -2893,7 +2935,8 @@ public class Jass2 {
 						final float xVelocity = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
 						final float yVelocity = arguments.get(2).visit(RealJassValueVisitor.getInstance()).floatValue();
 						if (textTag != null) {
-							textTag.setVelocity(xVelocity, yVelocity);
+							final float scale = (Math.abs(xVelocity) < 5.0f && Math.abs(yVelocity) < 5.0f) ? 1200f : 1.0f;
+							textTag.setVelocity(xVelocity * scale, yVelocity * scale);
 						}
 						return null;
 					});
@@ -5004,16 +5047,18 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("AddWeatherEffect",
 					(arguments, globalScope, triggerScope) -> {
-						final Rectangle where = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+						final Rectangle where = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
 						final int effectId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
-						// TODO NYI
-						return null;
+						final WeatherEffect effect = war3MapViewer.addWeatherEffect(where, new War3ID(effectId));
+						return new HandleJassValue(weathereffectType, effect);
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("EnableWeatherEffect",
 					(arguments, globalScope, triggerScope) -> {
-						final Rectangle where = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						final WeatherEffect whichEffect = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
 						final boolean enable = arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
-						// TODO NYI
+						if (whichEffect != null) {
+							whichEffect.setEnabled(enable);
+						}
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterDeathEvent",
@@ -5112,6 +5157,17 @@ public class Jass2 {
 						final int currentStock = arguments.get(2).visit(IntegerJassValueVisitor.getInstance());
 						final int stockMax = arguments.get(3).visit(IntegerJassValueVisitor.getInstance());
 						if (whichUnit != null) {
+							CAbilitySellUnits sellUnits = whichUnit.getFirstAbilityOfType(CAbilitySellUnits.class);
+							if (sellUnits == null) {
+								sellUnits = new CAbilitySellUnits(
+										CommonEnvironment.this.simulation.getHandleIdAllocator().createId(),
+										new ArrayList<War3ID>());
+								whichUnit.add(CommonEnvironment.this.simulation, sellUnits);
+							}
+							if (whichUnit.getFirstAbilityOfType(CAbilityRally.class) == null) {
+								whichUnit.add(CommonEnvironment.this.simulation,
+										new CAbilityRally(CommonEnvironment.this.simulation.getHandleIdAllocator().createId()));
+							}
 							whichUnit.addUnitToStock(new War3ID(unitId), currentStock, stockMax);
 						}
 						return null;
@@ -5264,7 +5320,13 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("SetDestructableOccluderHeight",
 					(arguments, globalScope, triggerScope) -> null);
 			jassProgramVisitor.getJassNativeManager().createNative("RemoveWeatherEffect",
-					(arguments, globalScope, triggerScope) -> null);
+					(arguments, globalScope, triggerScope) -> {
+						final WeatherEffect whichEffect = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						if (whichEffect != null) {
+							war3MapViewer.removeWeatherEffect(whichEffect);
+						}
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetSoundDistances",
 					(arguments, globalScope, triggerScope) -> {
 						final CSound soundHandle = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
@@ -7312,6 +7374,14 @@ public class Jass2 {
 									save.lumber[i] = p.getLumber();
 								}
 							}
+							save.timeOfDay = CommonEnvironment.this.simulation.getGameTimeOfDay();
+							save.timeOfDayScale = CommonEnvironment.this.simulation.getTimeOfDayScale();
+							if ((meleeUI != null) && (meleeUI.getCameraManager() != null)) {
+								save.cameraX = meleeUI.getCameraManager().target.x;
+								save.cameraY = meleeUI.getCameraManager().target.y;
+							}
+							final String currentMap = war3MapViewer.getCurrentMapPath();
+							save.savedMapPath = (currentMap != null) ? currentMap : "";
 							save.save(saveFile);
 							CommonEnvironment.this.lastSaveBasicFilename = new File(filename).getName();
 							System.out.println("SaveGame: saved " + save.globals.size()
@@ -7335,19 +7405,13 @@ public class Jass2 {
 							System.err.println("LoadGame: no valid save found for '" + filename + "'");
 							return null;
 						}
-						CommonEnvironment.this.lastSaveBasicFilename = new File(filename).getName();
-						// Restore JASS primitive globals immediately (unit/hero state
-						// restoration requires a full map-reload which is not yet wired).
-						save.restoreGlobals(globalScope);
-						// Restore player resources.
-						for (int i = 0; i < save.gold.length && i < WarsmashConstants.MAX_PLAYERS; i++) {
-							final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer p =
-									CommonEnvironment.this.simulation.getPlayer(i);
-							if (p != null) {
-								p.setGold(save.gold[i]);
-								p.setLumber(save.lumber[i]);
-							}
+						if (!save.belongsToMap(war3MapViewer.getCurrentMapPath())) {
+							System.err.println("LoadGame: save belongs to another map; use main-menu Load Saved");
+							return null;
 						}
+						CommonEnvironment.this.lastSaveBasicFilename = new File(filename).getName();
+						// Restore globals, resources, and (for v2+ saves) the clock + camera.
+						restoreSaveGameState(save, globalScope, CommonEnvironment.this.simulation, meleeUI);
 						System.out.println("LoadGame: restored " + save.globals.size()
 								+ " globals from " + saveFile);
 						return null;
@@ -7365,15 +7429,11 @@ public class Jass2 {
 							System.err.println("ReloadGame: no valid save found for '" + filename + "'");
 							return null;
 						}
-						save.restoreGlobals(globalScope);
-						for (int i = 0; i < save.gold.length && i < WarsmashConstants.MAX_PLAYERS; i++) {
-							final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer p =
-									CommonEnvironment.this.simulation.getPlayer(i);
-							if (p != null) {
-								p.setGold(save.gold[i]);
-								p.setLumber(save.lumber[i]);
-							}
+						if (!save.belongsToMap(war3MapViewer.getCurrentMapPath())) {
+							System.err.println("ReloadGame: save does not identify the current map");
+							return null;
 						}
+						restoreSaveGameState(save, globalScope, CommonEnvironment.this.simulation, meleeUI);
 						System.out.println("ReloadGame: restored globals from " + saveFile);
 						return null;
 					});
@@ -7439,11 +7499,8 @@ public class Jass2 {
 							return null;
 						}
 						final String cacheName = "HeroData.w3v";
+						final CGameCache cache = getOrCreateGameCache(cacheName);
 						final File cacheFile = gamecacheFileFor(CommonEnvironment.this.gamecacheDir, cacheName);
-						CGameCache cache = CGameCache.tryLoadFromFile(cacheFile, cacheName);
-						if (cache == null) {
-							cache = new CGameCache(cacheName);
-						}
 						final String missionKey = "Player" + player.getId();
 						cache.flushStoredMission(missionKey);
 						final List<CUnit> heroes = CommonEnvironment.this.simulation
@@ -7523,23 +7580,21 @@ public class Jass2 {
 						final String musicName = nullable(arguments, 0, StringJassValueVisitor.getInstance());
 						if (musicName != null) {
 							final String musicField = CommonEnvironment.this.gameUI.trySkinField(musicName);
-							meleeUI.playMusic(musicField != null ? musicField : musicName, true, 0);
+							meleeUI.playThematicMusic(musicField != null ? musicField : musicName, true, 0);
 						}
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("EndThematic",
 					(arguments, globalScope, triggerScope) -> {
-						meleeUI.stopMusic(false);
-						meleeUI.playMapMusic();
+						meleeUI.endThematicMusic();
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetSkyModel",
 					(arguments, globalScope, triggerScope) -> {
 						final String modelPath = nullable(arguments, 0, StringJassValueVisitor.getInstance());
-						// Full sky mesh swap is not yet available; accept so cinematic scripts bind.
-						if ((modelPath != null) && !modelPath.isEmpty()) {
-							System.out.println("SetSkyModel: accepted '" + modelPath + "' (mesh swap pending)");
-						}
+						// Full sky mesh swap is not yet available; track the path so scripts
+						// observe retail-plausible state.
+						meleeUI.setSkyModel(modelPath != null ? modelPath : "");
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetIntegerGameState",
@@ -7565,13 +7620,11 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("SetCinematicCamera",
 					(arguments, globalScope, triggerScope) -> {
 						final String cameraModelFile = nullable(arguments, 0, StringJassValueVisitor.getInstance());
-						// Full MDX camera-track playback is not yet available; stop pans/noise
-						// so cinematic scripts still get a stable camera baseline.
+						// Stop pans/noise for a stable baseline, then hand the model to
+						// the MDX camera-track player (no-op when the model is empty,
+						// missing, or has no camera track).
 						meleeUI.getCameraManager().stopCamera();
-						if ((cameraModelFile != null) && !cameraModelFile.isEmpty()) {
-							System.out.println("SetCinematicCamera: accepted '" + cameraModelFile
-									+ "' (track playback MVP pending)");
-						}
+						meleeUI.setCinematicCameraModel(cameraModelFile != null ? cameraModelFile : "");
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("ForceUIKey",
@@ -7632,13 +7685,22 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("PlayModelCinematic",
 					(arguments, globalScope, triggerScope) -> {
 						final String modelPath = nullable(arguments, 0, StringJassValueVisitor.getInstance());
-						meleeUI.playCinematic(modelPath != null ? modelPath : "");
+						// Model cinematics are in-map letterbox overlays, never ffmpeg movies.
+						meleeUI.playModelCinematic(modelPath != null ? modelPath : "");
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetIntroShotText",
-					(arguments, globalScope, triggerScope) -> null);
+					(arguments, globalScope, triggerScope) -> {
+						final String text = nullable(arguments, 0, StringJassValueVisitor.getInstance());
+						meleeUI.setIntroShotText(text != null ? text : "");
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetIntroShotModel",
-					(arguments, globalScope, triggerScope) -> null);
+					(arguments, globalScope, triggerScope) -> {
+						final String modelPath = nullable(arguments, 0, StringJassValueVisitor.getInstance());
+						meleeUI.setIntroShotModel(modelPath != null ? modelPath : "");
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("CinematicSkipButton",
 					(arguments, globalScope, triggerScope) -> {
 						final boolean visible = arguments.get(0).visit(BooleanJassValueVisitor.getInstance());
@@ -8436,12 +8498,8 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("InitGameCache",
 					(arguments, globalScope, triggerScope) -> {
 						final String cacheName = nullable(arguments, 0, StringJassValueVisitor.getInstance());
-						final String name = cacheName != null ? cacheName : "";
-						// Attempt to load a previously saved cache from disk so that inter-map
-						// hero carry-over and campaign state survive across game sessions.
-						final File cacheFile = gamecacheFileFor(CommonEnvironment.this.gamecacheDir, name);
-						final CGameCache loaded = CGameCache.tryLoadFromFile(cacheFile, name);
-						return new HandleJassValue(gamecacheType, loaded != null ? loaded : new CGameCache(name));
+						final CGameCache cache = getOrCreateGameCache(cacheName);
+						return new HandleJassValue(gamecacheType, cache);
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("SaveGameCache",
 					(arguments, globalScope, triggerScope) -> {
@@ -8463,8 +8521,7 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("ReloadGameCachesFromDisk",
 					(arguments, globalScope, triggerScope) -> {
-						// InitGameCache already reloads from disk on demand, so this is a no-op
-						// that returns TRUE to indicate caches are available.
+						CommonEnvironment.this.openGameCaches.clear();
 						return BooleanJassValue.TRUE;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("FlushGameCache",
@@ -8720,76 +8777,10 @@ public class Jass2 {
 						if (data == null) {
 							return unitType.getNullValue();
 						}
-						final CUnit restored = CommonEnvironment.this.simulation.createUnitSimple(
-								data.unitTypeId, player.getId(), x, y, facing);
+						final CUnit restored = data.createUnit(CommonEnvironment.this.simulation, player.getId(), x, y, facing);
 						if (restored == null) {
 							return unitType.getNullValue();
 						}
-						// Apply hero stats
-						final CAbilityHero heroData = restored.getHeroData();
-						if (heroData != null) {
-							if (data.strengthBase != heroData.getStrength().getBase()) {
-								heroData.setStrengthBase(CommonEnvironment.this.simulation, restored,
-										data.strengthBase);
-							}
-							if (data.agilityBase != heroData.getAgility().getBase()) {
-								heroData.setAgilityBase(CommonEnvironment.this.simulation, restored,
-										data.agilityBase);
-							}
-							if (data.intelligenceBase != heroData.getIntelligence().getBase()) {
-								heroData.setIntelligenceBase(CommonEnvironment.this.simulation, restored,
-										data.intelligenceBase);
-							}
-							if (data.strengthBonus != 0) {
-								heroData.addStrengthBonus(CommonEnvironment.this.simulation, restored,
-										data.strengthBonus);
-							}
-							if (data.agilityBonus != 0) {
-								heroData.addAgilityBonus(CommonEnvironment.this.simulation, restored,
-										data.agilityBonus);
-							}
-							if (data.intelligenceBonus != 0) {
-								heroData.addIntelligenceBonus(CommonEnvironment.this.simulation, restored,
-										data.intelligenceBonus);
-							}
-							// SetXP will level up the hero to match the stored XP
-							heroData.setXp(CommonEnvironment.this.simulation, restored, data.xp, false);
-							// Restore learned hero abilities before applying remaining skill points
-							if (data.abilities != null) {
-								heroData.setSkillPoints(Math.max(data.skillPoints, 64));
-								for (final StoredAbilityData abilityData : data.abilities) {
-									if ((abilityData == null) || (abilityData.abilityId == null)
-											|| (abilityData.level <= 0)) {
-										continue;
-									}
-									for (int level = 0; level < abilityData.level; level++) {
-										heroData.selectHeroSkill(CommonEnvironment.this.simulation, restored,
-												abilityData.abilityId);
-									}
-								}
-							}
-							heroData.setSkillPoints(data.skillPoints);
-							if ((data.properName != null) && !data.properName.isEmpty()) {
-								heroData.setProperName(data.properName);
-							}
-						}
-						// Restore inventory items
-						final CAbilityInventory inventoryData = restored.getInventoryData();
-						if (inventoryData != null && data.items != null) {
-							for (int slot = 0; slot < data.items.length; slot++) {
-								final StoredItemData itemData = data.items[slot];
-								if (itemData != null) {
-									final CItem newItem = CommonEnvironment.this.simulation
-											.createItem(itemData.typeId, x, y);
-									if (newItem != null) {
-										newItem.setCharges(itemData.charges);
-										inventoryData.giveItem(CommonEnvironment.this.simulation, restored, newItem,
-												slot, false);
-									}
-								}
-							}
-						}
-						player.addTechtreeUnlocked(CommonEnvironment.this.simulation, data.unitTypeId);
 						return new HandleJassValue(unitType, restored);
 					});
 			// Campaign availability natives - used by campaign scripts to control which
@@ -12697,6 +12688,36 @@ public class Jass2 {
 		}
 
 		/**
+		 * Restores a save written by {@code SaveGame} into the live game: JASS
+		 * primitive globals, per-player resources, and (for v2+ saves) the
+		 * time-of-day clock and the local camera target. Fields recorded as
+		 * {@code Float.NaN} (e.g. every v1 save) are skipped. The v3 saved map
+		 * path is consumed by the menu, not restored here.
+		 */
+		public static void restoreSaveGameState(final CGameSave save, final GlobalScope globalScope,
+				final CSimulation simulation, final WarsmashUI ui) {
+			save.restoreGlobals(globalScope);
+			for (int i = 0; i < save.gold.length && i < WarsmashConstants.MAX_PLAYERS; i++) {
+				final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer p = simulation
+						.getPlayer(i);
+				if (p != null) {
+					p.setGold(save.gold[i]);
+					p.setLumber(save.lumber[i]);
+				}
+			}
+			if (!Float.isNaN(save.timeOfDay)) {
+				simulation.setGameTimeOfDay(save.timeOfDay);
+			}
+			if (!Float.isNaN(save.timeOfDayScale)) {
+				simulation.setTimeOfDayScale(save.timeOfDayScale);
+			}
+			if (!Float.isNaN(save.cameraX) && !Float.isNaN(save.cameraY) && (ui != null)
+					&& (ui.getCameraManager() != null)) {
+				ui.getCameraManager().setTarget(save.cameraX, save.cameraY);
+			}
+		}
+
+		/**
 		 * Fog state of a (location, player) argument pair, as the
 		 * IsLocation*ToPlayer natives take them. An unknown location or player
 		 * reads as unexplored.
@@ -12739,6 +12760,7 @@ public class Jass2 {
 			try {
 				final JassThread mainThread = this.jassProgramVisitor.getGlobals().createThread("main",
 						Collections.emptyList(), TriggerExecutionScope.EMPTY);
+				this.initializationThread = mainThread;
 				this.jassProgramVisitor.getGlobals().queueThread(mainThread);
 			}
 			catch (final Exception exc) {
@@ -13175,58 +13197,7 @@ public class Jass2 {
 	 * and inventory items.
 	 */
 	private static StoredUnitData snapshotUnit(final CUnit unit) {
-		int xp = 0;
-		int skillPoints = 0;
-		int strBase = 0;
-		int agiBase = 0;
-		int intBase = 0;
-		int strBonus = 0;
-		int agiBonus = 0;
-		int intBonus = 0;
-		String properName = "";
-		StoredAbilityData[] abilities = null;
-		final CAbilityHero heroData = unit.getHeroData();
-		if (heroData != null) {
-			xp = heroData.getXp();
-			skillPoints = heroData.getSkillPoints();
-			strBase = heroData.getStrength().getBase();
-			agiBase = heroData.getAgility().getBase();
-			intBase = heroData.getIntelligence().getBase();
-			strBonus = heroData.getStrength().getBonus();
-			agiBonus = heroData.getAgility().getBonus();
-			intBonus = heroData.getIntelligence().getBonus();
-			properName = heroData.getProperName();
-			final List<StoredAbilityData> learned = new ArrayList<>();
-			for (final CAbility ability : unit.getAbilities()) {
-				if (!(ability instanceof CLevelingAbility)) {
-					continue;
-				}
-				final War3ID code = ability.getCode();
-				if ((code == null) || !heroData.getSkillsAvailable().contains(code)) {
-					continue;
-				}
-				final int level = ((CLevelingAbility) ability).getLevel();
-				if (level > 0) {
-					learned.add(new StoredAbilityData(code, level));
-				}
-			}
-			if (!learned.isEmpty()) {
-				abilities = learned.toArray(new StoredAbilityData[0]);
-			}
-		}
-		StoredItemData[] items = null;
-		final CAbilityInventory inventoryData = unit.getInventoryData();
-		if (inventoryData != null) {
-			items = new StoredItemData[inventoryData.getItemCapacity()];
-			for (int slot = 0; slot < inventoryData.getItemCapacity(); slot++) {
-				final CItem item = inventoryData.getItemInSlot(slot);
-				if (item != null) {
-					items[slot] = new StoredItemData(item.getTypeId(), item.getCharges());
-				}
-			}
-		}
-		return new StoredUnitData(unit.getTypeId(), xp, skillPoints, strBase, agiBase, intBase,
-				strBonus, agiBonus, intBonus, properName, items, abilities);
+		return CGameSave.snapshotUnit(unit);
 	}
 
 	/**
@@ -13537,7 +13508,9 @@ public class Jass2 {
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetGameDifficulty",
 				(arguments, globalScope, triggerScope) -> {
-					return new HandleJassValue(gamedifficultyType, mapConfig.getGameDifficulty());
+					final CMapDifficulty difficulty = mapConfig.getGameDifficulty();
+					return new HandleJassValue(gamedifficultyType,
+							difficulty != null ? difficulty : CMapDifficulty.NORMAL);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetResourceDensity",
 				(arguments, globalScope, triggerScope) -> {

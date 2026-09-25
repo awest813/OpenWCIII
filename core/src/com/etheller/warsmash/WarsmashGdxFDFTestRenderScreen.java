@@ -313,13 +313,19 @@ public class WarsmashGdxFDFTestRenderScreen implements InputProcessor, Screen, S
 		}
 		else {
 			singleModelScene(this.scene, path, "birth");
-			WarsmashGdxFDFTestRenderScreen.this.modelCamera = WarsmashGdxFDFTestRenderScreen.this.mainModel.cameras
-					.get(0);
-			// this hack is because we only have the queued animation system in RenderWidget
-			// which is stupid and back and needs to get moved to the model instance
-			// itself... our model instance class is a
-			// hacky replica of a model viewer tool with a bunch of irrelevant loop type
-			// settings instead of what it should be
+			if ((WarsmashGdxFDFTestRenderScreen.this.mainModel != null)
+					&& !WarsmashGdxFDFTestRenderScreen.this.mainModel.cameras.isEmpty()) {
+				WarsmashGdxFDFTestRenderScreen.this.modelCamera = WarsmashGdxFDFTestRenderScreen.this.mainModel.cameras
+						.get(0);
+			}
+			else {
+				WarsmashGdxFDFTestRenderScreen.this.modelCamera = null;
+				if (WarsmashGdxFDFTestRenderScreen.this.mainInstance != null) {
+					WarsmashGdxFDFTestRenderScreen.this.mainInstance.detach();
+					WarsmashGdxFDFTestRenderScreen.this.mainInstance.setLocation(0, 0, 1024);
+					WarsmashGdxFDFTestRenderScreen.this.mainInstance.setScene(WarsmashGdxFDFTestRenderScreen.this.uiScene);
+				}
+			}
 			this.hasPlayedStandHack = false;
 		}
 		if (fogSettings != null) {
@@ -676,8 +682,11 @@ public class WarsmashGdxFDFTestRenderScreen implements InputProcessor, Screen, S
 				this.target.add(WarsmashGdxFDFTestRenderScreen.this.cameraTargetTemp[0],
 						WarsmashGdxFDFTestRenderScreen.this.cameraTargetTemp[1],
 						WarsmashGdxFDFTestRenderScreen.this.cameraTargetTemp[2]);
-				this.camera.perspective(WarsmashGdxFDFTestRenderScreen.this.modelCamera.fieldOfView * 0.6f,
-						this.camera.rect.width / this.camera.rect.height,
+				final float aspect = (this.camera.rect.height > 0)
+						? (this.camera.rect.width / this.camera.rect.height)
+						: (4f / 3f);
+				final float fovY = (float) (2.0 * Math.atan(Math.tan(WarsmashGdxFDFTestRenderScreen.this.modelCamera.fieldOfView / 2.0) / aspect));
+				this.camera.perspective(fovY, aspect,
 						WarsmashGdxFDFTestRenderScreen.this.modelCamera.nearClippingPlane,
 						WarsmashGdxFDFTestRenderScreen.this.modelCamera.farClippingPlane);
 			}

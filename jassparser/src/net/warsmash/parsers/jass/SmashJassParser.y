@@ -428,6 +428,11 @@ negatableExpression:
 		$$ = new NegateJassExpression($2);
 	}
 	|
+	PLUS negatableExpression // Unary plus preserves the numeric expression.
+	{
+		$$ = $2;
+	}
+	|
 	METHOD baseExpression DOT ID //MethodReferenceExpression
 	{
 		$$ = new MethodReferenceJassExpression($2, $4);

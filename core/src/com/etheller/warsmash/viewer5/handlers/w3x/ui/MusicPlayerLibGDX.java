@@ -21,6 +21,8 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 	private String defaultMusicField;
 	private boolean defaultMusicRandom;
 	private int defaultMusicIndex;
+	private float fadeDuration;
+	private float fadeElapsed;
 
 	public MusicPlayerLibGDX(DataSource dataSource, DataTable musicSLK) {
 		this.dataSource = dataSource;
@@ -29,7 +31,15 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 
 	@Override
 	public void update() {
+		update(Gdx.graphics == null ? 0f : Gdx.graphics.getDeltaTime());
+	}
+
+	void update(final float deltaTime) {
 		if (this.currentMusicActive) {
+			if (this.fadeElapsed < this.fadeDuration) {
+				this.fadeElapsed = Math.min(this.fadeDuration, this.fadeElapsed + Math.max(0f, deltaTime));
+				applyVolume();
+			}
 			if (this.currentMusics == null) {
 				playDefaultMusic();
 			}
@@ -61,19 +71,24 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 
 	@Override
 	public void stopMusic() {
+		this.currentMusicActive = false;
 		if (this.currentMusics != null) {
 			for (final Music music : this.currentMusics) {
 				if (music != null) {
 					music.pause();
 				}
 			}
-			this.currentMusicActive = false;
 		}
 	}
 
 	@Override
 	public void setVolume(int volume) {
-		final float volumeFloat = volume / 127f;
+		this.volume = Math.max(0, Math.min(127, volume)) / 127f;
+		applyVolume();
+	}
+
+	private void applyVolume() {
+		final float volumeFloat = this.volume * (this.fadeDuration > 0f ? this.fadeElapsed / this.fadeDuration : 1f);
 		if (this.currentMusics != null) {
 			for (final Music music : this.currentMusics) {
 				if (music != null) {
@@ -81,12 +96,14 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 				}
 			}
 		}
-		this.volume = volumeFloat;
 	}
 
 	@Override
 	public void resumeMusic() {
 		this.currentMusicActive = true;
+		if (this.currentMusics != null) {
+			this.currentMusics[this.currentMusicIndex].play();
+		}
 	}
 
 	@Override
@@ -105,10 +122,17 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 	@Override
 	public Music playMusicEx(String musicField, boolean random, int index, int fromMSecs, int fadeInMSecs) {
 		stopMusic();
-		if (musicField == null) {
+		if (this.currentMusics != null) {
+			for (final Music music : this.currentMusics) {
+				music.dispose();
+			}
+			this.currentMusics = null;
+		}
+		if ((musicField == null) || musicField.trim().isEmpty()) {
 			return null;
 		}
-		this.currentMusicActive = true;
+		this.fadeDuration = Math.max(0, fadeInMSecs) / GAME_MSECS_DIVISOR;
+		this.fadeElapsed = 0f;
 
 		final String[] semicolonMusics = musicField.split(";");
 		final List<String> musicPaths = new ArrayList<>();
@@ -120,7 +144,9 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 			}
 			final String[] moreSplitMusics = musicPath.split(",");
 			for (final String finalSplitPath : moreSplitMusics) {
-				musicPaths.add(finalSplitPath);
+				if (!finalSplitPath.trim().isEmpty()) {
+					musicPaths.add(finalSplitPath.trim());
+				}
 			}
 		}
 		final String[] musics = musicPaths.toArray(new String[musicPaths.size()]);
@@ -130,7 +156,7 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 		for (int i = 0; i < musics.length; i++) {
 			if (this.dataSource.has(musics[i])) {
 				final Music newMusic = Gdx.audio.newMusic(new DataSourceFileHandle(this.dataSource, musics[i]));
-				newMusic.setVolume(this.volume);
+				newMusic.setVolume(this.fadeDuration > 0f ? 0f : this.volume);
 				this.currentMusics[i] = newMusic;
 				validMusicCount++;
 			}
@@ -145,14 +171,20 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 			}
 			this.currentMusics = fixedList;
 		}
+		if (validMusicCount == 0) {
+			this.currentMusics = null;
+			return null;
+		}
+		index = Math.floorMod(index, validMusicCount);
 		if (random) {
 			index = (int) (Math.random() * this.currentMusics.length);
 		}
 		this.currentMusicIndex = index;
 		this.currentMusicRandomizeIndex = random;
+		this.currentMusicActive = true;
 		if (this.currentMusics[index] != null) {
 			this.currentMusics[index].play();
-			if (fromMSecs != 0) {
+			if (fromMSecs > 0) {
 				this.currentMusics[index].setPosition(fromMSecs / GAME_MSECS_DIVISOR);
 			}
 			return this.currentMusics[index];

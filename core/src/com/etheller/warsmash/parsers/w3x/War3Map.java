@@ -33,7 +33,7 @@ import mpq.MPQException;
 /**
  * Warcraft 3 map (W3X and W3M).
  */
-public class War3Map implements DataSource {
+public class War3Map implements DataSource, AutoCloseable {
 
 	private CompoundDataSource baseDataSource;
 	private DataSource dataSource;
@@ -190,7 +190,8 @@ public class War3Map implements DataSource {
 
 	@Override
 	public void close() throws IOException {
-		this.dataSource.close();
+		// The game archives belong to the caller and are reused by later chapters.
+		this.internalMpqContentsDataSource.close();
 	}
 
 	public DataSource getCompoundDataSource() {

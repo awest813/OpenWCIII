@@ -78,6 +78,7 @@ import com.etheller.warsmash.viewer5.Scene;
 import com.etheller.warsmash.viewer5.ViewerTextureRenderable;
 import com.etheller.warsmash.viewer5.gl.Extensions;
 import com.etheller.warsmash.viewer5.handlers.mdx.Attachment;
+import com.etheller.warsmash.viewer5.handlers.mdx.Camera;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxComplexInstance;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxModel;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxNode;
@@ -95,6 +96,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.UnitSound;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.CameraPreset;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.CameraRates;
+import com.etheller.warsmash.viewer5.handlers.w3x.camera.CinematicCameraPlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.GameCameraManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.camera.PortraitCameraManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid;
@@ -127,6 +129,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUpgradeType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUpgradeType.UpgradeLevel;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CinematicPresentationState;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.ThematicMusicState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidgetFilterFunction;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbilityAttack;
@@ -155,6 +159,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CPri
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilityNeutralBuilding;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellItems;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellUnits;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.jass.CAbilityJass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityGoldMinable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityOverlayedMine;
@@ -543,8 +548,20 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	private SimpleFrame smashCommandButtons;
 	private boolean userControlEnabled = true;
 	private boolean subtitleDisplayOverride;
+	private boolean cinematicSubtitlesEnabled = true;
 	private UIFrame cinematicScenePanel;
 	private CinematicPortrait cinematicPortrait;
+	private final CinematicPresentationState cinematicPresentation = new CinematicPresentationState();
+	private final ThematicMusicState thematicMusic = new ThematicMusicState();
+	private Camera cinematicCamera;
+	private MdxComplexInstance cinematicCameraInstance;
+	private final float[] cinematicCameraPosOffset = new float[3];
+	private final float[] cinematicCameraTargetOffset = new float[3];
+	private final float[] cinematicCameraPos = new float[3];
+	private final float[] cinematicCameraTarget = new float[3];
+	private final Vector3 cinematicCameraPosVec = new Vector3();
+	private final Vector3 cinematicCameraTargetVec = new Vector3();
+	private static final Vector3 CINEMATIC_WORLD_UP = new Vector3(0, 0, 1);
 
 	public MeleeUI(final DataSource dataSource, final ExtendViewport uiViewport, final Scene uiScene,
 			final Scene portraitScene, final CameraPreset[] cameraPresets, final CameraRates cameraRates,
@@ -1925,8 +1942,15 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		final float groundHeight = Math.max(
 				this.war3MapViewer.terrain.getGroundHeight(this.cameraManager.target.x, this.cameraManager.target.y),
 				this.war3MapViewer.terrain.getWaterHeight(this.cameraManager.target.x, this.cameraManager.target.y));
-		this.cameraManager.updateTargetZ(groundHeight);
-		this.cameraManager.updateCamera();
+		if (this.cinematicCameraInstance != null) {
+			// An MDX camera track owns the camera; suppress RTS motion so the
+			// track and user input do not fight. ESC ends the track (see keyDown).
+			updateCinematicCamera();
+		}
+		else {
+			this.cameraManager.updateTargetZ(groundHeight);
+			this.cameraManager.updateCamera();
+		}
 		if (this.allowDrag && (this.draggingMouseButton == Input.Buttons.MIDDLE)) {
 			// in case camera updates while dragging mouse, update where we think mouse is
 			// in 3d
@@ -2512,6 +2536,12 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 
 		@Override
 		public Void accept(final CAbilitySellItems ability) {
+			handleTargetCursor(ability);
+			return null;
+		}
+
+		@Override
+		public Void accept(final CAbilitySellUnits ability) {
 			handleTargetCursor(ability);
 			return null;
 		}
@@ -4145,8 +4175,19 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 
 	@Override
 	public void upkeepChanged() {
-		this.rootFrame.setText(this.resourceBarUpkeepText, "Upkeep NYI");
-		this.resourceBarUpkeepText.setColor(Color.CYAN);
+		final int goldUpkeepRate = this.localPlayer.getGoldUpkeepRate();
+		if (goldUpkeepRate >= 60) {
+			this.rootFrame.setText(this.resourceBarUpkeepText, "High Upkeep");
+			this.resourceBarUpkeepText.setColor(Color.RED);
+		}
+		else if (goldUpkeepRate >= 30) {
+			this.rootFrame.setText(this.resourceBarUpkeepText, "Low Upkeep");
+			this.resourceBarUpkeepText.setColor(Color.YELLOW);
+		}
+		else {
+			this.rootFrame.setText(this.resourceBarUpkeepText, "No Upkeep");
+			this.resourceBarUpkeepText.setColor(Color.GREEN);
+		}
 	}
 
 	@Override
@@ -4251,6 +4292,10 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			}
 		}
 		if (keycode == Input.Keys.ESCAPE) {
+			if (this.cinematicCameraInstance != null) {
+				endCinematicCamera();
+				this.cameraManager.stopCamera();
+			}
 			this.unitOrderListener.issueGuiPlayerEvent(JassGameEventsWar3.EVENT_PLAYER_END_CINEMATIC.getEventId());
 			return true;
 		}
@@ -5452,6 +5497,44 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	}
 
 	@Override
+	public void playThematicMusic(final String musicField, final boolean random, final int index) {
+		playThematicMusicEx(musicField, random, index, 0, 0);
+	}
+
+	@Override
+	public void playThematicMusicEx(final String musicField, final boolean random, final int index,
+			final int fromMSecs, final int fadeInMSecs) {
+		// Thematic music lives on its own layer above the map playlist; the map
+		// default is left intact so EndThematicMusic can drop back to it. Fade
+		// ramps are recorded but still applied as immediate transitions.
+		this.thematicMusic.playThematic(musicField, fromMSecs, fadeInMSecs);
+		this.musicPlayer.playMusicEx(musicField, random, index, fromMSecs, fadeInMSecs);
+	}
+
+	@Override
+	public void endThematicMusic() {
+		this.thematicMusic.endThematic();
+		this.musicPlayer.stopMusic();
+		this.musicPlayer.playDefaultMusic();
+	}
+
+	@Override
+	public void setThematicMusicPlayPosition(final int millisecs) {
+		this.thematicMusic.setPlayPosition(millisecs);
+		this.musicPlayer.setMusicPosition(millisecs);
+	}
+
+	@Override
+	public String getThematicMusicTrack() {
+		return this.thematicMusic.getTrack();
+	}
+
+	@Override
+	public boolean isThematicMusicPlaying() {
+		return this.thematicMusic.isPlaying();
+	}
+
+	@Override
 	public void gameClosed() {
 		this.musicPlayer.stopMusic();
 	}
@@ -5648,7 +5731,12 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		final RenderUnitType unitTypeData = this.war3MapViewer.getUnitTypeData(new War3ID(portraitUnitId));
 		if (this.cinematicPanel.isVisible()) {
 			this.rootFrame.setText(this.cinematicSpeakerText, speakerTitle);
-			this.rootFrame.setText(this.cinematicDialogueText, text);
+			if (this.subtitleDisplayOverride || this.cinematicSubtitlesEnabled) {
+				this.rootFrame.setText(this.cinematicDialogueText, text);
+			}
+			else {
+				this.rootFrame.setText(this.cinematicDialogueText, "");
+			}
 			this.cinematicPortrait.setCinematicTalkingHead(
 					unitTypeData == null ? null : unitTypeData.getPortraitModel(), color.getHandleId(),
 					unitTypeData == null ? SequenceUtils.EMPTY : unitTypeData.getRequiredAnimationNames(),
@@ -5668,7 +5756,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 					this.portrait.setNamedAnimation(animationName);
 				}
 			}
-			if (this.subtitleDisplayOverride || true) {
+			if (this.subtitleDisplayOverride || this.cinematicSubtitlesEnabled) {
 				showGameMessage("|Cffffcc00" + speakerTitle + "|r: " + text, sceneDuration);
 			}
 		}
@@ -5683,6 +5771,16 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	@Override
 	public void forceCinematicSubtitles(boolean value) {
 		this.subtitleDisplayOverride = value;
+	}
+
+	@Override
+	public void setCinematicSubtitlesEnabled(final boolean enabled) {
+		this.cinematicSubtitlesEnabled = enabled;
+	}
+
+	@Override
+	public boolean isCinematicSubtitlesEnabled() {
+		return this.cinematicSubtitlesEnabled;
 	}
 
 	@Override
@@ -6043,6 +6141,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		this.moviePlaying = false;
 		this.movieSleepingThread = null;
 		this.movieSleepTimer = null;
+		this.cinematicPresentation.endModelCinematic();
 		stopMovieSession();
 		setCinematicAudio(false);
 		if (this.cinematicSpeakerText != null) {
@@ -6152,6 +6251,158 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	@Override
 	public float getMovieDurationSeconds() {
 		return (this.movieSession != null) ? (float) this.movieSession.getDurationSeconds() : 0f;
+	}
+
+	@Override
+	public void setSkyModel(final String modelPath) {
+		this.cinematicPresentation.setSkyModel(modelPath);
+		try {
+			if (this.war3MapViewer != null) {
+				this.war3MapViewer.setSkyModel(this.cinematicPresentation.getSkyModel());
+			}
+		}
+		catch (final Exception e) {
+			// A sky failure must never break the mission script.
+			System.err.println("SetSkyModel: viewer swap failed: " + e.getMessage());
+		}
+	}
+
+	@Override
+	public String getSkyModel() {
+		return this.cinematicPresentation.getSkyModel();
+	}
+
+	@Override
+	public void setCinematicCameraModel(final String cameraModelFile) {
+		this.cinematicPresentation.setCinematicCamera(cameraModelFile);
+		endCinematicCamera();
+		final String tracked = this.cinematicPresentation.getCinematicCamera();
+		if (tracked.isEmpty() || (this.war3MapViewer == null) || (this.dataSource == null)) {
+			return;
+		}
+		try {
+			final String mdxPath = War3MapViewer.mdx(tracked);
+			final String mdlPath = War3MapViewer.mdl(mdxPath);
+			if (!this.dataSource.has(mdxPath) && !this.dataSource.has(mdlPath)) {
+				System.out.println("SetCinematicCamera: model not found in data sources: " + tracked);
+				return;
+			}
+			final MdxModel model = this.war3MapViewer.loadModelMdx(tracked);
+			if ((model == null) || model.getCameras().isEmpty()) {
+				System.out.println("SetCinematicCamera: no camera track in: " + tracked);
+				return;
+			}
+			final MdxComplexInstance instance = (MdxComplexInstance) model.addInstance();
+			instance.setSequenceLoopMode(SequenceLoopMode.ALWAYS_LOOP);
+			instance.setSequence(0);
+			instance.setLocation(0, 0, 0);
+			instance.setScene(this.war3MapViewer.worldScene);
+			this.cinematicCamera = model.getCameras().get(0);
+			this.cinematicCameraInstance = instance;
+			System.out.println("SetCinematicCamera: driving '" + tracked + "' camera '"
+					+ this.cinematicCamera.name + "'");
+		}
+		catch (final Exception e) {
+			// A camera failure must never break the mission script.
+			System.err.println("SetCinematicCamera: failed for '" + tracked + "': " + e.getMessage());
+			endCinematicCamera();
+		}
+	}
+
+	@Override
+	public String getCinematicCameraModel() {
+		return this.cinematicPresentation.getCinematicCamera();
+	}
+
+	@Override
+	public boolean isCinematicCameraPlaying() {
+		return this.cinematicCameraInstance != null;
+	}
+
+	@Override
+	public void endCinematicCamera() {
+		if (this.cinematicCameraInstance != null) {
+			this.cinematicCameraInstance.detach();
+			this.cinematicCameraInstance = null;
+		}
+		this.cinematicCamera = null;
+	}
+
+	/**
+	 * Drives the world camera from the attached MDX camera track. Call instead of
+	 * the normal RTS camera update while a cinematic camera is active.
+	 */
+	private void updateCinematicCamera() {
+		final MdxComplexInstance instance = this.cinematicCameraInstance;
+		final Camera track = this.cinematicCamera;
+		if ((instance == null) || (track == null) || (this.war3MapViewer == null)) {
+			return;
+		}
+		track.getPositionTranslation(this.cinematicCameraPosOffset, instance.sequence, instance.frame,
+				instance.counter);
+		track.getTargetTranslation(this.cinematicCameraTargetOffset, instance.sequence, instance.frame,
+				instance.counter);
+		CinematicCameraPlayer.evaluateTrack(track.position, track.targetPosition, this.cinematicCameraPosOffset,
+				this.cinematicCameraTargetOffset, this.cinematicCameraPos, this.cinematicCameraTarget);
+		this.cinematicCameraPosVec.set(this.cinematicCameraPos[0], this.cinematicCameraPos[1],
+				this.cinematicCameraPos[2]);
+		this.cinematicCameraTargetVec.set(this.cinematicCameraTarget[0], this.cinematicCameraTarget[1],
+				this.cinematicCameraTarget[2]);
+		final com.etheller.warsmash.viewer5.Camera camera = this.war3MapViewer.worldScene.camera;
+		camera.perspective(track.fieldOfView, camera.getAspect(), track.nearClippingPlane,
+				track.farClippingPlane);
+		camera.moveToAndFace(this.cinematicCameraPosVec, this.cinematicCameraTargetVec, CINEMATIC_WORLD_UP);
+	}
+
+	@Override
+	public void playModelCinematic(final String modelPath) {
+		this.cinematicPresentation.startModelCinematic(modelPath);
+		final String tracked = this.cinematicPresentation.getModelCinematic();
+		if (tracked.isEmpty()) {
+			return;
+		}
+		this.moviePlaying = true;
+		this.movieTitle = tracked;
+		showInterface(false, 0f);
+		enableUserControl(false);
+		if (this.cinematicSpeakerText != null) {
+			this.rootFrame.setText(this.cinematicSpeakerText, "Model Cinematic");
+		}
+		if (this.cinematicDialogueText != null) {
+			final String skipHint = this.cinematicSkipAllowed ? "\n(Press ESC to skip)" : "";
+			this.rootFrame.setText(this.cinematicDialogueText, "Playing: " + tracked + skipHint);
+		}
+		System.out.println("PlayModelCinematic: tracking '" + tracked + "' (in-map playback pending)");
+	}
+
+	@Override
+	public String getModelCinematic() {
+		return this.cinematicPresentation.getModelCinematic();
+	}
+
+	@Override
+	public boolean isModelCinematicPlaying() {
+		return this.cinematicPresentation.isModelCinematicPlaying();
+	}
+
+	@Override
+	public void setIntroShotText(final String text) {
+		this.cinematicPresentation.setIntroShotText(text);
+	}
+
+	@Override
+	public String getIntroShotText() {
+		return this.cinematicPresentation.getIntroShotText();
+	}
+
+	@Override
+	public void setIntroShotModel(final String modelPath) {
+		this.cinematicPresentation.setIntroShotModel(modelPath);
+	}
+
+	@Override
+	public String getIntroShotModel() {
+		return this.cinematicPresentation.getIntroShotModel();
 	}
 
 	@Override
@@ -6520,6 +6771,14 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 					save.lumber[i] = p.getLumber();
 				}
 			}
+			save.timeOfDay = this.war3MapViewer.simulation.getGameTimeOfDay();
+			save.timeOfDayScale = this.war3MapViewer.simulation.getTimeOfDayScale();
+			if (getCameraManager() != null) {
+				save.cameraX = getCameraManager().target.x;
+				save.cameraY = getCameraManager().target.y;
+			}
+			final String currentMap = this.war3MapViewer.getCurrentMapPath();
+			save.savedMapPath = (currentMap != null) ? currentMap : "";
 			save.save(saveFile);
 			showGameMessage("Game saved: QuickSave", 3f);
 		}
@@ -6538,6 +6797,10 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 				showGameMessage("No QuickSave found", 3f);
 				return;
 			}
+			if (!save.belongsToMap(this.war3MapViewer.getCurrentMapPath())) {
+				showGameMessage("This save belongs to another map. Use Load Saved from the main menu.", 5f);
+				return;
+			}
 			final GlobalScope scope = this.war3MapViewer.simulation.getGlobalScope();
 			if (scope != null) {
 				save.restoreGlobals(scope);
@@ -6548,6 +6811,15 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 					p.setGold(save.gold[i]);
 					p.setLumber(save.lumber[i]);
 				}
+			}
+			if (!Float.isNaN(save.timeOfDay)) {
+				this.war3MapViewer.simulation.setGameTimeOfDay(save.timeOfDay);
+			}
+			if (!Float.isNaN(save.timeOfDayScale)) {
+				this.war3MapViewer.simulation.setTimeOfDayScale(save.timeOfDayScale);
+			}
+			if (!Float.isNaN(save.cameraX) && !Float.isNaN(save.cameraY) && (getCameraManager() != null)) {
+				getCameraManager().setTarget(save.cameraX, save.cameraY);
 			}
 			showGameMessage("Game loaded: QuickSave", 3f);
 		}

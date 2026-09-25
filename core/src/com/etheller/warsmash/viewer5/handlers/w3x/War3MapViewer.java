@@ -57,6 +57,7 @@ import com.etheller.warsmash.parsers.w3x.w3e.War3MapW3e;
 import com.etheller.warsmash.parsers.w3x.w3i.War3MapW3i;
 import com.etheller.warsmash.parsers.w3x.w3i.War3MapW3iFlags;
 import com.etheller.warsmash.parsers.w3x.wpm.War3MapWpm;
+import com.etheller.warsmash.viewer5.handlers.w3x.environment.WeatherEffect;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.units.GameObject;
@@ -240,6 +241,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	public MdxComplexInstance dncUnit;
 	public MdxComplexInstance dncTerrain;
 	public MdxComplexInstance dncTarget;
+	private MdxComplexInstance skyInstance;
 	public CSimulation simulation;
 	private float updateTime = 0;
 	private final SimulationBudgetTracker simulationBudgetTracker = new SimulationBudgetTracker();
@@ -271,6 +273,22 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	private final SettableCommandErrorListener commandErrorListener;
 
 	public final List<TextTag> textTags = new ArrayList<>();
+	public final List<WeatherEffect> weatherEffects = new ArrayList<>();
+
+	public WeatherEffect addWeatherEffect(final Rectangle where, final War3ID effectId) {
+		final WeatherEffect effect = new WeatherEffect(
+				this.simulation != null ? this.simulation.getHandleIdAllocator().createId() : this.weatherEffects.size() + 1,
+				where, effectId);
+		this.weatherEffects.add(effect);
+		return effect;
+	}
+
+	public void removeWeatherEffect(final WeatherEffect effect) {
+		if (effect != null) {
+			effect.setEnabled(false);
+			this.weatherEffects.remove(effect);
+		}
+	}
 
 	private final War3MapConfig mapConfig;
 
@@ -1343,6 +1361,11 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 						this.simulation.getGameTimeOfDay() / this.simulation.getGameplayConstants().getGameDayHours());
 				this.dncTarget.update(rawDeltaTime, null);
 			}
+			if (this.skyInstance != null) {
+				// Sky domes are authored around the origin; keep the dome centered
+				// on the game camera so the terrain never leaves it behind.
+				this.skyInstance.setLocation(this.worldScene.camera.location);
+			}
 		}
 	}
 
@@ -1830,6 +1853,57 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			this.size = size;
 			this.texture = texture;
 			this.textureDotted = textureDotted;
+		}
+	}
+
+	/**
+	 * Swaps the scene sky mesh (JASS {@code SetSkyModel}). The sky instance is
+	 * parented to the world scene and follows the game camera every frame (see
+	 * {@link #update()}). An empty path clears the sky; a path that resolves to
+	 * no loadable model keeps the previous sky so a bad script call cannot leave
+	 * the mission without one.
+	 */
+	public void setSkyModel(final String modelPath) {
+		final String normalized = (modelPath == null) ? "" : modelPath.replace('/', '\\');
+		if (normalized.isEmpty()) {
+			detachSky();
+			return;
+		}
+		final String mdxPath = mdx(normalized);
+		final String mdlPath = mdl(mdxPath);
+		if (!this.dataSource.has(mdxPath) && !this.dataSource.has(mdlPath)) {
+			System.out.println("SetSkyModel: model not found in data sources: " + normalized);
+			return;
+		}
+		try {
+			final MdxModel skyModel = loadModelMdx(normalized);
+			if (skyModel == null) {
+				System.out.println("SetSkyModel: loader returned null for: " + normalized);
+				return;
+			}
+			final MdxComplexInstance instance = (MdxComplexInstance) skyModel.addInstance();
+			if (!skyModel.sequences.isEmpty()) {
+				standOnRepeat(instance);
+			}
+			instance.setLocation(this.worldScene.camera.location);
+			detachSky();
+			instance.setScene(this.worldScene);
+			this.skyInstance = instance;
+			System.out.println("SetSkyModel: showing '" + normalized + "'");
+		}
+		catch (final Exception e) {
+			System.err.println("SetSkyModel: failed to load '" + normalized + "': " + e.getMessage());
+		}
+	}
+
+	public MdxComplexInstance getSkyInstance() {
+		return this.skyInstance;
+	}
+
+	private void detachSky() {
+		if (this.skyInstance != null) {
+			this.skyInstance.detach();
+			this.skyInstance = null;
 		}
 	}
 

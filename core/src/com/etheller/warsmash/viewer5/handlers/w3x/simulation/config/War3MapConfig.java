@@ -23,7 +23,7 @@ public class War3MapConfig implements CPlayerAPI {
 	private final EnumMap<CMapFlag, Boolean> mapFlagToEnabled = new EnumMap<>(CMapFlag.class);
 	private CMapPlacement placement;
 	private CGameSpeed gameSpeed;
-	private CMapDifficulty gameDifficulty;
+	private CMapDifficulty gameDifficulty = CMapDifficulty.NORMAL;
 	private CMapDensity resourceDensity;
 	private CMapDensity creatureDensity;
 	private CGameType gameTypeSelected;

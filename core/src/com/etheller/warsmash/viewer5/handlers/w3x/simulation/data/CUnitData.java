@@ -41,6 +41,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CAbi
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CPrimaryAttribute;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellItems;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellUnits;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityQueue;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityRally;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityReviveHero;
@@ -170,6 +171,7 @@ public class CUnitData {
 	private static final String UPGRADES_TO = "Upgrade"; // replaced from 'uupt'
 	private static final String ITEMS_SOLD = "Sellitems"; // replaced from 'usei'
 	private static final String ITEMS_MADE = "Makeitems"; // replaced from 'umki'
+	private static final String UNITS_SOLD = "Sellunits"; // replaced from 'useu'
 	private static final String REVIVES_HEROES = "Revive"; // replaced from 'urev'
 	private static final String UNIT_RACE = "race"; // replaced from 'urac'
 
@@ -335,6 +337,7 @@ public class CUnitData {
 		final List<War3ID> upgradesTo = unitTypeInstance.getUpgradesTo();
 		final List<War3ID> itemsSold = unitTypeInstance.getItemsSold();
 		final List<War3ID> itemsMade = unitTypeInstance.getItemsMade();
+		final List<War3ID> unitsSold = unitTypeInstance.getUnitsSold();
 		if (!unitsTrained.isEmpty() || !researchesAvailable.isEmpty()) {
 			unit.add(simulation, new CAbilityQueue(handleIdAllocator.createId(), unitsTrained, researchesAvailable));
 		}
@@ -347,10 +350,13 @@ public class CUnitData {
 		if (!itemsMade.isEmpty()) {
 			unit.add(simulation, new CAbilitySellItems(handleIdAllocator.createId(), itemsMade));
 		}
+		if (!unitsSold.isEmpty()) {
+			unit.add(simulation, new CAbilitySellUnits(handleIdAllocator.createId(), unitsSold));
+		}
 		if (unitTypeInstance.isRevivesHeroes()) {
 			unit.add(simulation, new CAbilityReviveHero(handleIdAllocator.createId()));
 		}
-		if (!unitsTrained.isEmpty() || unitTypeInstance.isRevivesHeroes()) {
+		if (!unitsTrained.isEmpty() || unitTypeInstance.isRevivesHeroes() || !unitsSold.isEmpty()) {
 			unit.add(simulation, new CAbilityRally(handleIdAllocator.createId()));
 		}
 		if (unitTypeInstance.isHero()) {
@@ -439,6 +445,7 @@ public class CUnitData {
 		final List<War3ID> upgradesTo = unitTypeInstance.getUpgradesTo();
 		final List<War3ID> itemsSold = unitTypeInstance.getItemsSold();
 		final List<War3ID> itemsMade = unitTypeInstance.getItemsMade();
+		final List<War3ID> unitsSold = unitTypeInstance.getUnitsSold();
 		if (!unitsTrained.isEmpty() || !researchesAvailable.isEmpty()) {
 			unit.add(simulation, new CAbilityQueue(handleIdAllocator.createId(), unitsTrained, researchesAvailable));
 		}
@@ -451,10 +458,13 @@ public class CUnitData {
 		if (!itemsMade.isEmpty()) {
 			unit.add(simulation, new CAbilitySellItems(handleIdAllocator.createId(), itemsMade));
 		}
+		if (!unitsSold.isEmpty()) {
+			unit.add(simulation, new CAbilitySellUnits(handleIdAllocator.createId(), unitsSold));
+		}
 		if (unitTypeInstance.isRevivesHeroes()) {
 			unit.add(simulation, new CAbilityReviveHero(handleIdAllocator.createId()));
 		}
-		if (!unitsTrained.isEmpty() || unitTypeInstance.isRevivesHeroes()) {
+		if (!unitsTrained.isEmpty() || unitTypeInstance.isRevivesHeroes() || !unitsSold.isEmpty()) {
 			unit.add(simulation, new CAbilityRally(handleIdAllocator.createId()));
 		}
 		if (unitTypeInstance.isHero()) {
@@ -740,6 +750,7 @@ public class CUnitData {
 
 			final List<War3ID> itemsSold = parseIDList(unitType.getFieldAsList(ITEMS_SOLD));
 			final List<War3ID> itemsMade = parseIDList(unitType.getFieldAsList(ITEMS_MADE));
+			final List<War3ID> unitsSold = parseIDList(unitType.getFieldAsList(UNITS_SOLD));
 
 			final War3ID defaultAutocastAbilityId;
 			if ((defaultAutocastAbility != null) && !defaultAutocastAbility.isEmpty()
@@ -784,7 +795,7 @@ public class CUnitData {
 					movementType, moveHeight, collisionSize, classifications, attacks, attacksEnabled, armorType, raise,
 					decay, defenseType, impactZ, buildingPathingPixelMap, deathTime, targetedAs, acquisitionRange,
 					minimumAttackRange, structuresBuilt, unitsTrained, researchesAvailable, upgradesUsed,
-					upgradeClassToType, upgradesTo, itemsSold, itemsMade, unitRace, goldCost, lumberCost, foodUsed,
+					upgradeClassToType, upgradesTo, itemsSold, itemsMade, unitsSold, unitRace, goldCost, lumberCost, foodUsed,
 					foodMade, buildTime, goldRepairCost, lumberRepairCost, repairTime, preventedPathingTypes,
 					requiredPathingTypes, propWindow, turnRate, requirements, requirementTiers, unitLevel, hero,
 					strength, strPlus, agility, agiPlus, intelligence, intPlus, primaryAttribute, heroAbilityList,

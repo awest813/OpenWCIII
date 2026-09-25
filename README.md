@@ -1,36 +1,58 @@
 # OpenWCIII
 
-**A faithful open-source Warcraft III — with quality-of-life upgrades.**
+OpenWCIII is a community fork of Warsmash that reimplements the Warcraft III
+engine in Java. The goal is faithful Reign of Chaos (RoC) and The Frozen Throne
+(TFT) gameplay, followed by quality-of-life improvements.
 
-OpenWCIII is a community fork of [Warsmash](https://github.com/Retera/WarsmashModEngine):
-a free reimplementation of the Warcraft III engine. The mission is simple:
+**Development status: incomplete. Full single-player campaign parity is not
+verified.** Mission completion, enemy AI behavior, presentation, and saved-game
+resume still need substantial verification and implementation.
 
-1. **Faithful first** — classic RoC / TFT gameplay, campaigns, maps, and mods
-   should behave like retail Warcraft III wherever the engine claims support.
-2. **Open forever** — engine code you can study, fix, and extend; no black box.
-3. **QoL on top** — launcher profiles, diagnostics, modern OS/GPU support, and
-   ergonomics that do not rewrite the game’s identity.
+You need your own Warcraft III game data. This repository does not supply a
+Warcraft III installation.
 
-OpenWCIII ships **engine code only**. You must own Warcraft III and point the
-engine at your assets via `warsmash.ini`.
+## Verified status
 
----
+Latest local verification, September 24, 2026, used Windows, Java 17, Gradle 8.6,
+and a combined RoC/TFT MPQ asset set:
 
-## Why this exists
+| Check | Result | What it establishes |
+|---|---|---|
+| Core tests | 222 passed; 0 reported failures, errors, or skips | The assertions exercised by the local suite passed |
+| Campaign loading and idle simulation | 85/85 discovered maps; 300 ticks each | Object loading, checked AI script loading, and short simulation runs |
+| Focused hero carryover test | Passed with retail data | The tested hero retained stats, learned Holy Light, and equipment through a disk gamecache round trip |
 
-Warcraft III defined a generation of RTS and custom-map culture. Official
-clients and patches have splintered that ecosystem. OpenWCIII aims to keep
-classic WC3 playable and preservable: an open engine under community control,
-compatible with owned game data, and improved where fidelity is not at risk.
+The inventory includes interludes, credits, and bonus maps. This is **not 85
+completed missions**. The idle audit does not execute mission objectives, render
+the game, verify AI strategy, or measure memory leaks. Retail-dependent tests
+may skip or return early when local game data is unavailable.
 
-Upstream Warsmash framed this as “OpenMW for Warcraft III.” OpenWCIII keeps
-that compass and sharpens the product goal: **faithful WC3 first, then QoL**.
+The [campaign parity plan](docs/WC3_CAMPAIGN_PARITY_AUDIT.md) records evidence,
+known gaps, reproduction commands, and completion criteria. No overall
+“percent complete” figure is justified.
 
----
+## Current limitations
 
-## Quick Start
+- **Save/load is partial.** Gameplay restores primitive script globals/arrays,
+  resources, clock, and camera, but not a complete battlefield, script handles,
+  triggers, timers, or AI execution state.
+- **Progression is not verified end to end.** Menu availability and transition
+  code exist; resolving a next-map path does not prove victory, unlocks,
+  carryover, retry, and the next chapter work together.
+- **Gameplay coverage is incomplete.** The latest audit reports unsupported
+  upgrade effects and skipped legacy destructable modifications. Unimplemented
+  abilities can fall back to behaviorless placeholders.
+- **Presentation is partial.** Some panels are basic overlays; model cinematics
+  are not fully played. Movies require external ffmpeg. Some options persist
+  without affecting gameplay yet.
+- Custom campaign parsing exists, but a complete launch flow is not established.
+  Replay, LAN, multiplayer, and arbitrary custom-map parity are not certified by
+  the campaign checks.
 
-### 1) Clone and test
+## Build and run
+
+Use **JDK 17** with `JAVA_HOME` set. The wrapper specifies **Gradle 8.6** and
+needs network access to download Gradle and dependencies on a fresh checkout.
 
 ```bash
 git clone https://github.com/awest813/OpenWCIII.git
@@ -38,179 +60,85 @@ cd OpenWCIII
 ./gradlew :core:test
 ```
 
-### 2) Configure assets
+In Windows PowerShell, replace `./gradlew` with `.\gradlew.bat`.
 
-Edit `core/assets/warsmash.ini` and set `[DataSources]` to your Warcraft III
-installation. Patch-specific notes are in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
-and the INI section below.
+### Configure assets
 
-### 3) Launch
+Edit [core/assets/warsmash.ini](core/assets/warsmash.ini). Its checked-in paths
+are developer-specific and must be replaced. A combined classic RoC/TFT example:
 
-```bash
-./gradlew :desktop:runGame
+```ini
+[DataSources]
+Count=4
+Type00=MPQ
+Path00="C:/WC3Data/war3.mpq"
+Type01=MPQ
+Path01="C:/WC3Data/War3x.mpq"
+Type02=MPQ
+Path02="C:/WC3Data/War3xlocal.mpq"
+Type03=Folder
+Path03="C:/src/OpenWCIII/resources"
+
+[Emulator]
+MaxPlayers=16
+GameVersion=1
 ```
 
-Useful launcher flags:
+Use your actual paths. Update the existing sections and retain the other INI
+settings. Later sources take precedence. Add numbered Folder sources for maps
+or movies stored outside the archives, and update `Count`.
 
-- `-help` — show all options and exit
-- `-profile safe|balanced|high` — preset launch profile
-- `-window [width height]` — force windowed mode
-- `-fps <value>` — cap FPS (`0` uncapped)
-- `-vsync` / `-novsync`
-- `-msaa <samples>` (including `-msaa 0` to disable)
-- `-validate` — validate `warsmash.ini` data-source paths and exit
-- `-ini <path>` — use a custom config
-- `-loadfile <path>` — auto-load map or TOC
-- `-nolog` — keep logs on console
+The local checks used all three archives together. They do not establish
+RoC-only compatibility or certify every patch. [COMPATIBILITY.md](docs/COMPATIBILITY.md)
+contains layout notes and historical support claims; its hardware and patch
+matrix was not revalidated by this campaign audit.
 
----
+### Validate and launch
 
-## Mission pillars
+```bash
+./gradlew :desktop:runGame -Pargs="-validate"
+./gradlew :desktop:runGame -Pargs="-window 1280 720"
+```
 
-| Pillar | Meaning |
-|--------|---------|
-| **Fidelity** | Prefer retail WC3 behavior for maps, campaigns, JASS, and UI flows we claim to support. |
-| **Preservation** | Keep classic patches (especially 1.22–1.29 and well-tested 1.32.10) running on modern hardware. |
-| **QoL** | Better launch/debug UX, stability, and docs — without turning WC3 into a different game. |
-| **Openness** | Readable engine, documented tradeoffs, contributions welcome. |
+The task runs from `core/assets`. For IDE launches, use that working directory
+and the `com.etheller.warsmash.desktop.DesktopLauncher` main class.
 
-Detailed product/engineering roadmap: [docs/MISSION.md](docs/MISSION.md),
-[docs/ENGINE_MODERNIZATION_ANALYSIS.md](docs/ENGINE_MODERNIZATION_ANALYSIS.md).
+Use `-Pargs="-help"` for options. These include `-ini`, `-loadfile`,
+`-profile safe|balanced|high`, `-fps`, `-vsync` / `-novsync`, `-msaa`, and `-nolog`.
+Gradle forwards `-Pargs` by splitting on whitespace, so paths containing spaces
+are not reliably preserved by that mechanism.
 
-Campaign parity tracking (RoC + TFT): work continues toward full single-player
-campaign support; see `CHANGELOG.md` and open PRs for current spine progress.
+Validation checks data-source paths, not campaign completeness. The launch task
+currently ignores application exit codes; inspect its output after a failure.
 
----
+Movie decoding requires ffmpeg on `PATH`, through `WARSMASH_FFMPEG`, or via the
+`warsmash.ffmpeg` Java system property. Missing movies or decoder support use a
+fallback overlay, which does not count as movie parity.
 
-## Project Status & Roadmap
+## Development priorities
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| **A** | Diagnostics, launcher QoL, CI, docs | **Complete** |
-| **B** | Light-system leak fix, GLSL normalization, parser consolidation design | **Complete** |
-| **C** | Render hot-path allocation/frame-time reductions | **Complete** |
-| **D** | Parser unification, server hardening, async asset pipeline | **Complete** |
-| **E** | JASS/Lua coverage, campaign/map fidelity, multiplayer hardening | **In progress** |
-| **F** | Community modding layer (asset overrides, mod APIs/tooling) | Planned |
+1. Run actual mission scripts and track objectives and branches.
+2. Resolve missing upgrade, object-data, ability, and AI behavior.
+3. Implement complete, identity-preserving mission save/resume.
+4. Verify progression, difficulty, defeat/retry, and chapter carryover.
+5. Review rendered UI, cinematics, sound, and long-session stability.
 
-Also see [`CHANGELOG.md`](CHANGELOG.md) and [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+The [parity plan](docs/WC3_CAMPAIGN_PARITY_AUDIT.md) is the campaign status source.
+[MISSION.md](docs/MISSION.md) describes the goal;
+[ENGINE_MODERNIZATION_ANALYSIS.md](docs/ENGINE_MODERNIZATION_ANALYSIS.md) and
+[CHANGELOG.md](CHANGELOG.md) provide design and historical context. Historical
+phase labels are not current campaign certification.
 
-### Current focus
+Report revision, OS/Java details, asset version, map, difficulty, reproduction
+steps, and logs with issues. Include behavioral evidence with fixes and identify
+what remains untested. Do not contribute proprietary game archives.
 
-Phase E: deepen JASS/campaign fidelity and map-format coverage so RoC/TFT and
-classic custom maps feel like Warcraft III — then layer QoL without breaking
-that contract.
+## Attribution and license
 
----
+OpenWCIII builds on Warsmash by Retera and contributors, with components derived
+from projects including mdx-m3-viewer, HiveWE, and wc3data. Preserve source and
+dependency attribution notices.
 
-## Relationship to Warsmash
-
-OpenWCIII is based on Warsmash by Retera and contributors. Upstream history,
-engine architecture, and most setup instructions still apply. Prefer this
-repository for OpenWCIII-specific goals (faithful WC3 + QoL); credit and
-link back to [WarsmashModEngine](https://github.com/Retera/WarsmashModEngine)
-when discussing shared engine foundations.
-
----
-
-### In the News (Warsmash)
-
-Some social posts in 2022 claimed Warsmash was taken down by Activision
-Blizzard. That did **not** happen; confusion originated from a parody video
-takedown. Upstream Discord: https://discord.com/invite/ucjftZ7x7H
-
-## Gameplay Example (Warsmash)
-
-[![GAMEPLAY VIDEO](http://img.youtube.com/vi/EO-FDeQhFWc/0.jpg)](https://www.youtube.com/watch?v=EO-FDeQhFWc)
-
-For a concrete checklist of what remains before RoC/TFT campaigns match
-retail WC3, see [`docs/WC3_CAMPAIGN_PARITY_AUDIT.md`](docs/WC3_CAMPAIGN_PARITY_AUDIT.md).
-
----
-
-## Before you Begin: INI File
-
-Regardless of whether you edit from an IDE, run from the command line, or build
-a binary release, you need a correct `warsmash.ini`. Warsmash (and OpenWCIII)
-do not auto-detect a single “true” Warcraft III install: Activision’s patch
-history moved registry keys and archive layouts repeatedly (1.27 → Reforged).
-
-Put the user in control. The `[DataSources]` block describes a virtual file
-system of layered “places to look.” Once configured, the engine can play from
-any of the layouts below (all tested at some point upstream):
-
-- Warcraft III: Frozen Throne: Patch 1.22 - 1.28
-  - `[DataSources]` set to using MPQ files + the "resources" folder from this repo
-  - `[Emulator]` block required to have `MaxPlayers=16`
-- Warcraft III: Frozen Throne: Patch 1.29
-  - MPQ files + resources; remove `War3Patch.mpq` from the list
-  - `[Emulator]` `MaxPlayers=28`
-- Warcraft III: Frozen Throne: Patch 1.30
-  - Manually extracted CASC folders (folders named `.mpq` that are not MPQ archives)
-  - Still include the repo `resources` folder
-  - CASC parser targets 1.32.10+; 1.30 folder names are probed if present
-  - `MaxPlayers=28` — less recently tested
-- Warcraft III: Frozen Throne: Patch 1.31
-  - Extracted `.w3mod` folders + resources; `MaxPlayers=28` — less recently tested
-- Warcraft III: Frozen Throne: Patch 1.32
-  - CASC directly with INI “Prefixes” for `.w3mod`s; see `./core/assets/warsmashRF.ini` for HD
-  - Still include resources; best-tested modern layout is often 1.32.10
-  - Sound tables / FLAC / DDS caveats: see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
-- **Not** Patch 1.33+ model format — not parsed yet. Prefer an older asset set.
-
----
-
-## How to Build/Run the Code
-
-### From IntelliJ IDE
-1. Download IntelliJ
-2. Open this repo (`https://github.com/awest813/OpenWCIII.git`) via “Open from VCS”
-3. Edit `core/assets/warsmash.ini` so data sources locate your WC3 assets
-4. Run the Gradle target `runGame`
-5. Optional: `runGame -Pargs="-loadfile WorldEditTestMap.w3x -window"`
-6. Extra flags via `-Pargs`: `-windowed [width height]`, `-fps`, `-vsync`/`-novsync`, `-msaa`, `-ini`, `-help`
-
-### From the Eclipse IDE
-1. Install Eclipse + Marketplace plugin `ANTLR 4 IDE`
-2. `git clone https://github.com/awest813/OpenWCIII.git` outside Eclipse
-3. Use a separate Eclipse workspace folder
-4. `File > Import` → `Gradle > Existing Gradle Project` (prefer `Next` over early `Finish`)
-5. If Gradle import crashes on system Java, install Eclipse Temurin JDK 17 and retry
-6. Configure ANTLR preferences: disable listener, enable visitor, set Directory to `./build/generated-src`
-7. Gradle refresh all warsmash-* projects; trigger ANTLR regen in `fdfparser` and `jassparser` `antlr-src`
-8. Run `DesktopLauncher` with working directory `desktop/assets` (or equivalent)
-9. Point `warsmash.ini` at your WC3 install (Hive setup threads may help for older patches)
-
-### From GNU/Linux Command Line
-1. `git clone https://github.com/awest813/OpenWCIII.git`
-2. Prefer Eclipse Temurin JDK 17 over some distro OpenJDK 17 packages (LibGDX native issues)
-3. Edit `./core/assets/warsmash.ini` with forward-slash paths
-4. `JAVA_HOME=…/temurin-17 ./gradlew desktop:runGame`
-
-## How to Build Release Binary Version
-1. Clone the repo
-2. `./gradlew desktop:runtime`
-3. Use `./desktop/build/image` — add WC3 assets + a valid `warsmash.ini`
-4. Run `./bin/warsmash.bat` (Windows) or `./bin/warsmash.sh`
-5. Optional Windows EXE wrapper: [Warsmash Windows Wrapper](https://github.com/Retera/WarsmashWindowsWrapper/tree/experimental)
-
-## Background and History
-
-The engine runs on Java 17 (Java 8 syntax) with LibGDX and a ported MDX/W3X
-viewer stack. Major lineages include:
-
-- Relevant portions of [mdx-m3-viewer](https://github.com/flowtsohg/mdx-m3-viewer) for MDX/W3X display
-- Terrain systems descended from [HiveWE](https://github.com/stijnherfst/HiveWE), adapted for MDX rendering
-- Graphical enhancements from [wc3data](https://github.com/d07RiV/wc3data) (waves, shadows, UberSplats, etc.)
-- BLP/MPQ tooling from DrSuperGood; TGA pathing from OgerLord / Retera Model Studio lineage
-- SLK/INI and object-editor parsers consolidated over Phases B–D
-
-See upstream Warsmash history for deeper attribution. OpenWCIII continues that
-work toward faithful WC3 + QoL.
-
-## Legal Stuff
-_NOTE: The following is not legal advice and is only back-of-the-hand speculation. In addition, this project may contain repackaged code from other projects where indicated, and these other projects may be subject to the terms of other license agreements such as the GPL. The licenses for those projects should be clearly indicated when you review their code._
-
-Earlier versions of Warsmash included a footnote suggesting that the official Warcraft 3 game might some day be able to copy components from Warsmash as a means to improve itself, because Warsmash was MIT licensed. It was brought to attention that at least one of the dependencies was GPL licensed and more specifically that the exact terms of the GPL suggest that any project that uses GPL code as a dependency must itself be GPL licensed in order to comply with the GPL terms. As such, had Activision actually copied code from Warsmash and placed that code into Reforged, they would have been at risk of legally creating a situation that required the whole of Reforged itself to become free software, perhaps, because Warsmash may have this obligation to be free software likewise despite an incorrect documentation/understanding of the matter in previous versions.
-
-**You must own Warcraft III to use OpenWCIII.** This repository does not redistribute Blizzard Entertainment game assets.
+The repository's [LICENSE](LICENSE) contains the GNU Affero General Public
+License, version 3. Consult it and component-specific notices for applicable
+terms. Warcraft III game data is separate from the engine source.

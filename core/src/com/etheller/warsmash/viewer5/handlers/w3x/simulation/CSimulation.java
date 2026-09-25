@@ -13,6 +13,7 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Rectangle;
@@ -175,9 +176,13 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		this.handleIdAllocator = new HandleIdAllocator();
 		this.worldCollision = new CWorldCollision(entireMapBounds, this.gameplayConstants.getMaxCollisionRadius());
 		this.regionManager = new CRegionManager(entireMapBounds, pathingGrid);
+		final CPathfindingProcessor.Node[][] pathfindingNodes = CPathfindingProcessor.createNodes(pathingGrid);
+		final CPathfindingProcessor.Node[][] pathfindingCornerNodes = CPathfindingProcessor.createCornerNodes(pathingGrid);
+		final AtomicInteger sharedPathfindJobId = new AtomicInteger();
 		this.pathfindingProcessors = new CPathfindingProcessor[WarsmashConstants.MAX_PLAYERS];
 		for (int i = 0; i < WarsmashConstants.MAX_PLAYERS; i++) {
-			this.pathfindingProcessors[i] = new CPathfindingProcessor(pathingGrid, this.worldCollision);
+			this.pathfindingProcessors[i] = new CPathfindingProcessor(pathingGrid, this.worldCollision,
+					pathfindingNodes, pathfindingCornerNodes, sharedPathfindJobId);
 		}
 		this.seededRandom = seededRandom;
 		this.players = new ArrayList<>();
@@ -207,6 +212,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 			final CPlayer newPlayer = new CPlayer(defaultRace, new float[] { startLoc.getX(), startLoc.getY() },
 					configPlayer, new CPlayerFogOfWar(pathingGrid));
 			newPlayer.setAIDifficulty(configPlayer.getAIDifficulty());
+			newPlayer.setSimulation(this);
 			this.players.add(newPlayer);
 			this.defaultPlayerUnitOrderExecutors.add(new CPlayerUnitOrderExecutor(this, i));
 			if ((newPlayer.getController() == CMapControl.NEUTRAL) && (i < (WarsmashConstants.MAX_PLAYERS - 4))) {
@@ -268,8 +274,20 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		return this.units;
 	}
 
+	/** Snapshot at a script boundary, including creations/removals pending this tick. */
+	public List<CUnit> getUnitsForSave() {
+		final List<CUnit> snapshot = new ArrayList<>(this.units);
+		snapshot.addAll(this.newUnits);
+		snapshot.removeAll(this.removedUnits);
+		return snapshot;
+	}
+
 	public List<CDestructable> getDestructables() {
 		return this.destructables;
+	}
+
+	public List<CItem> getItems() {
+		return this.items;
 	}
 
 	public void registerTimer(final CTimer timer) {
@@ -646,7 +664,9 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		this.onTickTriggers.removeAll(this.removedOnTickTriggers);
 		this.removedOnTickTriggers.clear();
 
-		this.globalScope.runThreads();
+		if (this.globalScope != null) {
+			this.globalScope.runThreads();
+		}
 		for (final GlobalScope aiScope : this.aiGlobalScopes) {
 			aiScope.runThreads();
 		}
@@ -765,7 +785,10 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 
 	@Override
 	public CPlayer getPlayer(final int index) {
-		return this.players.get(index);
+		if ((index >= 0) && (index < this.players.size())) {
+			return this.players.get(index);
+		}
+		return null;
 	}
 
 	public CPlayer getWinningPlayer() {

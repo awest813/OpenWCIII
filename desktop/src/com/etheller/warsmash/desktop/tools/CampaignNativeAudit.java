@@ -92,6 +92,14 @@ public final class CampaignNativeAudit {
 			}
 		}
 		if (archives.isEmpty()) {
+			for (final String defaultPath : new String[] { "F:\\WC3Data\\war3.mpq", "F:\\WC3Data\\War3x.mpq", "F:\\WC3Data\\War3xlocal.mpq" }) {
+				final Path p = Paths.get(defaultPath);
+				if (Files.exists(p)) {
+					archives.add(p);
+				}
+			}
+		}
+		if (archives.isEmpty()) {
 			System.err.println("Pass at least one --mpq <path> holding campaign maps and Scripts\\common.j.");
 			System.exit(2);
 		}

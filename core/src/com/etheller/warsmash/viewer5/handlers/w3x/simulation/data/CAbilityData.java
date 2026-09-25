@@ -1,5 +1,15 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.data;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.paladin.CAbilityHolyLight;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.paladin.CAbilityDivineShield;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.paladin.CAbilityResurrect;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.archmage.CAbilitySummonWaterElemental;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.archmage.CAbilityBlizzard;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.archmage.CAbilityBrilliance;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.archmage.CAbilityMassTeleport;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.mountainking.CAbilityThunderClap;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.mountainking.CAbilityAvatar;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -104,32 +114,34 @@ public class CAbilityData {
 	}
 
 	private void registerCodes() {
+		// Native implementations are fallbacks. Ability Builder/JASS registrations
+		// below may override them, but campaigns must work without optional scripts.
 		// ----Human----
 		// Paladin:
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHhb"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityHolyLight(handleId, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHds"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityDivineShield(handleId, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHre"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityResurrect(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHhb"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityHolyLight(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHds"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityDivineShield(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHre"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityResurrect(handleId, alias)));
 		// Archmage
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHwe"), new CAbilityTypeDefinitionSpellBase(
-//				(handleId, alias) -> new CAbilitySummonWaterElemental(handleId, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHbz"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityBlizzard(handleId, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHab"), new CAbilityTypeDefinitionSpellBase(
-//				(handleId, alias) -> new CAbilityBrilliance(handleId, alias, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHmt"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityMassTeleport(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHwe"), new CAbilityTypeDefinitionSpellBase(
+				(handleId, alias) -> new CAbilitySummonWaterElemental(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHbz"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityBlizzard(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHab"), new CAbilityTypeDefinitionSpellBase(
+				(handleId, alias) -> new CAbilityBrilliance(handleId, alias, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHmt"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityMassTeleport(handleId, alias)));
 		// Mountain King:
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHtb"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityThunderBolt(handleId, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHtc"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityThunderClap(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHtb"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityThunderBolt(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHtc"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityThunderClap(handleId, alias)));
 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("ANfb"),
 				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityThunderBolt(handleId, alias)));
-//		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHav"),
-//				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityAvatar(handleId, alias)));
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHav"),
+				new CAbilityTypeDefinitionSpellBase((handleId, alias) -> new CAbilityAvatar(handleId, alias)));
 
 		// Blood Mage:
 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("Apxf"), new CAbilityTypeDefinitionPhoenixFire());
@@ -308,10 +320,12 @@ public class CAbilityData {
 
 	public void registerJassType(final War3ID war3id, final CAbilityTypeJassDefinition whichAbilityType) {
 		this.codeToAbilityTypeDefinition.put(war3id, whichAbilityType);
+		this.aliasToAbilityType.entrySet().removeIf(entry -> entry.getValue().getCode().equals(war3id));
 	}
 
 	public void registerAbilityBuilderType(final War3ID war3id, final AbilityBuilderConfiguration configuration) {
 		this.codeToAbilityTypeDefinition.put(war3id, configuration.createDefinition());
+		this.aliasToAbilityType.entrySet().removeIf(entry -> entry.getValue().getCode().equals(war3id));
 	}
 
 	public CAbilityType<?> getAbilityType(final War3ID alias) {

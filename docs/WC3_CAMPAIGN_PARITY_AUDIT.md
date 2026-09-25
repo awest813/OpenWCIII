@@ -1,282 +1,213 @@
-# WC3 Campaign Full Parity Audit
+# Warcraft III campaign parity: status and implementation plan
 
-**Goal:** Run the Warcraft III single-player campaigns (Reign of Chaos + The Frozen Throne) in Warsmash / OpenWCIII with full parity to retail WC3.
+**Reviewed September 24, 2026. Status: incomplete; no full-parity sign-off.**
 
-**Status (as of 2026-09-10):** Missions load and play from retail disc data.
-**P0 progression spine is largely landed** (`ChangeLevel` + score Continue,
-dialog buttons, selection, hero carry-over, menu restore, availability store,
-score/boards MVP, transmission VO + named anims, cine filters, volume groups,
-hero natives, AI assault MVP, player-state events, mission restart, shop
-stock, ffmpeg-backed movie playback). Still missing for full parity:
-competitive build AI, sky mesh, full RoC/TFT soak.
+Scope: RoC and TFT single-player campaigns, chapter transitions, interludes,
+credits, and bonus-campaign branches. Multiplayer, replay, arbitrary custom
+campaigns, and Warcraft II formats require separate plans.
 
-## Measuring parity
+A registered native can be a no-op; a parsed map can be unwinnable. This plan
+separates implemented code, bounded verification, and remaining behavior.
+No overall completion percentage is justified.
 
-`./gradlew :desktop:campaignNativeAudit` reads the campaign scripts out of your
-own archives and reports which `common.j` natives the campaigns reach that the
-engine does not implement. Re-run it after native work; the current output is
-[CAMPAIGN_NATIVE_COVERAGE.md](CAMPAIGN_NATIVE_COVERAGE.md).
+## Evidence baseline
+
+Results describe the local working tree, not a tagged release or clean-checkout
+CI guarantee. The environment used Windows, Java 17, Gradle 8.6, and layered
+`war3.mpq`, `War3x.mpq`, and `War3xlocal.mpq` under `F:/WC3Data`.
+The base archive was matched to the user's RoC disc image; the installed TFT
+archives were not independently matched to their installer.
+
+| Check | Recorded result | Scope and exclusions |
+|---|---|---|
+| Core suite, latest run | 222 tests; 0 reported failures/errors/skips | Focused assertions, including retail fixtures; not mission playthroughs |
+| Strict idle audit, latest run | 85/85 maps; 300 ticks each; 25,500 total | Object loading, checked AI parsing/initialization, idle simulation; no mission objectives, rendering, or leak measurement |
+| Progression audit, earlier review | 70/70 distinct next-map targets resolved | Static target discovery and map opening; not executed transitions |
+| Backing-screen audit, earlier review | 47/47 checks passed | Selected assets and model data; not visual approval |
+| Native audit, earlier review | 0 reachable names missing from registration | Static reachability/registration; not correct native behavior |
+| Cinematic-reference audit, earlier review | 0 missing files among references checked | Literal references and model parsing; not playback or timing |
+
+The inventory includes interludes, credits, and bonus submaps. Counts depend on
+the archives and are not a count of completed missions.
+
+Local evidence: `Logs/campaign-regressions-final.txt`,
+`Logs/campaign-strict-final.txt`, and earlier
+`Logs/campaign-presentation-review.txt`. These are local artifacts, not guaranteed
+contents of a fresh checkout. The generated
+[native report](CAMPAIGN_NATIVE_COVERAGE.md) uses “implementation” for registration
+coverage; it cannot establish behavior.
+
+Earlier smoke results were weaker: ability definitions were not found from the
+repository working directory and some failures were swallowed. Correct discovery
+exposed 32 legacy-aura loading failures, now fixed. Strict parsing exposed unary
+plus in `u08x02.ai`, now supported. The latest strict run contains no reported AI
+parse or path-cycle exceptions.
+
+**Remaining warnings:** unsupported upgrade effects and skipped legacy
+destructable modifications still occur. The audit can pass despite them.
+Retail-dependent tests also use local paths and may skip or return early when
+data is missing. Zero reported skips alone does not prove every fixture ran.
+
+## Implementation and limits
+
+| Area | Present / bounded evidence | Remaining gap |
+|---|---|---|
+| Campaign menus | Profile-specific persistent availability, default seeding, selection, guarded loading | Verify fresh profiles, unlock order, cinematic availability, and returns in real campaigns |
+| Chapter transitions | ChangeLevel routing, score Continue flow, failure recovery, archive lifetime fixes | Execute victory/defeat/retry and every branch |
+| Hero gamecache | Stats, skills, name, inventory, disk persistence; retail test covers equipped Paladin and Holy Light healing | Verify actual chapter scripts, other heroes/items, and bonus transitions |
+| Saved games | v5 primitive globals/arrays, resources, clock/camera; older formats readable; safer writes; restore after startup | Full battlefield, handles, triggers, timers, and execution state missing from gameplay resume |
+| Entity save scaffold | Collection/serialization helpers, including pending creation/removal handling | Not wired into complete gameplay save/load; restore creates entities without preserving script identity |
+| Campaign AI | Script environment, native registrations, expansion/guard/assault code and focused tests | Verify economy, production, research, attacks, defense, targeting, and timing |
+| Abilities/pathing | Human skill fallbacks, legacy aura defaults, corrected equipment bonuses, isolated search state | Missing ability and upgrade behavior; broader combat/movement verification |
+| Mission UI | Quests, dialogs, leaderboard/multiboard, victory/defeat interfaces | Several basic overlays; verify layout, input, hotkeys, and timing |
+| Cinematics/audio | External ffmpeg movies, sky/camera support, music state/fade-in, stacked sound registry | Model playback, camera roll, fade-out, non-music volume effects, rendered/audio review |
+| Options/custom campaigns | Options persistence and custom-campaign format parser | Some options lack live effects; parsing does not establish a complete launch flow |
+
+Focused tests include `StoredUnitDataSimulationTest`, `CampaignHeroCarryoverTest`,
+`CGameSaveTest`, `CampaignProgressStoreTest`, `CPathfindingProcessorTest`, and
+`JassFileFailureTest`. They establish their assertions, not feature-wide parity.
+
+## Prioritized work and acceptance gates
+
+All gates remain open. Completion requires behavioral evidence against a stated
+retail asset/version baseline.
+
+### P0 — Real mission verification
+
+- [ ] Execute map configuration, mission startup, triggers, timers, and AI in the
+  verification harness. Record runtime errors, not just parse failures.
+- [ ] Inventory maps from the archives; distinguish chapters, interludes, credits,
+  and bonus submaps.
+- [ ] Make retail fixture paths configurable and replace silent early returns
+  with explicit unavailable-data reporting.
+- [ ] Record revision, archive fingerprints, settings, seed, scenario actions,
+  ticks, errors, and warnings with every run.
+- [ ] Complete one opening mission through its actual victory trigger and next
+  chapter before expanding coverage.
+
+**Exit evidence:** a reproducible fresh-profile run through objectives and the
+next chapter with no unexplained script errors. Retain idle checks as smoke tests.
+
+### P0 — Gameplay blockers
+
+- [ ] Inventory unsupported upgrade effects; implement required effects and
+  verify the resulting unit behavior.
+- [ ] Handle the legacy destructable modifications currently discarded.
+- [ ] Identify behaviorless ability/native fallbacks reached by missions and
+  implement the required effects with outcome-based tests.
+- [ ] Exercise AI economy, production, research, expansion, guard allocation,
+  attacks, and victory-critical interactions in a live simulation.
+- [ ] Verify terrain/pathing, transports, scripted units, and special mechanics
+  where the mission inventory demonstrates their use.
+
+**Exit evidence:** affected objectives complete, required AI behavior executes,
+and required gameplay data is not silently discarded. Suppressing a warning
+without implementing its behavior does not satisfy the gate.
+
+### P0 — Complete mission save/resume
+
+- [ ] Design identity-preserving restoration before wiring entity helpers into
+  gameplay. Reconnect script references without duplicating map objects.
+- [ ] Restore required unit/item/destructable state, orders, abilities, buffs,
+  cooldowns, upgrades, and player state.
+- [ ] Restore handles/handle arrays, triggers, timers, queued and sleeping scripts,
+  objectives, gamecache relationships, and AI execution state.
+- [ ] Verify versioning, corruption recovery, missing assets, and failed loads
+  without damaging the last usable save.
+- [ ] Compare uninterrupted play with save/quit/relaunch/resume during battle,
+  a sleeping trigger, a timed objective, hero inventory changes, and a transition.
+
+**Exit evidence:** resumed missions preserve identity and objectives and remain
+completable. Primitive-state restoration does not satisfy this gate.
+
+### P1 — Progression and presentation
+
+- [ ] Verify victory, defeat, retry, Continue, menu return, and failure recovery.
+- [ ] Verify fresh-profile gating, unlock persistence after restart, profile
+  switching/deletion, difficulty selection, and all campaign branches.
+- [ ] Check hero carryover through actual chapter scripts and bonus revisits.
+- [ ] Review menus, loading screens, quests, dialogs, scores, input, and subtitles
+  in rendered runs at documented resolutions.
+- [ ] Finish model cinematic/audio behavior and review movies, transmissions,
+  skipping, camera restoration, and music transitions.
+- [ ] Make visible options effective or clearly identify unavailable controls.
+
+**Exit evidence:** recorded scenario results plus visual/audio review, including
+skip and error cases. Asset resolution alone is insufficient.
+
+### P2 — Coverage and release verification
+
+- [ ] Complete every playable mission and required branch at each difficulty
+  claimed as supported; review interludes and endings.
+- [ ] Measure memory, resource lifetime, frame time, and stability over repeated
+  chapter transitions and save/load cycles.
+- [ ] Recheck the declared OS/GPU and asset-version matrix on release builds.
+- [ ] Publish a revision-specific report with open deviations and artifacts;
+  narrow support claims when a gate remains open.
+
+**Exit evidence:** no unexplained progression blockers or omitted required
+behavior in the declared scope. Registration and smoke checks cannot approve
+full campaign parity.
+
+## Mission result record
+
+No completed start-to-finish campaign matrix is established by this review.
+Create a row per actual scenario; never prefill success from the idle audit.
+
+| Map / scenario | Revision + assets | Difficulty / seed | Objectives + AI | Save/resume | Exit + next chapter | Visual/audio | Evidence / defects |
+|---|---|---|---|---|---|---|---|
+| Not yet recorded | — | — | Unverified | Unverified | Unverified | Unverified | Add reproducible actions and logs |
+
+Use **passed**, **failed**, **blocked**, **not run**, or **not applicable with
+reason**. Attach reproduction steps to failures. Distinguish automated assertions
+from manual observation.
+
+## Reproduce the bounded checks
+
+Use JDK 17 and the Gradle 8.6 wrapper from the repository root. On Windows,
+replace `./gradlew` with `.\gradlew.bat`.
 
 ```bash
-./gradlew :desktop:campaignNativeAudit -Pargs="--mpq <war3.mpq> --mpq <War3x.mpq> --mpq <War3xlocal.mpq>"
+./gradlew :core:test
+./gradlew :desktop:campaignSoakAudit -Pargs="--mpq C:/WC3Data/war3.mpq --mpq C:/WC3Data/War3x.mpq --mpq C:/WC3Data/War3xlocal.mpq --ticks 300"
 ```
 
-Across all 85 retail campaign maps, reachable-but-unimplemented natives went
-from 79 to 37 across the 2026-09-10 and 2026-09-13 passes. The 37 have since
-been implemented in `Jass2` (gameplay-real where the sim supports it:
-buff removal, cooldown reset, sleep, timed life, `IsUnitIdType`, blight rect,
-item-slot removal, sound cutoff; accepted-and-ignored where no system exists
-yet: doodad/destructable visuals, minimap icons, weather, terrain deformation,
-transports). Follow-ups have since landed too: `TriggerRegisterPlayerStateEvent`
-fires on the rising edge via `CPlayerStateEvent` (with `GetEventPlayerState`),
-`RestartGame` reloads the running map through the `ChangeLevel` path, and shop
-stock is tracked (`CAbilitySellItems` catalog + counts with out-of-stock
-purchase gating; mercenary counts on the `CUnit` ledger). Re-run
-`campaignNativeAudit` against owned archives to confirm the report reads 0
-for the previously missing set.
+Replace example paths. Audits do not derive archives from the launcher INI;
+pass `--mpq` explicitly. Defaults are developer-specific `F:/WC3Data` paths.
+Gradle splits forwarded arguments on whitespace, so use paths without spaces.
+The soak task supports `--filter` and `--limit`; label filtered results accordingly.
 
-## First soak on retail disc data (2026-09-10)
+Run each additional task with the same three `--mpq` arguments:
 
-Nine campaign openers were launched with `-loadfile` against unpatched Reign of
-Chaos 1.00 + Frozen Throne 1.07 disc data: RoC Prologue01, Human01, Orc01,
-Undead01, NightElf01 and TFT HumanX01, UndeadX01, OrcX01, NightElfX01. All nine
-now reach in-mission simulation with no fatal exception. What that pass found:
+| Gradle task | Purpose |
+|---|---|
+| `:desktop:campaignProgressionAudit` | Discover literal chapter targets and check map resolution |
+| `:desktop:campaignNativeAudit` | Generate reachable native registration report |
+| `:desktop:campaignBackingAudit` | Check selected backing/loading model assets |
+| `:desktop:campaignCinematicRefs` | Inspect literal cinematic asset references |
 
-- Every `abilityBehaviors` config file failed to parse on Java 17, so every
-  Ability Builder ability was missing. Fixed.
-- Scene lights crashed the render thread through a buffer-position bug. Fixed.
-- Older Battle.net UI data, missing minimap icons and an unparseable doodad
-  object data table each aborted startup or map load. All three now degrade.
-- `TriggerRegisterUnitInRange` was the largest remaining gameplay gap, reached
-  by 24 maps. It now works: `CUnitInRangeEvent` watches the circle each tick.
-- `CreateTimer` and `CreateGroup` were missing from the config environment,
-  which is where Blizzard.j's timer and group globals get initialized. Fixed.
+Nonzero audit exits fail Gradle. Empty discovery fails progression and soak tasks.
+Inspect warnings and discovered/tested counts even on success. The soak task's
+3 GB heap limit is not a measured minimum system requirement.
 
-### Also worth tracing: config runs only in the lobby
+Core reports are in `core/build/reports/tests/test/index.html` and
+`core/build/test-results/test`. For retail tests, check fixture availability as
+well as the reported test counts.
 
-Only `ConfigEnvironment` ever runs a map's `config` function, so anything a map
-does there outside the config natives is dropped. Undead01 sets allied victory
-from `InitCustomTeams`, and the config pass has no `SetPlayerState` to apply it
-with. The simulation does support allied victory and the W3I force flags carry
-it too, so check whether these maps rely on the script call before deciding
-between registering the native in the config pass or running `config` in the
-game environment.
+## Code map and maintenance
 
-### Next gap: the AI script environment
+| Responsibility | Source |
+|---|---|
+| Native semantics / gamecache | [Jass2.java](../core/src/com/etheller/warsmash/parsers/jass/Jass2.java) |
+| Campaign AI | [JassAIEnvironment.java](../core/src/com/etheller/warsmash/parsers/jass/JassAIEnvironment.java) |
+| Save representation / entity scaffold | [CGameSave.java](../core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/CGameSave.java) |
+| Hero reconstruction | [StoredUnitData.java](../core/src/com/etheller/warsmash/viewer5/handlers/w3x/simulation/StoredUnitData.java) |
+| Menus / chapter loading | [MenuUI.java](../core/src/com/etheller/warsmash/viewer5/handlers/w3x/ui/MenuUI.java) |
+| Startup / pending save application | [WarsmashGdxMapScreen.java](../core/src/com/etheller/warsmash/WarsmashGdxMapScreen.java) |
+| Audits | [desktop tools](../desktop/src/com/etheller/warsmash/desktop/tools) |
+| Commands / working directories | [desktop/build.gradle](../desktop/build.gradle) |
 
-Campaign AI scripts call `common.j` natives such as `Player` that `common.ai`
-never declares, so `JassAIEnvironment.loadAI` fails to compile them and the
-mission runs with no AI. NightElf01 shows this. Alongside it, 64 of the 123
-`common.ai` natives have no implementation, which is what keeps the enemy from
-building a competitive economy.
-
-**Severity legend**
-
-| Tag | Meaning |
-|-----|---------|
-| **P0** | Blocks finishing a campaign or advancing between missions |
-| **P1** | Mission playable but missing retail-critical behavior |
-| **P2** | Polish / parity nicety / needs soak testing |
-
----
-
-## Already working
-
-- Campaign menu loads `CampaignFile` / `UI\CampaignInfoClassic.txt`; race + mission lists (`CampaignMenuData`, `CampaignMenuUI`, `MenuUI`)
-- Mission launch with guarded map preload (failed preload keeps menu usable)
-- Campaign backgrounds, fog, ambient loop, cursor, door fade
-- `InitGameCache` / store-get-flush / `SaveGameCache` with disk persistence (`CGameCache`)
-- Partial `StoreUnit` / `RestoreUnit` (XP, stats, skill points, inventory)
-- Partial `SaveGame` / `LoadGame` (JASS primitive globals + gold/lumber)
-- In-map cinematic HUD mode (`CinematicMode`, `ShowInterface`, `SetCinematicScene`)
-- Transmission text + portrait + VO label playback (`soundLabel`)
-- Thematic music start/end
-- `CustomVictory` / `CustomDefeat` fire events then exit to menu screen object
-- Quest / multiboard / leaderboard state + text overlays
-- Script dialogs (visible; button handle returns)
-- Timer dialogs
-- Trigger exception isolation so one bad trigger does not kill the loop
-- Core hero XP / level / `SelectHeroSkill` gameplay natives
-- Cine-filter MVP overlay; volume-group MUSIC scaling
-- Hero script natives (`SetHeroProperName`, `UnitModifySkillPoints`, …)
-
----
-
-## P0 — Progression spine (must ship first)
-
-### 1. Chain map loading — `ChangeLevel`
-- **Status:** **DONE (MVP)** — native calls `WarsmashUI.requestChangeLevel`;
-  `MenuUI` loads the next map via pending-change-level (score screen skipped).
-- **Remaining:** honor `doScoreScreen` once score screen exists; verify retail
-  map-path resolution quirks across RoC/TFT.
-
-### 2. Restore campaign chrome after mission exit
-- **Status:** **DONE** — `MenuUI.onReturnFromGame()` restores mission-select
-  chrome and ambient for campaign returns.
-
-### 3. Victory / defeat → next step
-- **Status:** **DONE (MVP)** — exit-to-menu works; score Continue dialog;
-  `EndGame` and `ChangeLevel(..., true)` honor score screen before proceed.
-  In-script `ChangeLevel` chains maps.
-
-### 4. Fix `DialogAddButton` handle return
-- **Status:** **DONE** — returns `button` handle.
-
-### 5. Selection natives for cinematic / scripted control
-- **Status:** **DONE** — wired to `MeleeUI` + selection circles.
-
-### 6. Hero carry-over: learned abilities + proper name
-- **Status:** **DONE** — `StoredUnitData` + gamecache v2 + restore path.
-
-### 7. Movie / intro cinematic playback
-- **Status:** **DONE (ffmpeg-backed)** — `PlayCinematic` resolves the movie
-  through the data sources (`Movies\*.mpq` AVI files, `.avi`, `.mp4`), decodes
-  video via a user-provided `ffmpeg` pipe (`MoviePlayer.Session`, backpressure-paced
-  raw RGB frames uploaded to a centered, aspect-ratio-preserved texture) and
-  streams the audio track to PCM output, ducking in-game music/ambient sounds.
-  The JASS thread sleeps for the decoded duration, and ESC / Space / Enter skips
-  playback cleanly. No codec is bundled (no MIT pure-Java MPEG-4 Part 2 decoder exists);
-  without `ffmpeg` or the movie file it falls back to the skippable title overlay.
-  `MenuUI` also exposes campaign intro and ending cinematics as mission select
-  buttons tied to `CampaignProgressStore`. `PlayModelCinematic` / `SetIntroShot*`
-  remain stubs.
-
-### 8. Campaign AI bootstrap
-- **Status:** **MVP DONE** — `StartCampaignAI`/`StartMeleeAI` load scripts into
-  `JassAIEnvironment` with `StartThread`/`Sleep`. Unit-count + captain-home
-  natives work; **assault roster** (`AddAssault`/`CaptainIsEmpty`/`CaptainAttack`
-  orders + `SuicidePlayer` attack-move) MVP landed. Build-queue natives remain
-  stubs — AI will not yet produce competitive economies.
-
-### Also landed this pass
-- **`PauseGame`** freezes sim (timers/threads still run).
-- **`EndGame`** exits to menu via custom-victory path.
-- **Quest log panel** (toolbar button + ScriptDialog list).
-- **Score screen MVP** (Victory/Defeat Continue dialog).
-- **Multiboard + leaderboard** text overlays and Create* natives.
-- **Campaign menu gating** from `CampaignProgressStore`.
-- **`PolledWait`**, **`SaveGameExists`**, **`SetUnitPathing`**,
-  **`CachePlayerHeroData`**.
-
-
----
-
-## P1 — Retail-critical mission features
-
-### Campaign progress & menu state
-- [x] Persist mission / campaign / cinematic availability (`CampaignProgressStore`)
-- [x] Availability natives: `SetCampaignAvailable`, `SetOpCinematicAvailable`, `SetEdCinematicAvailable`, `SetTutorialCleared`, `ForceCampaignSelectScreen`, `CustomCampaignButtonSetVisible`
-- [x] `SetCampaignMenuRace` / `Ex` + `GetCampaignMenuRace`
-- [x] Honor `CampaignMenuData.isDefaultOpen` for gating (seed all campaigns)
-- [ ] Enable or implement Custom Campaign / Options / Credits (`ENABLE_NOT_YET_IMPLEMENTED_BUTTONS=false` in `MenuUI`); Load Saved still menu-gated
-
-### Save / load UX & completeness
-- [x] Esc-menu Save/Load buttons (QuickSave MVP)
-- [ ] Main-menu Load Saved
-- [x] `ReloadGame` (restores last-save globals/resources MVP)
-- [x] `SaveGameExists`, `CopySaveGame`, `RemoveSaveDirectory`, `RenameSaveDirectory`; `GetSaveBasicFilename`
-- [x] `CachePlayerHeroData`
-- [ ] Extend `SaveGame`/`LoadGame` beyond primitives (or document that campaign continuity is gamecache-only and match retail usage)
-
-### In-mission UI parity
-- [x] Quest dialog UI (quest button + ScriptDialog list)
-- [x] Multiboard rendering (text overlay MVP)
-- [x] Leaderboard API + text overlay MVP
-- [x] Score screen after victory/defeat (Continue dialog MVP)
-- [x] Dialog hotkey handling
-
-### Cinematic / presentation (in-map)
-- [x] Transmission voice / `soundLabel` playback (UISounds MVP)
-- [x] Named transmission animations (`setSequence` by name; fallback PORTRAIT/TALK)
-- [x] `ClearTransmissionQueue` / `EnableTransmission`
-- [x] `SetCinematicCamera` (stops pans/noise; MDX track playback still TODO)
-- [x] Cine-filter API MVP (`SetCineFilter*`, `DisplayCineFilter`, …)
-- [x] `PauseGame` (sim freeze; timers/threads still run)
-- [x] `CinematicSkipButton` (ESC skip for `PlayCinematic`); `SetSkyModel` accepted (mesh swap pending); `SetCinematicAudio` ducks MUSIC/AMBIENT MVP
-
-### Sound / music groups
-- [x] `VolumeGroupSetVolume` / `VolumeGroupReset` (MUSIC → music player; others stored)
-- [ ] Stacked / ambient / remaining 3D sound setters
-- [ ] Separate thematic music layer / fade parity
-- [x] `ClearMapMusic`
-
-### Heroes / abilities / pathing used by scripts
-- [x] Soft-fail `UnitAddAbility` for unprogrammed rawcodes (`CAbilityGenericDoNothing`)
-- [x] `UnitModifySkillPoints`, `UnitStripHeroLevel` (MVP; no ability unlearn), `SetHeroProperName`, `DecUnitAbilityLevel`, `SetReservedLocalHeroButtons` (stored)
-- [x] Non-permanent `SetHeroStr` / `Agi` / `Int`
-- [x] `SetUnitPathing`
-- [x] `UnitShareVision` (per-unit fog modifier)
-
-### Camera / images / blight (often used in campaign scripts)
-- [x] Camera noise / stop variants (`CameraSet*Noise`, `StopCamera`)
-- [x] Image MVP (`CreateImage`/`ShowImage`/`SetImagePosition` via ground splat); Ubersplat MVP (`CreateUbersplat`/show/destroy)
-- [x] `SetBlight` / `SetBlightLoc`
-- [x] Terrain queries: `IsTerrainPathable`, `GetTerrainType`, `GetTerrainVariance`, null-safe `GetTerrainCliffLevel`
-- [x] `PingMinimap` / `PingMinimapEx`
-- [x] `EnableUserUI` → control + interface visibility
-
----
-
-## P2 — Polish & verification
-
-- [x] `PolledWait` (BJ often wraps `TriggerSleepAction`)
-- [x] Trackables (`CreateTrackable` + hit/track events MVP)
-- [x] Chat event registration fires events (Enter/chat button prompt MVP)
-- [x] `SyncStored*` (SP no-op)
-- [x] `HaveStoredMission`; `ReloadGameCachesFromDisk` still returns TRUE (InitGameCache already loads disk)
-- [x] Deduplicate early vs late `Store*` native registrations in `Jass2`
-- [x] Timer dialog color/speed
-- [x] `FlashQuestDialogButton` / `ForceQuestDialogUpdate`
-- [x] DefeatCondition as real type
-- [ ] Campaign BLP alpha artifacts (README)
-- [ ] Reforged FLAC quality (`docs/COMPATIBILITY.md`)
-- [x] `Cheat` native (basic: whosyourdaddy / greedisgood / pointbreak / thereisnospoon)
-
-### Mission soak matrix (required for “full parity” sign-off)
-
-Nine campaign openers pass a load-and-run check as of 2026-09-10; the rest of
-the matrix below is still to do.
-
-Play and log missing natives / abilities / crashes for each:
-
-1. RoC Prologue → Human → Undead → Orc → Night Elf (all missions + interlude movies)
-2. TFT Blood Elf → Undead → Orc → Night Elf / Illidan finale
-3. Optional: custom campaign button path once enabled
-
-For each mission record: start OK, mid-mission script errors, victory path, hero carry-over correctness, next-map transition.
-
----
-
-## Suggested implementation order
-
-| Step | Work | Unlocks |
-|------|------|---------|
-| 1 | `DialogAddButton` return + selection natives | Scripted dialogs / cine control |
-| 2 | Hero ability + properName in `StoredUnitData` | Correct carry-over |
-| 3 | `ChangeLevel` + gamecache continuity | Multi-map campaigns |
-| 4 | `onReturnFromGame` UI restore + mission availability state | Menu progression between manual launches |
-| 5 | Victory/defeat → score screen → menu or `ChangeLevel` | Retail end-of-mission flow |
-| 6 | `PlayCinematic` MVP (skippable stub → real video) | Interludes / intro shots |
-| 7 | `StartCampaignAI` + common.ai coverage | Enemy AI on campaign maps |
-| 8 | Quests / multiboard / leaderboard UI | Scripted objectives UI |
-| 9 | Transmission VO, cine filters, pause, volume groups | Presentation parity |
-| 10 | RoC + TFT soak matrix; fix remaining natives/abilities | Full parity sign-off |
-
----
-
-## Code anchors
-
-| Area | Primary files |
-|------|----------------|
-| Campaign menu | `core/.../ui/menu/CampaignMenu*.java`, `MenuUI.java` |
-| Mission UI / victory | `MeleeUI.java`, `WarsmashUI.java` |
-| JASS natives | `core/.../parsers/jass/Jass2.java` |
-| Gamecache / stores | `CGameCache.java`, `StoredUnitData.java`, `CGameSave.java` |
-| Roadmap phase | `docs/ENGINE_MODERNIZATION_ANALYSIS.md` Phase E |
-| Recent campaign fixes | `CHANGELOG.md` — Campaign Reliability Pass (2026-03-07), Startup Reliability (2026-03-06) |
-
----
-
-## Out of scope clarification
-
-This audit targets **Warcraft III** campaign parity inside Warsmash (OpenWCIII). It does **not** cover loading native **Warcraft II** (Tides of Darkness / Beyond the Dark Portal) assets or `.pud` maps; that would be a separate engine/format project.
+Update this plan when evidence or scope changes. Older completion claims in the
+changelog, modernization analysis, and compatibility notes are historical context;
+they do not override the campaign status here. Preserve the distinction between
+implemented code and verified player-visible behavior.

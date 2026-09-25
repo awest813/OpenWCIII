@@ -137,6 +137,27 @@ public final class GameUI extends AbstractUIFrame implements UIFrame {
 		this.mapStrings = mapStrings;
 	}
 
+	GameUI(final GameSkin skin) {
+		super("GameUI", null);
+		this.dataSource = null;
+		this.skin = (skin != null) ? skin.getSkin() : null;
+		this.viewport = null;
+		this.uiScene = null;
+		this.modelViewer = null;
+		this.racialCommandIndex = 0;
+		this.templates = null;
+		this.dynamicFontGeneratorHolder = null;
+		this.fontGenerator = null;
+		this.font = null;
+		this.font20 = null;
+		this.fontParam = null;
+		this.fdfCoordinateResolutionDummyViewport = null;
+		this.skinData = (skin != null) ? skin.getSkinsTable() : null;
+		this.errorStrings = null;
+		this.glyphLayout = null;
+		this.mapStrings = null;
+	}
+
 	public static GameSkin loadSkin(final DataSource dataSource, final String skin) {
 		final DataTable skinsTable = new DataTable(StringBundle.EMPTY);
 		try (InputStream stream = dataSource.getResourceAsStream("UI\\war3skins.txt")) {
@@ -240,40 +261,40 @@ public final class GameUI extends AbstractUIFrame implements UIFrame {
 	}
 
 	public boolean hasSkinField(final String file) {
-		return (file != null) && this.skin.hasField(file);
+		if (file == null) {
+			return false;
+		}
+		final String fieldVersioned = file + "_V" + WarsmashConstants.GAME_VERSION;
+		if (this.skin.hasField(fieldVersioned)) {
+			return true;
+		}
+		return this.skin.hasField(file);
 	}
 
 	public String getSkinField(String file) {
 		if (file == null) {
 			throw new NullPointerException("file is null");
 		}
+		final String fieldVersioned = file + "_V" + WarsmashConstants.GAME_VERSION;
+		if (this.skin.hasField(fieldVersioned)) {
+			return this.skin.getField(fieldVersioned);
+		}
 		if (this.skin.hasField(file)) {
-			file = this.skin.getField(file);
+			return this.skin.getField(file);
 		}
-		else {
-			final String fieldVersioned = file + "_V" + WarsmashConstants.GAME_VERSION;
-			if (this.skin.hasField(fieldVersioned)) {
-				file = this.skin.getField(fieldVersioned);
-			}
-			else {
-				throw new IllegalStateException("Decorated file name lookup not available: " + file);
-			}
-		}
-		return file;
+		throw new IllegalStateException("Decorated file name lookup not available: " + file);
 	}
 
 	public String trySkinField(String file) {
 		if (file == null) {
 			throw new NullPointerException("file is null");
 		}
-		if (this.skin.hasField(file)) {
-			file = this.skin.getField(file);
+		final String fieldVersioned = file + "_V" + WarsmashConstants.GAME_VERSION;
+		if (this.skin.hasField(fieldVersioned)) {
+			return this.skin.getField(fieldVersioned);
 		}
-		else {
-			final String fieldVersioned = file + "_V" + WarsmashConstants.GAME_VERSION;
-			if (this.skin.hasField(fieldVersioned)) {
-				file = this.skin.getField(fieldVersioned);
-			}
+		if (this.skin.hasField(file)) {
+			return this.skin.getField(file);
 		}
 		return file;
 	}

@@ -46,6 +46,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.C
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CAbilityHero;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilityNeutralBuilding;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilitySellUnits;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.listeners.CUnitAbilityEffectReactionListener;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityGoldMinable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityOverlayedMine;
@@ -1606,6 +1607,9 @@ public class CUnit extends CWidget {
 	}
 
 	public CUnitAnimationListener getUnitAnimationListener() {
+		if (this.unitAnimationListener == null) {
+			return CUnitAnimationListener.DO_NOTHING;
+		}
 		return this.unitAnimationListener;
 	}
 
@@ -4218,6 +4222,14 @@ public class CUnit extends CWidget {
 		return this.rallyPoint;
 	}
 
+	public void dispatchSpawnedUnit(final CSimulation game, final CUnit spawnedUnit) {
+		spawnedUnit.nudgeAround(game, this);
+		game.unitTrainedEvent(this, spawnedUnit);
+		if (this.rallyPoint != null) {
+			this.rallyPoint.visit(UseAbilityOnTargetByIdVisitor.INSTANCE.reset(game, spawnedUnit, OrderIds.smart));
+		}
+	}
+
 	private static interface RallyProvider {
 		float getX();
 
@@ -4434,10 +4446,18 @@ public class CUnit extends CWidget {
 	 */
 	public void addUnitToStock(final War3ID unitId, final int currentStock, final int stockMax) {
 		this.unitStock.put(Integer.valueOf(unitId.getValue()), new int[] { currentStock, stockMax });
+		final CAbilitySellUnits sellUnits = getFirstAbilityOfType(CAbilitySellUnits.class);
+		if (sellUnits != null) {
+			sellUnits.addUnitToStock(unitId, currentStock, stockMax);
+		}
 	}
 
 	public void removeUnitFromStock(final War3ID unitId) {
 		this.unitStock.remove(Integer.valueOf(unitId.getValue()));
+		final CAbilitySellUnits sellUnits = getFirstAbilityOfType(CAbilitySellUnits.class);
+		if (sellUnits != null) {
+			sellUnits.removeUnitFromStock(unitId);
+		}
 	}
 
 	public int getUnitStockCurrent(final War3ID unitId) {
@@ -5320,7 +5340,11 @@ public class CUnit extends CWidget {
 			if (sightRadius > 0) {
 				final float radSq = (sightRadius * sightRadius)
 						/ (CPlayerFogOfWar.GRID_STEP * CPlayerFogOfWar.GRID_STEP);
-				final CPlayerFogOfWar fogOfWar = game.getPlayer(this.playerIndex).getFogOfWar();
+				final CPlayer player = game.getPlayer(this.playerIndex);
+				if (player == null) {
+					return;
+				}
+				final CPlayerFogOfWar fogOfWar = player.getFogOfWar();
 				final boolean flying = getMovementType() == MovementType.FLY;
 				final float myX = getX();
 				final float myY = getY();

@@ -46,6 +46,36 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 
 	void setMusicPlayPosition(int millisecs);
 
+	/**
+	 * Starts a thematic-music track on its own layer above the map playlist.
+	 * Ending it (see {@link #endThematicMusic()}) drops back to map music.
+	 */
+	default void playThematicMusic(final String musicField, final boolean random, final int index) {
+		playMusic(musicField, random, index);
+	}
+
+	default void playThematicMusicEx(final String musicField, final boolean random, final int index,
+			final int fromMSecs, final int fadeInMSecs) {
+		playMusicEx(musicField, random, index, fromMSecs, fadeInMSecs);
+	}
+
+	default void endThematicMusic() {
+		stopMusic(false);
+		playMapMusic();
+	}
+
+	default void setThematicMusicPlayPosition(final int millisecs) {
+		setMusicPlayPosition(millisecs);
+	}
+
+	default String getThematicMusicTrack() {
+		return "";
+	}
+
+	default boolean isThematicMusicPlaying() {
+		return false;
+	}
+
 	Scene getUiScene();
 
 	CTimerDialog createTimerDialog(CTimer timer);
@@ -77,6 +107,18 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 	void endCinematicScene();
 
 	void forceCinematicSubtitles(boolean value);
+
+	/**
+	 * User preference for transmission subtitles (Options screen). Transmission
+	 * portrait/VO still play; only the subtitle text line is gated. Defaults to
+	 * enabled to preserve existing behavior.
+	 */
+	default void setCinematicSubtitlesEnabled(final boolean enabled) {
+	}
+
+	default boolean isCinematicSubtitlesEnabled() {
+		return true;
+	}
 
 	/**
 	 * Trigger a custom victory for the local player (campaign mission complete).
@@ -141,6 +183,73 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 
 	/** Ends an in-progress {@link #playCinematic} overlay early. */
 	void endPlayCinematic();
+
+	/**
+	 * Records a sky model path from {@code SetSkyModel}. Full sky-mesh swap is
+	 * still pending; implementations must at least retain the path so scripts
+	 * observe retail-plausible state.
+	 */
+	default void setSkyModel(final String modelPath) {
+	}
+
+	default String getSkyModel() {
+		return "";
+	}
+
+	/**
+	 * Records a cinematic camera model from {@code SetCinematicCamera} (MDX
+	 * track playback still pending; callers also stop pans/noise for a stable
+	 * baseline).
+	 */
+	default void setCinematicCameraModel(final String cameraModelFile) {
+	}
+
+	default String getCinematicCameraModel() {
+		return "";
+	}
+
+	/**
+	 * Whether an MDX camera track is currently driving the world camera
+	 * (see {@code SetCinematicCamera}).
+	 */
+	default boolean isCinematicCameraPlaying() {
+		return false;
+	}
+
+	/** Detaches the MDX camera track and returns control to the game camera. */
+	default void endCinematicCamera() {
+	}
+
+	/**
+	 * Plays a model cinematic ({@code PlayModelCinematic}). Unlike
+	 * {@link #playCinematic(String)} this never starts ffmpeg movie decoding;
+	 * it shows the letterbox overlay for the model path until skipped or ended.
+	 */
+	default void playModelCinematic(final String modelPath) {
+		playCinematic(modelPath);
+	}
+
+	default String getModelCinematic() {
+		return "";
+	}
+
+	default boolean isModelCinematicPlaying() {
+		return false;
+	}
+
+	default void setIntroShotText(final String text) {
+	}
+
+	default String getIntroShotText() {
+		return "";
+	}
+
+	default void setIntroShotModel(final String modelPath) {
+	}
+
+	default String getIntroShotModel() {
+		return "";
+	}
 
 	/** Registers a quest for the in-game quest dialog. */
 	void registerQuest(com.etheller.warsmash.viewer5.handlers.w3x.simulation.quest.CQuest quest);

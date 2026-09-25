@@ -33,18 +33,26 @@ public class ABActionInstantReturnResources implements ABSingleAction {
 						harv.getCarriedResourceAmount());
 				harv.setCarriedResources(ResourceType.FOOD, 0);
 				break;
-			case GOLD:
-				pl.addGold(harv.getCarriedResourceAmount());
+			case GOLD: {
+				final int goldMined = harv.getCarriedResourceAmount();
+				final int goldTax = Math.round(goldMined * (pl.getGoldUpkeepRate() / 100.0f));
+				final int goldGained = goldMined - goldTax;
+				pl.addGold(goldGained);
 				game.unitGainResourceEvent(targetUnit, pl.getId(), harv.getCarriedResourceType(),
-						harv.getCarriedResourceAmount());
+						goldGained);
 				harv.setCarriedResources(ResourceType.GOLD, 0);
 				break;
-			case LUMBER:
-				pl.addLumber(harv.getCarriedResourceAmount());
+			}
+			case LUMBER: {
+				final int lumberHarvested = harv.getCarriedResourceAmount();
+				final int lumberTax = Math.round(lumberHarvested * (pl.getLumberUpkeepRate() / 100.0f));
+				final int lumberGained = lumberHarvested - lumberTax;
+				pl.addLumber(lumberGained);
 				game.unitGainResourceEvent(targetUnit, pl.getId(), harv.getCarriedResourceType(),
-						harv.getCarriedResourceAmount());
+						lumberGained);
 				harv.setCarriedResources(ResourceType.LUMBER, 0);
 				break;
+			}
 			case MANA:
 				// ??
 				break;

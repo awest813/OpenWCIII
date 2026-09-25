@@ -661,17 +661,22 @@ public final class War3ObjectDataChangeset {
 		if ((this.version != 1) && (this.version != 2) && (this.version != 3)) {
 			return false;
 		}
-		ObjectMap backup = this.original.clone();
-		if (!loadtable(stream, this.original, true, wts, inlineWTS)) {
-			this.original = backup;
-			return false;
+		try {
+			ObjectMap backup = this.original.clone();
+			if (!loadtable(stream, this.original, true, wts, inlineWTS)) {
+				this.original = backup;
+				return false;
+			}
+			backup = this.custom.clone();
+			if (!loadtable(stream, this.custom, false, wts, inlineWTS)) {
+				this.original = backup;
+				return false;
+			}
+			return true;
 		}
-		backup = this.custom.clone();
-		if (!loadtable(stream, this.custom, false, wts, inlineWTS)) {
-			this.original = backup;
-			return false;
+		catch (final java.io.EOFException eof) {
+			return desynced("EOF encountered while reading table: " + eof.getMessage());
 		}
-		return true;
 	}
 
 	public boolean load(final File file, final WTS wts, final boolean inlineWTS) throws IOException {

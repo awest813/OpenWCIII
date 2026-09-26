@@ -1,6 +1,7 @@
 package com.etheller.warsmash.parsers.jass;
 
 import java.awt.image.BufferedImage;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -9,7 +10,11 @@ import java.util.List;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.etheller.interpreter.ast.debug.JassException;
+import com.etheller.interpreter.ast.definition.JassDefinitionBlock;
 import com.etheller.interpreter.ast.execution.JassThread;
+import com.etheller.interpreter.ast.function.JassFunction;
+import com.etheller.interpreter.ast.function.JassParameter;
+import com.etheller.interpreter.ast.function.NativeJassFunction;
 import com.etheller.interpreter.ast.scope.GlobalScope;
 import com.etheller.interpreter.ast.scope.TriggerExecutionScope;
 import com.etheller.interpreter.ast.util.JassProgram;
@@ -18,6 +23,7 @@ import com.etheller.interpreter.ast.value.CodeJassValue;
 import com.etheller.interpreter.ast.value.HandleJassType;
 import com.etheller.interpreter.ast.value.HandleJassValue;
 import com.etheller.interpreter.ast.value.IntegerJassValue;
+import com.etheller.interpreter.ast.value.JassType;
 import com.etheller.interpreter.ast.value.JassValue;
 import com.etheller.interpreter.ast.value.JassValueVisitor;
 import com.etheller.interpreter.ast.value.RealJassValue;
@@ -30,6 +36,7 @@ import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.parsers.fdf.GameUI;
 import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.viewer5.Scene;
+import net.warsmash.parsers.jass.SmashJassParser;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
@@ -50,8 +57,10 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfi
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderExecutor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimerSleepAction;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.unit.BuildOnBuildingIntersector;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.PointAbilityTargetCheckReceiver;
@@ -216,6 +225,146 @@ public class JassAIEnvironment {
 				mapcontrolType, playerslotstateType, mapConfig, new HandleIdAllocator());
 		Jass2.registerRandomNatives(jassProgramVisitor, simulation);
 
+		globals.createGlobal("PLAYER_STATE_RESOURCE_GOLD", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.RESOURCE_GOLD));
+		globals.createGlobal("PLAYER_STATE_RESOURCE_LUMBER", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.RESOURCE_LUMBER));
+		globals.createGlobal("PLAYER_STATE_RESOURCE_FOOD_CAP", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.RESOURCE_FOOD_CAP));
+		globals.createGlobal("PLAYER_STATE_RESOURCE_FOOD_USED", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.RESOURCE_FOOD_USED));
+		globals.createGlobal("PLAYER_STATE_FOOD_CAP_CEILING", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.FOOD_CAP_CEILING));
+		globals.createGlobal("PLAYER_STATE_GIVES_BOUNTY", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.GIVES_BOUNTY));
+		globals.createGlobal("PLAYER_STATE_ALLIED_VICTORY", playerstateType,
+				new HandleJassValue(playerstateType, CPlayerState.ALLIED_VICTORY));
+
+		globals.createGlobal("ALLIANCE_PASSIVE", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.PASSIVE));
+		globals.createGlobal("ALLIANCE_HELP_REQUEST", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.HELP_REQUEST));
+		globals.createGlobal("ALLIANCE_HELP_RESPONSE", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.HELP_RESPONSE));
+		globals.createGlobal("ALLIANCE_SHARED_XP", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.SHARED_XP));
+		globals.createGlobal("ALLIANCE_SHARED_SPELLS", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.SHARED_SPELLS));
+		globals.createGlobal("ALLIANCE_SHARED_VISION", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.SHARED_VISION));
+		globals.createGlobal("ALLIANCE_SHARED_CONTROL", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.SHARED_CONTROL));
+		globals.createGlobal("ALLIANCE_SHARED_ADVANCED_CONTROL", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.SHARED_ADVANCED_CONTROL));
+		globals.createGlobal("ALLIANCE_RESCUABLE", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.RESCUABLE));
+		globals.createGlobal("ALLIANCE_SHARED_VISION_FORCED", alliancetypeType,
+				new HandleJassValue(alliancetypeType, CAllianceType.SHARED_VISION_FORCED));
+
+		globals.createGlobal("MAP_DIFFICULTY_EASY", gamedifficultyType,
+				new HandleJassValue(gamedifficultyType, CMapDifficulty.EASY));
+		globals.createGlobal("MAP_DIFFICULTY_NORMAL", gamedifficultyType,
+				new HandleJassValue(gamedifficultyType, CMapDifficulty.NORMAL));
+		globals.createGlobal("MAP_DIFFICULTY_HARD", gamedifficultyType,
+				new HandleJassValue(gamedifficultyType, CMapDifficulty.HARD));
+		globals.createGlobal("MAP_DIFFICULTY_INSANE", gamedifficultyType,
+				new HandleJassValue(gamedifficultyType, CMapDifficulty.INSANE));
+
+		globals.createGlobal("VERSION_REIGN_OF_CHAOS", versionType,
+				new HandleJassValue(versionType, 0));
+		globals.createGlobal("VERSION_FROZEN_THRONE", versionType,
+				new HandleJassValue(versionType, 1));
+
+		jassProgramVisitor.getJassNativeManager().createNative("GetPlayerState",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayer p = arguments.size() > 0 && arguments.get(0) != null
+							? arguments.get(0).visit(ObjectJassValueVisitor.getInstance()) : null;
+					final CPlayerState state = arguments.size() > 1 && arguments.get(1) != null
+							? arguments.get(1).visit(ObjectJassValueVisitor.getInstance()) : null;
+					if (p != null && state != null && simulation != null) {
+						return IntegerJassValue.of(p.getPlayerState(simulation, state));
+					}
+					return IntegerJassValue.ZERO;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetPlayerAlliance",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayer p1 = arguments.size() > 0 && arguments.get(0) != null
+							? arguments.get(0).visit(ObjectJassValueVisitor.getInstance()) : null;
+					final CPlayer p2 = arguments.size() > 1 && arguments.get(1) != null
+							? arguments.get(1).visit(ObjectJassValueVisitor.getInstance()) : null;
+					final CAllianceType setting = arguments.size() > 2 && arguments.get(2) != null
+							? arguments.get(2).visit(ObjectJassValueVisitor.getInstance()) : null;
+					if (p1 != null && p2 != null && setting != null) {
+						return BooleanJassValue.of(p1.hasAlliance(p2.getId(), setting));
+					}
+					return BooleanJassValue.FALSE;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetPlayerStructureCount",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayer p = arguments.size() > 0 && arguments.get(0) != null
+							? arguments.get(0).visit(ObjectJassValueVisitor.getInstance()) : null;
+					final boolean includeUnfinished = arguments.size() > 1 && arguments.get(1) != null
+							&& arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+					if (p != null && simulation != null) {
+						int count = 0;
+						for (final CUnit unit : simulation.getUnits()) {
+							if (unit != null && !unit.isDead() && unit.getPlayerIndex() == p.getId() && unit.isBuilding()) {
+								if (includeUnfinished || (!unit.isConstructing() && !unit.isUpgrading())) {
+									count++;
+								}
+							}
+						}
+						return IntegerJassValue.of(count);
+					}
+					return IntegerJassValue.ZERO;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetFloatGameState",
+				(arguments, globalScope, triggerScope) -> RealJassValue.ZERO);
+		jassProgramVisitor.getJassNativeManager().createNative("GetGameDifficulty",
+				(arguments, globalScope, triggerScope) -> gamedifficultyType.getNullValue());
+		jassProgramVisitor.getJassNativeManager().createNative("GetFoodMade",
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation != null) {
+						final CUnitType unitType = simulation.getUnitData().getUnitType(new War3ID(unitId));
+						return IntegerJassValue.of(unitType != null ? unitType.getFoodMade() : 0);
+					}
+					return IntegerJassValue.ZERO;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetFoodUsed",
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation != null) {
+						final CUnitType unitType = simulation.getUnitData().getUnitType(new War3ID(unitId));
+						return IntegerJassValue.of(unitType != null ? unitType.getFoodUsed() : 0);
+					}
+					return IntegerJassValue.ZERO;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("VersionCompatible",
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.TRUE);
+		jassProgramVisitor.getJassNativeManager().createNative("SuicideSleep",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("Cheat",
+				(arguments, globalScope, triggerScope) -> null);
+		jassProgramVisitor.getJassNativeManager().createNative("Max",
+				(arguments, globalScope, triggerScope) -> {
+					final int a = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					final int b = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
+					return IntegerJassValue.of(Math.max(a, b));
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetPlayerStartLocation",
+				(arguments, globalScope, triggerScope) -> {
+					final CPlayer p = arguments.size() > 0 && arguments.get(0) != null
+							? arguments.get(0).visit(ObjectJassValueVisitor.getInstance()) : null;
+					return IntegerJassValue.of(p != null ? p.getId() : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("IsUnitDetected",
+				(arguments, globalScope, triggerScope) -> {
+					final CUnit unit = arguments.size() > 0 && arguments.get(0) != null
+							? arguments.get(0).visit(ObjectJassValueVisitor.getInstance()) : null;
+					return BooleanJassValue.of(unit != null && !unit.isDead());
+				});
+
 		jassProgramVisitor.getJassNativeManager().createNative("StartThread",
 				(arguments, globalScope, triggerScope) -> {
 					final CodeJassValue threadFunc = arguments.get(0).visit(CodeJassValueVisitor.getInstance());
@@ -253,11 +402,15 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> {
 					return IntegerJassValue.of(JassAIEnvironment.this.aiPlayerIndex);
 				});
-		jassProgramVisitor.getJassNativeManager().createNative("Player", (arguments, globalScope, triggerScope) -> {
+		final JassFunction playerFunc = (arguments, globalScope, triggerScope) -> {
 			final int index = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
 			final CPlayer player = simulation != null ? simulation.getPlayer(index) : null;
 			return new HandleJassValue(JassAIEnvironment.this.playerType, player);
-		});
+		};
+		globals.defineFunction(0, "native", "Player",
+				new NativeJassFunction(Collections.singletonList(new JassParameter(JassType.INTEGER, "number")),
+						this.playerType, "Player", playerFunc));
+		jassProgramVisitor.getJassNativeManager().createNative("Player", playerFunc);
 		jassProgramVisitor.getJassNativeManager().createNative("UnitAlive",
 				(arguments, globalScope, triggerScope) -> {
 					final CUnit unit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
@@ -1642,6 +1795,94 @@ public class JassAIEnvironment {
 		}
 	}
 
+	private static final String COMMON_AI_EXTRA_NATIVES =
+			"native Player takes integer number returns player\n"
+			+ "constant native GetPlayerState takes player whichPlayer, playerstate whichPlayerState returns integer\n"
+			+ "constant native GetPlayerAlliance takes player whichPlayer, player otherPlayer, alliancetype whichAllianceSetting returns boolean\n"
+			+ "constant native GetPlayerStructureCount takes player whichPlayer, boolean includeUnfinished returns integer\n"
+			+ "constant native GetRandomInt takes integer lowBound, integer highBound returns integer\n"
+			+ "constant native GetFloatGameState takes fgamestate whichFloatGameState returns real\n"
+			+ "constant native GetGameDifficulty takes nothing returns gamedifficulty\n"
+			+ "constant native GetFoodMade takes integer unitid returns integer\n"
+			+ "constant native GetFoodUsed takes integer unitid returns integer\n"
+			+ "constant native VersionCompatible takes version whichVersion returns boolean\n"
+			+ "constant native SuicideSleep takes integer seconds returns nothing\n"
+			+ "native Cheat takes string cheatStr returns nothing\n"
+			+ "constant native Deg2Rad takes real degrees returns real\n"
+			+ "constant native Rad2Deg takes real radians returns real\n"
+			+ "constant native Sin takes real radians returns real\n"
+			+ "constant native Cos takes real radians returns real\n"
+			+ "constant native Tan takes real radians returns real\n"
+			+ "constant native Asin takes real y returns real\n"
+			+ "constant native Acos takes real x returns real\n"
+			+ "constant native Atan takes real x returns real\n"
+			+ "constant native Atan2 takes real y, real x returns real\n"
+			+ "constant native SquareRoot takes real x returns real\n"
+			+ "constant native Pow takes real x, real power returns real\n"
+			+ "constant native I2R takes integer i returns real\n"
+			+ "constant native R2I takes real r returns integer\n"
+			+ "constant native I2S takes integer i returns string\n"
+			+ "constant native R2S takes real r returns string\n"
+			+ "constant native R2SW takes real r, integer width, integer precision returns string\n"
+			+ "constant native S2I takes string s returns integer\n"
+			+ "constant native S2R takes string s returns real\n"
+			+ "constant native StringHash takes string s returns integer\n"
+			+ "constant native StringLength takes string s returns integer\n"
+			+ "constant native SubString takes string source, integer start, integer end returns string\n"
+			+ "constant native StringCase takes string source, boolean upper returns string\n"
+			+ "constant native Max takes integer a, integer b returns integer\n"
+			+ "constant native GetPlayers takes nothing returns integer\n"
+			+ "constant native GetStartLocationX takes integer whichStartLocation returns real\n"
+			+ "constant native GetStartLocationY takes integer whichStartLocation returns real\n"
+			+ "constant native GetPlayerStartLocation takes player whichPlayer returns integer\n"
+			+ "constant native IsUnitDetected takes unit whichUnit, player whichPlayer returns boolean\n";
+
+	private static volatile List<JassDefinitionBlock> cachedCommonAiBlocks = null;
+	private static final Object COMMON_AI_LOCK = new Object();
+
+	public static void preloadCommonAi(final DataSource dataSource) {
+		if (cachedCommonAiBlocks == null) {
+			synchronized (COMMON_AI_LOCK) {
+				if (cachedCommonAiBlocks == null) {
+					loadCommonAiBlocks(dataSource);
+				}
+			}
+		}
+	}
+
+	public static void resetCachedCommonAi() {
+		synchronized (COMMON_AI_LOCK) {
+			cachedCommonAiBlocks = null;
+		}
+	}
+
+	private static List<JassDefinitionBlock> loadCommonAiBlocks(final DataSource dataSource) {
+		final List<JassDefinitionBlock> collected = new ArrayList<>();
+		final JassProgram collector = new JassProgram() {
+			@Override
+			public void addAll(final List<JassDefinitionBlock> blocks) {
+				super.addAll(blocks);
+				collected.addAll(blocks);
+			}
+		};
+		String commonPath = "Scripts\\common.ai";
+		if (!dataSource.has(commonPath) && dataSource.has("common.ai")) {
+			commonPath = "common.ai";
+		}
+		if (dataSource.has(commonPath)) {
+			try {
+				final SmashJassParser extraParser = new SmashJassParser(new StringReader(COMMON_AI_EXTRA_NATIVES));
+				extraParser.scanAndParse("COMMON_AI_EXTRA_NATIVES", collector);
+				Jass2.readJassFile(dataSource, collector, commonPath);
+				cachedCommonAiBlocks = Collections.unmodifiableList(collected);
+			}
+			catch (final Exception e) {
+				System.err.println("Failed to cache common.ai: " + e.getMessage());
+			}
+		}
+		return cachedCommonAiBlocks;
+	}
+
 	/**
 	 * Loads {@code Scripts\common.ai} plus the race/campaign script and returns a
 	 * ready AI environment. Missing scripts are tolerated (returns null) so maps
@@ -1657,22 +1898,29 @@ public class JassAIEnvironment {
 		final JassProgram jassProgramVisitor = new JassProgram();
 		final JassAIEnvironment environment = new JassAIEnvironment(jassProgramVisitor, dataSource, uiViewport, uiScene,
 				gameUI, mapConfig, simulation, aiPlayerIndex);
-		final String[] preambleFiles = new String[] { "Scripts\\common.j", "Scripts\\common.ai" };
-		for (final String file : preambleFiles) {
-			String path = file;
-			if (!dataSource.has(path)) {
-				final int slash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
-				if (slash >= 0) {
-					path = path.substring(slash + 1);
+
+		preloadCommonAi(dataSource);
+		if (cachedCommonAiBlocks != null) {
+			jassProgramVisitor.addAll(cachedCommonAiBlocks);
+		}
+		else {
+			final String[] preambleFiles = new String[] { "Scripts\\common.j", "Scripts\\common.ai" };
+			for (final String file : preambleFiles) {
+				String path = file;
+				if (!dataSource.has(path)) {
+					final int slash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+					if (slash >= 0) {
+						path = path.substring(slash + 1);
+					}
 				}
-			}
-			if (dataSource.has(path)) {
-				try {
-					Jass2.readJassFile(dataSource, jassProgramVisitor, path);
-				}
-				catch (final Exception e) {
-					System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
-					return null;
+				if (dataSource.has(path)) {
+					try {
+						Jass2.readJassFile(dataSource, jassProgramVisitor, path);
+					}
+					catch (final Exception e) {
+						System.err.println("StartCampaignAI: failed reading " + path + ": " + e.getMessage());
+						return null;
+					}
 				}
 			}
 		}

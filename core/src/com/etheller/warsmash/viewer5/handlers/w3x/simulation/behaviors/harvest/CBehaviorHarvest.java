@@ -48,6 +48,12 @@ public class CBehaviorHarvest extends CAbstractRangedBehavior
 
 	@Override
 	public boolean isWithinRange(final CSimulation simulation) {
+		if (this.target instanceof CUnit) {
+			final CUnit targetUnit = (CUnit) this.target;
+			final float range = Math.max(this.abilityHarvest.getTreeAttack().getRange(),
+					targetUnit.getUnitType().getCollisionSize() + 64f);
+			return this.unit.canReach(this.target, range);
+		}
 		return this.unit.canReach(this.target, this.abilityHarvest.getTreeAttack().getRange());
 	}
 

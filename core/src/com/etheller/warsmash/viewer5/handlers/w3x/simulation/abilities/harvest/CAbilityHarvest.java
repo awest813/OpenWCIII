@@ -101,6 +101,18 @@ public class CAbilityHarvest extends AbstractGenericSingleIconActiveAbility {
 		if (isToggleOn() && (orderId == OrderIds.returnresources)) {
 			return this.behaviorReturnResources.reset(game);
 		}
+		if (orderId == OrderIds.autoharvestlumber) {
+			final CDestructable nearestTree = CBehaviorReturnResources.findNearestTree(caster, this, game, caster);
+			if (nearestTree != null) {
+				return this.behaviorHarvest.reset(game, nearestTree);
+			}
+		}
+		else if (orderId == OrderIds.autoharvestgold) {
+			final CUnit nearestMine = CBehaviorReturnResources.findNearestMine(caster, game);
+			if (nearestMine != null) {
+				return this.behaviorHarvest.reset(game, nearestMine);
+			}
+		}
 		return caster.pollNextOrderBehavior(game);
 	}
 
@@ -178,9 +190,27 @@ public class CAbilityHarvest extends AbstractGenericSingleIconActiveAbility {
 	}
 
 	@Override
+	public void checkCanTargetNoTarget(final CSimulation game, final CUnit unit, final int orderId,
+			final AbilityTargetCheckReceiver<Void> receiver) {
+		if ((orderId == OrderIds.autoharvestgold) || (orderId == OrderIds.autoharvestlumber)
+				|| (orderId == OrderIds.returnresources)) {
+			innerCheckCanTargetNoTarget(game, unit, orderId, receiver);
+		}
+		else {
+			super.checkCanTargetNoTarget(game, unit, orderId, receiver);
+		}
+	}
+
+	@Override
 	protected void innerCheckCanTargetNoTarget(final CSimulation game, final CUnit unit, final int orderId,
 			final AbilityTargetCheckReceiver<Void> receiver) {
 		if ((orderId == OrderIds.returnresources) && isToggleOn()) {
+			receiver.targetOk(null);
+		}
+		else if ((orderId == OrderIds.autoharvestgold) && (this.goldCapacity > 0)) {
+			receiver.targetOk(null);
+		}
+		else if ((orderId == OrderIds.autoharvestlumber) && (this.lumberCapacity > 0)) {
 			receiver.targetOk(null);
 		}
 		else {

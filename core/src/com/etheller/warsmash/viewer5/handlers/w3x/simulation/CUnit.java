@@ -2505,7 +2505,7 @@ public class CUnit extends CWidget {
 		}
 		for (final CAbility ability : this.abilities) {
 			final BooleanAbilityActivationReceiver activationReceiver = BooleanAbilityActivationReceiver.INSTANCE;
-			ability.checkCanUse(simulation, this, orderId, activationReceiver);
+			ability.checkCanUse(simulation, this, orderId, activationReceiver.reset());
 			if (activationReceiver.isOk()) {
 				if (target == null) {
 					final BooleanAbilityTargetCheckReceiver<Void> booleanTargetReceiver = BooleanAbilityTargetCheckReceiver

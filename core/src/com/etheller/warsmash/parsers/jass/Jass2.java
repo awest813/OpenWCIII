@@ -1139,6 +1139,10 @@ public class Jass2 {
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("IssuePointOrderLoc",
 					(arguments, globalScope, triggerScope) -> {
+						if ((arguments.size() < 3) || (arguments.get(0) == null) || (arguments.get(1) == null)
+								|| (arguments.get(2) == null)) {
+							return BooleanJassValue.FALSE;
+						}
 						final CUnit whichUnit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
 						if (whichUnit == null) {
 							return BooleanJassValue.FALSE;
@@ -1146,6 +1150,9 @@ public class Jass2 {
 						final String orderString = arguments.get(1).visit(StringJassValueVisitor.getInstance());
 						final AbilityPointTarget whichLocation = arguments.get(2)
 								.visit(ObjectJassValueVisitor.getInstance());
+						if (whichLocation == null) {
+							return BooleanJassValue.FALSE;
+						}
 						final CPlayerUnitOrderExecutor defaultPlayerUnitOrderExecutor = CommonEnvironment.this.simulation
 								.getDefaultPlayerUnitOrderExecutor(whichUnit.getPlayerIndex());
 						final BooleanAbilityActivationReceiver activationReceiver = BooleanAbilityActivationReceiver.INSTANCE;

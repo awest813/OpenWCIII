@@ -103,15 +103,71 @@ public class SequenceUtils {
 		return matches;
 	}
 
-	public static int matchRank(final EnumSet<AnimationTokens.SecondaryTag> goalTagSet,
-			final EnumSet<AnimationTokens.SecondaryTag> tagsToTest) {
-		int matchRank = 0;
-		for (final AnimationTokens.SecondaryTag goalTag : goalTagSet) {
-			if (tagsToTest.contains(goalTag)) {
-				matchRank += (SECONDARY_TAGS_DECLARED_COUNT - goalTag.ordinal()) + 1;
-				matchRank += 200000;
+	public static final EnumSet<SecondaryTag> ORDINAL_TAGS = EnumSet.of(
+			SecondaryTag.FIRST,
+			SecondaryTag.SECOND,
+			SecondaryTag.THIRD,
+			SecondaryTag.FOURTH,
+			SecondaryTag.FIFTH);
+
+	public static boolean isCompatible(final EnumSet<SecondaryTag> goalTagSet,
+			final EnumSet<SecondaryTag> tagsToTest) {
+		if (tagsToTest == null) {
+			return true;
+		}
+		// 1. Ordinal tag mutual exclusivity:
+		// If candidate has an ordinal tag, the goalTagSet MUST contain the same ordinal tag.
+		for (final SecondaryTag ordinalTag : ORDINAL_TAGS) {
+			if (tagsToTest.contains(ordinalTag)) {
+				if (goalTagSet == null || !goalTagSet.contains(ordinalTag)) {
+					return false;
+				}
 			}
 		}
+
+		// 2. Structural UPGRADE Tag Check:
+		// If candidate has UPGRADE, goalTagSet MUST have UPGRADE.
+		// A non-upgraded unit must never play an UPGRADE sequence.
+		if (tagsToTest.contains(SecondaryTag.UPGRADE)) {
+			if (goalTagSet == null || !goalTagSet.contains(SecondaryTag.UPGRADE)) {
+				return false;
+			}
+		}
+
+		// 3. Structural ALTERNATE / ALTERNATEEX Check:
+		// A normal unit must never play an ALTERNATE / ALTERNATEEX sequence.
+		if (tagsToTest.contains(SecondaryTag.ALTERNATE)) {
+			if (goalTagSet == null || !goalTagSet.contains(SecondaryTag.ALTERNATE)) {
+				return false;
+			}
+		}
+		if (tagsToTest.contains(SecondaryTag.ALTERNATEEX)) {
+			if (goalTagSet == null || !goalTagSet.contains(SecondaryTag.ALTERNATEEX)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public static int matchRank(final EnumSet<AnimationTokens.SecondaryTag> goalTagSet,
+			final EnumSet<AnimationTokens.SecondaryTag> tagsToTest) {
+		if (!isCompatible(goalTagSet, tagsToTest)) {
+			return -1;
+		}
+		int matchRank = 0;
+		int matchedCount = 0;
+		if (goalTagSet != null) {
+			for (final AnimationTokens.SecondaryTag goalTag : goalTagSet) {
+				if (tagsToTest.contains(goalTag)) {
+					matchRank += (SECONDARY_TAGS_DECLARED_COUNT - goalTag.ordinal()) + 1;
+					matchRank += 200000;
+					matchedCount++;
+				}
+			}
+		}
+		final int extraTags = tagsToTest.size() - matchedCount;
+		matchRank -= extraTags * 10;
 		return matchRank;
 	}
 
@@ -147,11 +203,25 @@ public class SequenceUtils {
 				for (int i = 0, l = sequences.size(); i < l; i++) {
 					final Sequence sequence = sequences.get(i);
 					if (sequence.getPrimaryTags().contains(type) || (type == null)) {
+						if (!isCompatible(tags, sequence.getSecondaryTags())) {
+							continue;
+						}
 						if ((fallbackTags == null) || (sequence.getSecondaryTags().size() < fallbackTags.size())
 								|| ((sequence.getSecondaryTags().size() == fallbackTags.size())
 										&& (SecondaryTagSequenceComparator.getTagsOrdinal(sequence.getSecondaryTags(),
 												tags) > SecondaryTagSequenceComparator.getTagsOrdinal(fallbackTags,
 														tags)))) {
+							fallbackTags = sequence.getSecondaryTags();
+						}
+					}
+				}
+			}
+			// Ultimate fallback if no compatible sequences were found
+			if (fallbackTags == null) {
+				for (int i = 0, l = sequences.size(); i < l; i++) {
+					final Sequence sequence = sequences.get(i);
+					if (sequence.getPrimaryTags().contains(type) || (type == null)) {
+						if ((fallbackTags == null) || (sequence.getSecondaryTags().size() < fallbackTags.size())) {
 							fallbackTags = sequence.getSecondaryTags();
 						}
 					}

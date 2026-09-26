@@ -22,11 +22,23 @@ public class CDestructableType {
 	private final int lumberRepairCost;
 	private final int repairTime;
 
+	private final boolean selectable;
+	private final boolean canAttack;
+
 	public CDestructableType(final War3ID typeId, final String name, final float maxLife,
 			final EnumSet<CTargetType> targetedAs,
 			final String armorType, final int buildTime, final int goldRepairCost, final int lumberRepairCost,
 			final int repairTime, final float occlusionHeight, final BufferedImage pathingPixelMap,
 			final BufferedImage pathingDeathPixelMap) {
+		this(typeId, name, maxLife, targetedAs, armorType, buildTime, goldRepairCost, lumberRepairCost, repairTime,
+				occlusionHeight, pathingPixelMap, pathingDeathPixelMap, true, true);
+	}
+
+	public CDestructableType(final War3ID typeId, final String name, final float maxLife,
+			final EnumSet<CTargetType> targetedAs,
+			final String armorType, final int buildTime, final int goldRepairCost, final int lumberRepairCost,
+			final int repairTime, final float occlusionHeight, final BufferedImage pathingPixelMap,
+			final BufferedImage pathingDeathPixelMap, final boolean selectable, final boolean canAttack) {
 		this.typeId = typeId;
 		this.name = name;
 		this.maxLife = maxLife;
@@ -39,6 +51,8 @@ public class CDestructableType {
 		this.goldRepairCost = goldRepairCost;
 		this.lumberRepairCost = lumberRepairCost;
 		this.repairTime = repairTime;
+		this.selectable = selectable;
+		this.canAttack = canAttack;
 	}
 
 	public War3ID getTypeId() {
@@ -87,5 +101,13 @@ public class CDestructableType {
 
 	public BufferedImage getPathingDeathPixelMap() {
 		return this.pathingDeathPixelMap;
+	}
+
+	public boolean isSelectable() {
+		return this.selectable;
+	}
+
+	public boolean isCanAttack() {
+		return this.canAttack;
 	}
 }

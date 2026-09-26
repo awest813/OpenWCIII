@@ -28,6 +28,9 @@ public class CDestructableData {
 	private static final String LUMBER_REPAIR = "lumberRep"; // replaced from 'brel'
 
 	private static final String OCCLUSION_HEIGHT = "occH";
+	private static final String SELECTABLE = "bgse"; // DestructableMetaData.slk rawcode; 0=not selectable, 1=selectable
+	private static final String CAN_ATTACK = "canAttack";
+	private static final String CAN_ATTACK_RAW = "bcan";
 
 	private final ObjectData unitData;
 	private final Map<War3ID, CDestructableType> unitIdToUnitType = new HashMap<>();
@@ -70,10 +73,27 @@ public class CDestructableData {
 			final int goldRepairCost = unitType.getFieldAsInteger(GOLD_REPAIR, 0);
 			final int lumberRepairCost = unitType.getFieldAsInteger(LUMBER_REPAIR, 0);
 			final float occlusionHeight = unitType.getFieldAsFloat(OCCLUSION_HEIGHT, 0);
+			// bgse: 0 = not selectable (decorative, e.g. DTsp spikes), 1 = selectable (e.g. DTg1 gate)
+			// Default to true so destructables without explicit data remain targetable.
+			final boolean selectable = unitType.getFieldAsInteger(SELECTABLE, 0) != 0
+					|| unitType.getFieldAsString(SELECTABLE, 0).isEmpty();
+
+			final String canAttackStr = unitType.getFieldAsString(CAN_ATTACK, 0);
+			final String canAttackRawStr = unitType.getFieldAsString(CAN_ATTACK_RAW, 0);
+			final boolean canAttack;
+			if (canAttackStr != null && !canAttackStr.isEmpty()) {
+				canAttack = unitType.getFieldAsInteger(CAN_ATTACK, 0) != 0;
+			}
+			else if (canAttackRawStr != null && !canAttackRawStr.isEmpty()) {
+				canAttack = unitType.getFieldAsInteger(CAN_ATTACK_RAW, 0) != 0;
+			}
+			else {
+				canAttack = true;
+			}
 
 			unitTypeInstance = new CDestructableType(typeId, name, life, targetedAs, armorType, buildTime,
 					goldRepairCost, lumberRepairCost, repairTime, occlusionHeight, buildingPathingPixelMap,
-					buildingPathingDeathPixelMap);
+					buildingPathingDeathPixelMap, selectable, canAttack);
 			this.unitIdToUnitType.put(typeId, unitTypeInstance);
 		}
 		return unitTypeInstance;

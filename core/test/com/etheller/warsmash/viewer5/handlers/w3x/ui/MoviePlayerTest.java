@@ -10,6 +10,22 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MoviePlayerTest {
+	@Test
+	void missingDecoderDoesNotInterruptTheGameThread() {
+		assertFalse(Thread.currentThread().isInterrupted());
+		assertEquals("", MoviePlayer.probeOutput("missing-warsmash-decoder-9247.exe",
+				new java.io.File("IntroX.avi")));
+		assertFalse(Thread.currentThread().isInterrupted());
+	}
+
+	@Test
+	void introXFindsTheRestoredAviWithoutChangingTheRetailReference() {
+		final List<String> paths = MoviePlayer.candidatePaths("IntroX");
+		assertEquals("IntroX", paths.get(0));
+		assertTrue(paths.contains("IntroX.avi"));
+		assertTrue(paths.contains("Movies\\IntroX.avi"));
+		assertTrue(paths.indexOf("IntroX.mpq") < paths.indexOf("IntroX.avi"));
+	}
 	private static final String FFMPEG_PROBE = "ffmpeg version 6.1.1\n"
 			+ "Input #0, avi, from 'OrcIntro.mpq':\n" + "  Duration: 00:01:47.20, start: 0.000000, bitrate: 1500 kb/s\n"
 			+ "  Stream #0:0: Video: mpeg4 (DIVX / 0x58564944), yuv420p, 640x480 [SAR 1:1 DAR 4:3], 1350 kb/s, 29.97 fps, 29.97 tbr, 29.97 tbn\n"

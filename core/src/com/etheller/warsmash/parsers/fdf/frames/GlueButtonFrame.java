@@ -47,6 +47,7 @@ public class GlueButtonFrame extends AbstractRenderableFrame implements Clickabl
 
 	public void setEnabled(final boolean enabled) {
 		this.enabled = enabled;
+		if (!enabled) this.mouseOver = false;
 		if (this.enabled) {
 			this.activeChild = this.controlBackdrop;
 		}
@@ -127,7 +128,7 @@ public class GlueButtonFrame extends AbstractRenderableFrame implements Clickabl
 
 	@Override
 	public void mouseEnter(final GameUI gameUI, final Viewport uiViewport) {
-		if (this.highlightOnMouseOver) {
+		if (this.enabled && isVisibleOnScreen() && this.highlightOnMouseOver) {
 			this.mouseOver = true;
 			onMouseEnter();
 		}
@@ -147,7 +148,7 @@ public class GlueButtonFrame extends AbstractRenderableFrame implements Clickabl
 
 	@Override
 	public void onClick(final int button) {
-		if (this.onClick != null) {
+		if (this.enabled && isVisibleOnScreen() && this.onClick != null) {
 			this.onClick.run();
 		}
 	}

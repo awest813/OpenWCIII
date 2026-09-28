@@ -382,6 +382,10 @@ public final class GlobalScope {
 
 	public void resetGlobalInitialization() {
 		this.lastGlobalsBlockEndInstructionPtr = -1;
+		// A later Preloader/ExecuteScript load may contain only functions. Do not
+		// leave the previous initializer callable or it resets the live map's
+		// globals (player forces, hero references, cinematic state, and timers).
+		this.functionNameToInstructionPtr.remove(INIT_GLOBALS_AUTOGEN_FXN_NAME);
 	}
 
 	public void innerBeginDefiningGlobals(final int lineNo, final String sourceFile) {

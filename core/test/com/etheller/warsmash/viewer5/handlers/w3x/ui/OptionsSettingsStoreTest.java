@@ -17,6 +17,25 @@ class OptionsSettingsStoreTest {
 	File tmpDir;
 
 	@Test
+	void windowSizeRoundTripsAndDraftEditsDoNotChangeStoredSettings() throws Exception {
+		final OptionsSettingsStore saved = new OptionsSettingsStore();
+		saved.setWindowSize(1280, 720);
+		final OptionsSettingsStore draft = new OptionsSettingsStore();
+		draft.copyFrom(saved);
+		draft.setWindowSize(1920, 1080);
+		assertEquals(1280, saved.getWindowWidth());
+		final File file = new File(tmpDir, "video.properties");
+		draft.save(file);
+		final OptionsSettingsStore loaded = new OptionsSettingsStore();
+		loaded.load(file);
+		assertEquals(1920, loaded.getWindowWidth());
+		assertEquals(1080, loaded.getWindowHeight());
+		org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+				() -> loaded.setWindowSize(0, 1080));
+		assertEquals(1920, loaded.getWindowWidth());
+	}
+
+	@Test
 	void defaults() {
 		final OptionsSettingsStore store = new OptionsSettingsStore();
 		assertEquals(100, store.getMusicVolume());

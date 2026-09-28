@@ -19,6 +19,12 @@ public class CampaignMission {
 		return this.missionName;
 	}
 
+	/** Cinematic entries can reference a scripted map or a prerecorded movie. */
+	public boolean isMap() {
+		final String path = this.mapFilename.toLowerCase(java.util.Locale.ROOT);
+		return path.endsWith(".w3m") || path.endsWith(".w3x");
+	}
+
 	public String getMapFilename() {
 		return this.mapFilename;
 	}

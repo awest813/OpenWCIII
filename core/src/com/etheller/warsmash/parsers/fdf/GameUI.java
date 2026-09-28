@@ -1044,13 +1044,20 @@ public final class GameUI extends AbstractUIFrame implements UIFrame {
 				final String controlPushedBackdropKey = frameDefinition.getString("ControlPushedBackdrop");
 				final String controlDisabledBackdropKey = frameDefinition.getString("ControlDisabledBackdrop");
 				final String controlMouseOverHighlightKey = frameDefinition.getString("ControlMouseOverHighlight");
+				final String buttonTextKey = frameDefinition.getString("ButtonText");
 				final Vector2Definition pushedTextOffset = frameDefinition.getVector2("ButtonPushedTextOffset");
 				if (pushedTextOffset != null) {
 					glueButtonFrame.setButtonPushedTextOffsetX(pushedTextOffset.getX());
 					glueButtonFrame.setButtonPushedTextOffsetY(pushedTextOffset.getY());
 				}
 				for (final FrameDefinition childDefinition : frameDefinition.getInnerFrames()) {
-					if (childDefinition.getName().equals(controlBackdropKey)) {
+					if (childDefinition.getName().equals(buttonTextKey)) {
+						final UIFrame text = inflate(childDefinition, glueButtonFrame, frameDefinition,
+								inDecorateFileNames || childDefinition.has("DecorateFileNames"));
+						text.setSetAllPoints(true);
+						glueButtonFrame.setButtonText(text);
+					}
+					else if (childDefinition.getName().equals(controlBackdropKey)) {
 						final UIFrame inflatedChild = inflate(childDefinition, glueButtonFrame, frameDefinition,
 								inDecorateFileNames || childDefinition.has("DecorateFileNames"));
 						inflatedChild.setSetAllPoints(true);

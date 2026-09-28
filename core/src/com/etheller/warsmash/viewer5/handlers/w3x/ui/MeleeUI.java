@@ -1,5 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignPresentationEvents;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CinematicSceneTimer;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -390,6 +392,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 	private SimpleButtonFrame alliesButton;
 	private SimpleButtonFrame chatButton;
 	private final Runnable exitGameRunnable;
+	private final CampaignPresentationEvents campaignPresentationEvents = new CampaignPresentationEvents();
 	private java.util.function.BiConsumer<String, Boolean> changeLevelHandler;
 	private SimpleFrame smashEscMenu;
 	private RenderWidget mouseOverUnit;
@@ -2320,8 +2323,8 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		}
 		final float drawX = (screenWidth - drawWidth) / 2f;
 		final float drawY = (screenHeight - drawHeight) / 2f;
-		// Pixmap rows arrive top-down while LibGDX texture reads bottom-up, hence negative height flip
-		batch.draw(this.movieTexture, drawX, drawY + drawHeight, drawWidth, -drawHeight);
+		// The decoder's first row belongs at the top of the screen.
+		batch.draw(this.movieTexture, drawX, drawY, drawWidth, drawHeight, 0, 1, 1, 0);
 	}
 
 	@Override
@@ -3124,7 +3127,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		}
 	}
 
-	private static final class CinematicPortrait {
+	private final class CinematicPortrait {
 		private final EnumSet<AnimationTokens.SecondaryTag> recycleSet = EnumSet
 				.noneOf(AnimationTokens.SecondaryTag.class);
 		private EnumSet<AnimationTokens.SecondaryTag> secondaryTags;
@@ -3132,6 +3135,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		private long portraitTargetDuration = 0;
 		private long portraitCurrentDuration = 0;
 		private long portraitShowDuration = -1;
+		private final CinematicSceneTimer sceneTimer = new CinematicSceneTimer();
 
 		private final SpriteFrame2 cinematicPortrait;
 		private final UIFrame cinematicScenePanel;
@@ -3143,12 +3147,19 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		}
 
 		public void endCinematicSequence() {
+			this.sceneTimer.end();
+			this.portraitCurrentDuration = 0;
+			this.portraitTargetDuration = 0;
 			this.secondaryTags = SequenceUtils.EMPTY;
 			this.cinematicScenePanel.setVisible(false);
+			MeleeUI.this.rootFrame.setText(MeleeUI.this.cinematicSpeakerText, "");
+			MeleeUI.this.rootFrame.setText(MeleeUI.this.cinematicDialogueText, "");
 		}
 
 		public void update(final float dt) {
-			if (isResetNeeded()) {
+			if (!this.sceneTimer.isActive()) return;
+			this.sceneTimer.advance(dt);
+			if (!this.sceneTimer.isActive()) {
 				endCinematicSequence();
 			}
 			else {
@@ -3174,10 +3185,6 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			}
 		}
 
-		private boolean isResetNeeded() {
-			return this.portraitCurrentDuration > this.portraitShowDuration;
-		}
-
 		public void talk(final UnitSound us, float extraDuration) {
 			// TODO we somehow called talk from null by clicking a unit right at the same
 			// time it died, so I do a null check here until I study that case further.
@@ -3200,6 +3207,13 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 
 		public void setCinematicTalkingHead(MdxModel portraitModel, int teamColorIndex,
 				EnumSet<SecondaryTag> secondaryTags, float faceLockTime) {
+			this.sceneTimer.start(faceLockTime);
+			if (!this.sceneTimer.isActive()) {
+				endCinematicSequence();
+				return;
+			}
+			this.portraitCurrentDuration = 0;
+			this.portraitTargetDuration = 0;
 			this.cinematicScenePanel.setVisible(true);
 			this.portraitShowDuration = (long) (1000 * faceLockTime);
 			this.secondaryTags = secondaryTags;
@@ -5764,6 +5778,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 
 	@Override
 	public void endCinematicScene() {
+		this.cinematicPortrait.endCinematicSequence();
 		this.portrait.faceLockTime = 0;
 		selectUnit(this.selectedUnit);
 	}
@@ -5806,6 +5821,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			showScoreDialog("Victory", "Mission Complete", this.exitGameRunnable);
 		}
 		else {
+			this.campaignPresentationEvents.cancelContinuation();
 			this.exitGameRunnable.run();
 		}
 	}
@@ -5816,6 +5832,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			showScoreDialog("Defeat", "Mission Failed", this.exitGameRunnable);
 		}
 		else {
+			this.campaignPresentationEvents.cancelContinuation();
 			this.exitGameRunnable.run();
 		}
 	}
@@ -5830,7 +5847,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		this.scoreDialog = createScriptDialog(scope);
 		this.scoreDialog.setTitle(this.rootFrame, title + "\n\n" + subtitle);
 		final CScriptDialogButton continueButton = createScriptDialogButton(this.scoreDialog, "Continue", 'C');
-		continueButton.getButtonFrame().setOnClick(() -> {
+		continueButton.getButtonFrame().setOnClick(this.campaignPresentationEvents.replaceContinuation(() -> {
 			if (this.scoreDialog != null) {
 				this.scoreDialog.setVisible(false);
 			}
@@ -5838,7 +5855,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			if (onContinue != null) {
 				onContinue.run();
 			}
-		});
+		}));
 		this.scoreDialog.getScriptDialogFrame().positionBounds(this.rootFrame, this.uiViewport);
 		this.scoreDialog.setVisible(true);
 	}
@@ -5893,6 +5910,7 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 			showScoreDialog("Victory", "Mission Complete", proceed);
 		}
 		else {
+			this.campaignPresentationEvents.cancelContinuation();
 			proceed.run();
 		}
 	}
@@ -5956,6 +5974,9 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 
 	@Override
 	public void playCinematic(final String moviePath) {
+		endCinematicScene();
+		this.cinematicPortrait.cinematicPortrait.setModel(null);
+		this.cinematicScenePanel.setVisible(true);
 		this.moviePlaying = true;
 		this.movieTitle = moviePath != null ? moviePath : "";
 		final String shortName;
@@ -5969,9 +5990,13 @@ public class MeleeUI implements CUnitStateListener, CommandButtonListener, Comma
 		if (this.cinematicDialogueText != null) {
 			final String skipHint = this.cinematicSkipAllowed ? "\n(Press ESC to skip)" : "";
 			this.rootFrame.setText(this.cinematicDialogueText,
-					"Playing: " + (shortName.isEmpty() ? "(movie)" : shortName) + skipHint);
+					"Loading cinematic" + (shortName.isEmpty() ? "" : ": " + shortName) + skipHint);
 		}
 		startMoviePlayback(moviePath);
+		if (this.movieSession == null && this.cinematicDialogueText != null) {
+			final String hint = this.cinematicSkipAllowed ? "\nPress Esc to continue." : "";
+			this.rootFrame.setText(this.cinematicDialogueText, "This cinematic could not be played." + hint);
+		}
 	}
 
 	/**

@@ -17,7 +17,7 @@ public class CampaignButtonUI extends AbstractUIFrame implements ClickableFrame 
 	private StringFrame nameText;
 	private Color defaultNameColor;
 	private Color defaultHeaderColor;
-	private boolean artHighlight;
+	private static final Color DISABLED_TEXT = new Color(0.5f, 0.5f, 0.5f, 1f);
 
 	public CampaignButtonUI(final String name, final UIFrame parent) {
 		super(name, parent);
@@ -30,10 +30,13 @@ public class CampaignButtonUI extends AbstractUIFrame implements ClickableFrame 
 	public void setEnabled(final boolean enabled) {
 		this.enabled = enabled;
 		this.buttonArt.setEnabled(enabled);
+		restoreTextColors();
 	}
 
 	public void setOnClick(final Runnable onClick) {
-		this.buttonArt.setOnClick(onClick);
+		this.buttonArt.setOnClick(() -> {
+			if (this.enabled && isVisible()) onClick.run();
+		});
 	}
 
 	@Override
@@ -76,19 +79,20 @@ public class CampaignButtonUI extends AbstractUIFrame implements ClickableFrame 
 
 	@Override
 	public void mouseEnter(final GameUI gameUI, final Viewport uiViewport) {
-		this.headerText.setColor(Color.WHITE);
-		this.nameText.setColor(Color.WHITE);
+		if (this.enabled) {
+			this.headerText.setColor(Color.WHITE);
+			this.nameText.setColor(Color.WHITE);
+		}
 	}
 
 	@Override
 	public void mouseExit(final GameUI gameUI, final Viewport uiViewport) {
-		this.headerText.setColor(this.defaultHeaderColor);
-		this.nameText.setColor(this.defaultNameColor);
+		restoreTextColors();
 	}
 
 	@Override
 	public void onClick(final int button) {
-		this.buttonArt.onClick(button);
+		if (this.enabled && isVisible()) this.buttonArt.onClick(button);
 	}
 
 	@Override
@@ -98,12 +102,19 @@ public class CampaignButtonUI extends AbstractUIFrame implements ClickableFrame 
 
 	public void setHeaderText(final StringFrame headerText) {
 		this.headerText = headerText;
-		this.defaultHeaderColor = headerText.getColor();
+		this.defaultHeaderColor = new Color(headerText.getColor());
+		restoreTextColors();
 	}
 
 	public void setNameText(final StringFrame nameText) {
 		this.nameText = nameText;
-		this.defaultNameColor = nameText.getColor();
+		this.defaultNameColor = new Color(nameText.getColor());
+		restoreTextColors();
+	}
+
+	private void restoreTextColors() {
+		if (this.headerText != null) this.headerText.setColor(this.enabled ? this.defaultHeaderColor : DISABLED_TEXT);
+		if (this.nameText != null) this.nameText.setColor(this.enabled ? this.defaultNameColor : DISABLED_TEXT);
 	}
 
 	@Override

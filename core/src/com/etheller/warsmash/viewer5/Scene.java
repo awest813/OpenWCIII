@@ -259,6 +259,11 @@ public abstract class Scene {
 	}
 
 	public void renderOpaque() {
+		renderOpaque(null);
+	}
+
+	/** Render the world without redrawing its separately rendered sky. */
+	public void renderOpaque(final ModelInstance background) {
 		if (!this.show) {
 			return;
 		}
@@ -272,7 +277,9 @@ public abstract class Scene {
 
 		// Add all of the batched instances to batches.
 		for (final ModelInstance instance : this.batchedInstances) {
-			addToBatch(instance);
+			if (instance != background) {
+				addToBatch(instance);
+			}
 		}
 
 		// Render all of the batches.
@@ -282,7 +289,9 @@ public abstract class Scene {
 
 		// Render all of the opaque things of non-batched instances.
 		for (final ModelInstance instance : this.instances) {
-			instance.renderOpaque(this.camera.viewProjectionMatrix);
+			if (instance != background) {
+				instance.renderOpaque(this.camera.viewProjectionMatrix);
+			}
 		}
 	}
 
@@ -312,6 +321,10 @@ public abstract class Scene {
 	 * camera's viewport.
 	 */
 	public void renderTranslucent() {
+		renderTranslucent(null);
+	}
+
+	public void renderTranslucent(final ModelInstance background) {
 		if (!this.show) {
 			return;
 		}
@@ -325,9 +338,23 @@ public abstract class Scene {
 		}
 
 		for (final ModelInstance instance : this.instances) {
-			instance.renderTranslucent();
+			if (instance != background) {
+				instance.renderTranslucent();
+			}
 		}
 
+	}
+
+	/** Sky geometry is a backdrop, regardless of its authored radius/depth flags. */
+	public void renderBackground(final ModelInstance background) {
+		if (this.show && background != null && background.shown()) {
+			background.renderOpaque(this.camera.viewProjectionMatrix);
+			background.renderTranslucent();
+			// Materials can write depth or leave the depth mask disabled. Remove sky
+			// depth only, preserving its color behind the terrain and world objects.
+			this.viewer.gl.glDepthMask(true);
+			this.viewer.gl.glClear(GL20.GL_DEPTH_BUFFER_BIT);
+		}
 	}
 
 	public void clearEmitterObjects() {

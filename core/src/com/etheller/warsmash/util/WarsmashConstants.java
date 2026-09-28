@@ -47,6 +47,7 @@ public class WarsmashConstants {
 	// to take priority over built-ins for tilesets.
 	public static boolean FIX_FLAT_FILES_TILESET_LOADING = false;
 	public static boolean ENABLE_MUSIC = false;
+	public static String FFMPEG_PATH = "";
 	public static boolean LOAD_UNITS_FROM_WORLDEDIT_DATA = false;
 	public static boolean CRASH_ON_INCOMPATIBLE_132_FEATURES = false;
 	public static final boolean FIRE_DEATH_EVENTS_ON_REMOVEUNIT = false;
@@ -77,6 +78,7 @@ public class WarsmashConstants {
 		}
 		FIX_FLAT_FILES_TILESET_LOADING = emulatorConstants.getFieldValue("FixFlatFilesTilesetLoading") == 1;
 		ENABLE_MUSIC = emulatorConstants.getFieldValue("EnableMusic") == 1;
+		FFMPEG_PATH = emulatorConstants.getField("FfmpegPath");
 		LOAD_UNITS_FROM_WORLDEDIT_DATA = emulatorConstants.getFieldValue("LoadUnitsFromWorldEditData") == 1;
 		CRASH_ON_INCOMPATIBLE_132_FEATURES = emulatorConstants.getFieldValue("CrashOnIncompatible132Features") == 1;
 		INPUT_HOTKEY_MODE = emulatorConstants.getFieldValue("InputHotkeyMode");

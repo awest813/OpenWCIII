@@ -1871,6 +1871,17 @@ public class JassAIEnvironment {
 		}
 		if (dataSource.has(commonPath)) {
 			try {
+				// Campaign common.ai uses more common.j symbols than the minimal
+				// bootstrap declares (for example time of day and race constants).
+				// Cache the real preamble too, preserving compatibility without
+				// parsing it again for every AI player.
+				String commonJPath = "Scripts\\common.j";
+				if (!dataSource.has(commonJPath)) {
+					commonJPath = "common.j";
+				}
+				if (dataSource.has(commonJPath)) {
+					Jass2.readJassFile(dataSource, collector, commonJPath);
+				}
 				final SmashJassParser extraParser = new SmashJassParser(new StringReader(COMMON_AI_EXTRA_NATIVES));
 				extraParser.scanAndParse("COMMON_AI_EXTRA_NATIVES", collector);
 				Jass2.readJassFile(dataSource, collector, commonPath);

@@ -42,6 +42,8 @@ public final class OptionsSettingsStore {
 	private boolean environmentalAudio = true;
 	private boolean positionalAudio = true;
 	private int gamma = DEFAULT_GAMMA;
+	private int windowWidth;
+	private int windowHeight;
 
 	public static OptionsSettingsStore get() {
 		return INSTANCE;
@@ -70,6 +72,8 @@ public final class OptionsSettingsStore {
 		this.environmentalAudio = other.environmentalAudio;
 		this.positionalAudio = other.positionalAudio;
 		this.gamma = other.gamma;
+		this.windowWidth = other.windowWidth;
+		this.windowHeight = other.windowHeight;
 	}
 
 	public int getMusicVolume() {
@@ -235,6 +239,18 @@ public final class OptionsSettingsStore {
 		this.environmentalAudio = true;
 		this.positionalAudio = true;
 		this.gamma = DEFAULT_GAMMA;
+		this.windowWidth = 0;
+		this.windowHeight = 0;
+	}
+
+	public int getWindowWidth() { return this.windowWidth; }
+	public int getWindowHeight() { return this.windowHeight; }
+	public void setWindowSize(int width, int height) {
+		if (width < 640 || height < 480 || width > 16384 || height > 16384) {
+			throw new IllegalArgumentException("Invalid window dimensions");
+		}
+		this.windowWidth = width;
+		this.windowHeight = height;
 	}
 
 	/** Persists this store to {@code file}, creating parent directories as needed. */
@@ -260,6 +276,8 @@ public final class OptionsSettingsStore {
 		props.setProperty("environmentalAudio", Boolean.toString(this.environmentalAudio));
 		props.setProperty("positionalAudio", Boolean.toString(this.positionalAudio));
 		props.setProperty("gamma", Integer.toString(this.gamma));
+		props.setProperty("windowWidth", Integer.toString(this.windowWidth));
+		props.setProperty("windowHeight", Integer.toString(this.windowHeight));
 		try (FileOutputStream out = new FileOutputStream(file)) {
 			props.store(out, "OpenWCIII options");
 		}
@@ -297,6 +315,12 @@ public final class OptionsSettingsStore {
 		this.environmentalAudio = getBool(props, "environmentalAudio", this.environmentalAudio);
 		this.positionalAudio = getBool(props, "positionalAudio", this.positionalAudio);
 		this.gamma = getInt(props, "gamma", this.gamma);
+		try {
+			int width = Integer.parseInt(props.getProperty("windowWidth", "0"));
+			int height = Integer.parseInt(props.getProperty("windowHeight", "0"));
+			if (width != 0 || height != 0) setWindowSize(width, height);
+		}
+		catch (IllegalArgumentException ignored) { }
 	}
 
 	private static int getInt(final Properties props, final String key, final int current) {

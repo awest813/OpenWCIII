@@ -875,7 +875,7 @@ public class CPlayer extends CBasePlayer {
 		// terminate in progress upgrades of this kind for player
 		final CUpgradeType upgradeType = simulation.getUpgradeData().getType(techIdRawcodeId);
 		if (upgradeType != null) {
-			for (final CUnit unit : simulation.getUnits()) {
+			for (final CUnit unit : simulation.getUnitsIncludingPending()) {
 				if (unit.getPlayerIndex() == getId()) {
 					if (unit.isBuildQueueActive() && (unit.getBuildQueueTypes()[0] == QueueItemType.RESEARCH)
 							&& (unit.getBuildQueue()[0].getValue() == techIdRawcodeId.getValue())) {

@@ -1380,13 +1380,14 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 				worldScene.renderOpaque(this.dynamicShadowManager, this.webGL);
 			}
 			if (DEBUG_DEPTH > 1) {
+				worldScene.renderBackground(this.skyInstance);
 				this.terrain.renderGround(this.dynamicShadowManager);
 			}
 			if (DEBUG_DEPTH > 2) {
 				this.terrain.renderCliffs();
 			}
 			if (DEBUG_DEPTH > 3) {
-				worldScene.renderOpaque();
+				worldScene.renderOpaque(this.skyInstance);
 			}
 			if (DEBUG_DEPTH > 4) {
 				this.terrain.renderUberSplats(false);
@@ -1395,7 +1396,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 				this.terrain.renderWater();
 			}
 			if (DEBUG_DEPTH > 6) {
-				worldScene.renderTranslucent();
+				worldScene.renderTranslucent(this.skyInstance);
 			}
 			if (DEBUG_DEPTH > 7) {
 				this.terrain.renderUberSplats(true);

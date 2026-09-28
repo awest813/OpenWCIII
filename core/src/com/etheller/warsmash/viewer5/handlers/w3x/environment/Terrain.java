@@ -131,6 +131,7 @@ public class Terrain {
 	private final List<SplatModel> uberSplatModelsList;
 	private int shadowMap;
 	private int fogOfWarMap;
+	private final FogTextureUpload fogTextureUpload = new FogTextureUpload();
 	public final Map<String, Splat> splats = new HashMap<>();
 	public final Map<String, List<float[]>> shadows = new HashMap<>();
 	public final Map<String, Texture> shadowTextures = new HashMap<>();
@@ -1765,8 +1766,7 @@ public class Terrain {
 		gl.glTexParameteri(GL30.GL_TEXTURE_2D, GL30.GL_TEXTURE_MIN_FILTER, GL30.GL_LINEAR);
 		gl.glTexParameteri(GL30.GL_TEXTURE_2D, GL30.GL_TEXTURE_WRAP_S, GL30.GL_CLAMP_TO_EDGE);
 		gl.glTexParameteri(GL30.GL_TEXTURE_2D, GL30.GL_TEXTURE_WRAP_T, GL30.GL_CLAMP_TO_EDGE);
-		gl.glTexImage2D(GL30.GL_TEXTURE_2D, 0, GL30.GL_R8, this.fogOfWarData.getWidth(), this.fogOfWarData.getHeight(),
-				0, GL30.GL_RED, GL30.GL_UNSIGNED_BYTE, this.visualFogData);
+		this.fogTextureUpload.upload(gl, this.fogOfWarData.getWidth(), this.fogOfWarData.getHeight(), this.visualFogData);
 	}
 
 	public int getFogOfWarMap() {

@@ -15,6 +15,8 @@ import com.etheller.warsmash.parsers.fdf.frames.UIFrame;
 public class DialogWar3 {
 
 	private final GameUI rootFrame;
+	private final MenuDialogState responseState;
+	private boolean question;
 	private final Viewport uiViewport;
 	private final UIFrame dialogWar3;
 	private final StringFrame dialogWar3Text;
@@ -42,6 +44,7 @@ public class DialogWar3 {
 		this.dialogWar3ButtonYesBackdrop = rootFrame.getFrameByName("DialogButtonYesBackdrop", 0);
 		this.defaultHeight = this.dialogWar3.getAssignedHeight();
 		this.dialogWar3.setVisible(false);
+		this.responseState = new MenuDialogState(() -> this.dialogWar3.setVisible(false));
 
 		final TextureFrame modalDialogBlacknessScreenCover = new ClickConsumingTextureFrame(null, this.rootFrame, false,
 				null);
@@ -64,15 +67,9 @@ public class DialogWar3 {
 		this.dialogWar3ButtonOkBackdrop.setVisible(true);
 		this.dialogWar3ButtonNoBackdrop.setVisible(false);
 		this.dialogWar3ButtonYesBackdrop.setVisible(false);
-		this.dialogWar3ButtonOk.setOnClick(new Runnable() {
-			@Override
-			public void run() {
-				if (runnable != null) {
-					runnable.run();
-				}
-				DialogWar3.this.dialogWar3.setVisible(false);
-			}
-		});
+		this.question = false;
+		final long token = this.responseState.open(runnable, runnable);
+		this.dialogWar3ButtonOk.setOnClick(() -> this.responseState.respond(token, true));
 		this.dialogWar3.setHeight(this.dialogWar3Text.getPredictedViewportHeight() + (this.defaultHeight * .75f));
 		this.dialogWar3.positionBounds(this.rootFrame, this.uiViewport);
 		this.dialogWar3.setVisible(true);
@@ -84,24 +81,25 @@ public class DialogWar3 {
 		this.dialogWar3ButtonOkBackdrop.setVisible(false);
 		this.dialogWar3ButtonNoBackdrop.setVisible(true);
 		this.dialogWar3ButtonYesBackdrop.setVisible(true);
-		this.dialogWar3ButtonYes.setOnClick(new Runnable() {
-			@Override
-			public void run() {
-				listener.yes();
-				DialogWar3.this.dialogWar3.setVisible(false);
-			}
-		});
-		this.dialogWar3ButtonNo.setOnClick(new Runnable() {
-			@Override
-			public void run() {
-				listener.no();
-				DialogWar3.this.dialogWar3.setVisible(false);
-			}
-		});
+		this.question = true;
+		final long token = this.responseState.open(listener::yes, listener::no);
+		this.dialogWar3ButtonYes.setOnClick(() -> this.responseState.respond(token, true));
+		this.dialogWar3ButtonNo.setOnClick(() -> this.responseState.respond(token, false));
 		this.dialogWar3Icon.setBackground(this.rootFrame.loadTexture(DialogIcon.QUESTION.getPath()));
 		this.dialogWar3.setHeight(this.dialogWar3Text.getPredictedViewportHeight() + (this.defaultHeight * .75f));
 		this.dialogWar3.positionBounds(this.rootFrame, this.uiViewport);
 		this.dialogWar3.setVisible(true);
+	}
+
+	public boolean isVisible() { return this.responseState.isOpen(); }
+
+	public boolean keyDown(final int keycode) {
+		if (!isVisible()) return false;
+		if (keycode == com.badlogic.gdx.Input.Keys.ESCAPE) this.responseState.respond(false);
+		else if (!this.question && (keycode == com.badlogic.gdx.Input.Keys.ENTER
+				|| keycode == com.badlogic.gdx.Input.Keys.NUMPAD_ENTER)) this.responseState.respond(true);
+		// Other keys stay inside the modal instead of reaching fields behind it.
+		return true;
 	}
 
 	public static interface DialogWar3Listener {

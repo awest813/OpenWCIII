@@ -87,6 +87,9 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 	private final CPlayerUnitOrderListener uiOrderListener;
 	private CommonEnvironment commonEnv;
 	private File pendingSaveFile;
+	private final int startupProbeSeconds = Integer.getInteger("warsmash.startupProbeSeconds", 0);
+	private float startupProbeElapsed;
+	private int startupProbeReport;
 
 	public WarsmashGdxMapScreen(final War3MapViewer mapViewer, final WarsmashGdxMultiScreenGame screenManager,
 			final WarsmashGdxMenuScreen menuScreen, final CPlayerUnitOrderListener uiOrderListener) {
@@ -331,6 +334,36 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.meleeUI.update(deltaTime);
 		this.viewer.updateAndRender();
 		applyPendingSave();
+		if (this.startupProbeSeconds > 0) {
+			this.startupProbeElapsed += delta;
+			if (this.startupProbeElapsed >= this.startupProbeReport) {
+				this.startupProbeReport += 5;
+				final com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation simulation = this.viewer.simulation;
+				System.out.println("[StartupProbe] tick=" + simulation.getGameTurnTick()
+						+ " initialized=" + this.commonEnv.isInitializationComplete()
+						+ " localPlayer=" + this.viewer.getLocalPlayerIndex()
+						+ " fog=" + simulation.isFogEnabled() + " mask=" + simulation.isFogMaskEnabled()
+						+ " filter=" + this.meleeUI.isCineFilterDisplayed()
+						+ " camera=" + this.viewer.worldScene.camera.location
+						+ " target=" + this.meleeUI.getCameraManager().target
+						+ " targetFog=" + this.viewer.getFogOfWar().getFogState(simulation, simulation.getPathingGrid(),
+								this.meleeUI.getCameraManager().target.x, this.meleeUI.getCameraManager().target.y)
+						+ " terrainFog=" + this.viewer.worldScene.fogSettings);
+				if (this.viewer.dncTerrain != null && !this.viewer.dncTerrain.lights.isEmpty()) {
+					final java.nio.FloatBuffer light = com.badlogic.gdx.utils.BufferUtils.newFloatBuffer(16);
+					this.viewer.dncTerrain.lights.get(0).bind(0, light);
+					System.out.println("[StartupProbe] terrainLight=" + light.get(8) + "," + light.get(9) + ","
+							+ light.get(10) + " intensity=" + light.get(11) + " ambient=" + light.get(15));
+				}
+				for (final com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit unit : simulation.getUnits()) {
+					if (unit.getPlayerIndex() == this.viewer.getLocalPlayerIndex()) {
+						System.out.println("[StartupProbe] owned=" + unit.getTypeId() + " at="
+								+ unit.getX() + "," + unit.getY() + " hidden=" + unit.isHidden());
+					}
+				}
+			}
+			if (this.startupProbeElapsed >= this.startupProbeSeconds) Gdx.app.exit();
+		}
 
 		Gdx.gl30.glDisable(GL30.GL_SCISSOR_TEST);
 

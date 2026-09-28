@@ -20,6 +20,40 @@ Changes are grouped by category:
 ## [Unreleased]
 
 ### fix
+- Integrated origin/main through `8472ce72`; preserved ownership-transfer food
+  counts and complete retail AI declarations in the new script cache.
+- Campaign preload scripts preserve live mission globals instead of resetting
+  hero references and crashing the opening cinematic after its black fade.
+- Post-cinematic fog restores the single retail default record in TFT; fog-of-war
+  texture rows upload without alignment padding that shifts visibility.
+- Cinematic sky domes render behind the world instead of occluding distant
+  terrain with their finite geometry.
+- Menu dialogs close before callbacks, preserving follow-up dialogs and rejecting
+  stale responses. Modal keyboard events no longer reach fields behind dialogs.
+- Menu Tab/Shift+Tab navigation wraps through available fields; Escape uses existing
+  Back/Cancel actions on supported screens. Shared buttons reject hidden/disabled clicks.
+- Campaign selection now dims locked labels and rejects stale clicks on locked or
+  hidden chapters. Outcome dialogs reject repeated and superseded Continue actions.
+- Victory/defeat presentation is restricted to the named local player; simulation
+  events remain intact. Ending transmissions clears portraits and subtitles.
+- Movie fallback messages accurately report unavailable playback.
+- Changing a unit's owner now refreshes ability requirements and player restrictions
+  in both directions, preserving script disables and avoiding repeated passive callbacks.
+- Ultravision research now enables the retail passive ability's daytime sight at
+  night, including shared vision. Requirements, ability disabling/removal, and
+  the current owner's research determine the benefit; base unit data stays intact.
+- Glaive bounce chains exclude their initial target, including overlapping attacks.
+- Zero-distance projectile impacts retain finite coordinates.
+- Retail tests report missing archives as explicit skips; strict fixture mode fails
+  missing-data runs. Combat regressions exercise real projectile updates and armor damage.
+- Moon Glaives research now increases the number of damaging bounce hits. An
+  in-flight missile stops bouncing when its index exceeds a reduced target cap.
+  Reinforced Defenses now applies fortified armor without changing shared unit
+  definitions; removing research restores the underlying armor state.
+- Human lumber-harvesting research now increases carrying capacity in campaign
+  and standard melee data. Research updates include units created during the
+  current tick. Spell-level research honors its configured increments and removes
+  the full bonus when research is reversed.
 - Campaign hero carryover restores equipment before reconciling bonus stats, avoiding
   doubled item bonuses and duplicate techtree counts. Saved unit snapshots include
   this tick's creations and exclude pending removals.

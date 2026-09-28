@@ -1,4 +1,6 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
+import com.etheller.warsmash.testutil.RetailTestData;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -90,11 +92,8 @@ class CampaignLoadingTest {
 
 	@Test
 	void testMapPathNormalizationOnDiscDataIfPresent() throws Exception {
-		final String war3MpqPath = "F:\\WC3Data\\war3.mpq";
-		final File mpqFile = new File(war3MpqPath);
-		if (!mpqFile.exists()) {
-			return; // Skip if retail archive not present in test environment
-		}
+		final String war3MpqPath = RetailTestData.require("war3.mpq").toString();
+
 
 		try (SeekableByteChannel channel = Files.newByteChannel(Paths.get(war3MpqPath), StandardOpenOption.READ)) {
 			final MPQArchive mpqArchive = new MPQArchive(channel);
@@ -125,11 +124,8 @@ class CampaignLoadingTest {
 
 	@Test
 	void testCampaignAILoadingOnDiscDataIfPresent() throws Exception {
-		final String war3MpqPath = "F:\\WC3Data\\war3.mpq";
-		final File mpqFile = new File(war3MpqPath);
-		if (!mpqFile.exists()) {
-			return;
-		}
+		final String war3MpqPath = RetailTestData.require("war3.mpq").toString();
+
 
 		try (SeekableByteChannel channel = Files.newByteChannel(Paths.get(war3MpqPath), StandardOpenOption.READ)) {
 			final MPQArchive mpqArchive = new MPQArchive(channel);
@@ -221,14 +217,14 @@ class CampaignLoadingTest {
 	@Test
 	void testAllCampaignMapsLoadingAndAIScripts() throws Exception {
 		final java.util.List<java.nio.file.Path> mpqPaths = new java.util.ArrayList<>();
-		for (final String pathStr : new String[] { "F:\\WC3Data\\war3.mpq", "F:\\WC3Data\\War3x.mpq", "F:\\WC3Data\\War3xlocal.mpq" }) {
+		for (final String pathStr : new String[] { RetailTestData.require("war3.mpq").toString(), RetailTestData.require("War3x.mpq").toString(), RetailTestData.require("War3xlocal.mpq").toString() }) {
 			final java.nio.file.Path p = Paths.get(pathStr);
 			if (Files.exists(p)) {
 				mpqPaths.add(p);
 			}
 		}
 		if (mpqPaths.isEmpty()) {
-			return; // Skip if disc data not available
+			throw new AssertionError("Required retail archives could not be loaded");
 		}
 
 		final java.util.List<MpqDataSource> mpqSources = new java.util.ArrayList<>();

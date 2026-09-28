@@ -12,7 +12,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CTargetType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CWeaponType;
-import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityTargetCheckReceiver;
+
 
 public class CUnitAttackMissileBounce extends CUnitAttackMissile {
 	private float damageLossFactor;
@@ -71,15 +71,33 @@ public class CUnitAttackMissileBounce extends CUnitAttackMissile {
 		final CWidget widget = target.visit(AbilityTargetWidgetVisitor.INSTANCE);
 		if (widget != null) {
 			final int nextBounceIndex = bounceIndex + 1;
-			if (nextBounceIndex != this.maximumNumberOfTargets) {
-				BounceMissileConsumer.INSTANCE.nextBounce(cSimulation, source, widget, this, x, y, damage,
-						nextBounceIndex, attackListener);
+			if (nextBounceIndex < this.maximumNumberOfTargets) {
+				final BounceChainListener chain = bounceIndex == 0 || !(attackListener instanceof BounceChainListener)
+						? new BounceChainListener(widget, attackListener) : (BounceChainListener) attackListener;
+				new BounceMissileConsumer().nextBounce(cSimulation, source, widget, this, x, y, damage,
+						nextBounceIndex, chain);
 			}
 		}
 	}
 
+	// Each launched attack keeps its own original target, including overlapping flights.
+	private static final class BounceChainListener implements CUnitAttackListener {
+		private final CWidget initialTarget;
+		private final CUnitAttackListener delegate;
+
+		private BounceChainListener(final CWidget initialTarget, final CUnitAttackListener delegate) {
+			this.initialTarget = initialTarget;
+			this.delegate = delegate;
+		}
+
+		@Override
+		public void onLaunch() { this.delegate.onLaunch(); }
+
+		@Override
+		public void onHit(final AbilityTarget target, final float damage) { this.delegate.onHit(target, damage); }
+	}
+
 	private static final class BounceMissileConsumer implements CUnitEnumFunction {
-		private static final BounceMissileConsumer INSTANCE = new BounceMissileConsumer();
 		private final Rectangle rect = new Rectangle();
 		private CUnitAttackMissileBounce attack;
 		private CSimulation simulation;
@@ -89,12 +107,12 @@ public class CUnitAttackMissileBounce extends CUnitAttackMissile {
 		private float y;
 		private float damage;
 		private int bounceIndex;
-		private CUnitAttackListener attackListener;
+		private BounceChainListener attackListener;
 		private boolean launched = false;
 
 		public void nextBounce(final CSimulation simulation, final CUnit source, final CWidget target,
 				final CUnitAttackMissileBounce attack, final float x, final float y, final float damage,
-				final int bounceIndex, final CUnitAttackListener attackListener) {
+				final int bounceIndex, final BounceChainListener attackListener) {
 			this.simulation = simulation;
 			this.source = source;
 			this.target = target;
@@ -115,7 +133,7 @@ public class CUnitAttackMissileBounce extends CUnitAttackMissile {
 
 		@Override
 		public boolean call(final CUnit enumUnit) {
-			if (enumUnit == this.target) {
+			if (enumUnit == this.target || enumUnit == this.attackListener.initialTarget) {
 				return false;
 			}
 			if (enumUnit.canBeTargetedBy(this.simulation, this.source, this.attack.areaOfEffectTargets)) {

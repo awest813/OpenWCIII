@@ -34,7 +34,7 @@ public class CampaignMenuUI extends SimpleFrame {
 		campaignButtonUI.setButtonArt(campaignArrowButton);
 		campaignButtonUI.add(campaignArrowButton);
 		campaignArrowButton.addSetPoint(new SetPoint(FramePoint.TOPLEFT, campaignButtonUI, FramePoint.TOPLEFT, 0, 0));
-		campaignArrowButton.setOnClick(onClick);
+		campaignButtonUI.setOnClick(onClick);
 
 		final StringFrame headerText = (StringFrame) this.rootFrame.createFrame("StandardSmallTextTemplate",
 				campaignButtonUI, 0, 0);

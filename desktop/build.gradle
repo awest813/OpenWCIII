@@ -30,6 +30,9 @@ task runGame(dependsOn: classes, type: JavaExec) {
     workingDir = project.assetsDir
     ignoreExitValue = true
     args cmdargs.split()
+    if (project.hasProperty('startupProbeSeconds')) {
+        systemProperty 'warsmash.startupProbeSeconds', project.property('startupProbeSeconds')
+    }
 }
 
 task campaignNativeAudit(dependsOn: classes, type: JavaExec) {
@@ -46,6 +49,13 @@ task campaignCinematicRefs(dependsOn: classes, type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     workingDir = project.rootDir
     args cmdargs.split()
+}
+
+task skyBackgroundRenderAudit(dependsOn: classes, type: JavaExec) {
+    description = "Runs an OpenGL pixel regression for cinematic sky/terrain depth ordering (requires a desktop)."
+    mainClass = "com.etheller.warsmash.desktop.tools.SkyBackgroundRenderAudit"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
 }
 
 task campaignBackingAudit(dependsOn: classes, type: JavaExec) {

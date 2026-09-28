@@ -276,6 +276,11 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 
 	/** Snapshot at a script boundary, including creations/removals pending this tick. */
 	public List<CUnit> getUnitsForSave() {
+		return getUnitsIncludingPending();
+	}
+
+	/** Snapshot including units created during this tick, excluding queued removals. */
+	public List<CUnit> getUnitsIncludingPending() {
 		final List<CUnit> snapshot = new ArrayList<>(this.units);
 		snapshot.addAll(this.newUnits);
 		snapshot.removeAll(this.removedUnits);

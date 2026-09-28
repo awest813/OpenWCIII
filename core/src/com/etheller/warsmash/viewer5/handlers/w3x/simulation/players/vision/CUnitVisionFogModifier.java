@@ -26,8 +26,7 @@ public class CUnitVisionFogModifier extends CFogModifier {
 	public void update(final CSimulation game, final CPlayer player, final PathingGrid pathingGrid,
 			final CPlayerFogOfWar fogOfWar) {
 		if (enabled && !this.unit.isDead() && !this.unit.isHidden()) {
-			final float sightRadius = game.isDay() && !alwaysNightVision ? this.unit.getUnitType().getSightRadiusDay()
-					: this.unit.getUnitType().getSightRadiusNight();
+			final float sightRadius = this.unit.getSightRadius(game, game.isDay() && !this.alwaysNightVision);
 			if (sightRadius > 0) {
 				final boolean flying = this.unit.getMovementType() == MovementType.FLY;
 				final float radSq = sightRadius * sightRadius / (CPlayerFogOfWar.GRID_STEP * CPlayerFogOfWar.GRID_STEP);

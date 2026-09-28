@@ -18,6 +18,10 @@ import java.util.zip.CRC32C;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
+import com.etheller.warsmash.parsers.fdf.frames.PopupMenuFrame;
+import com.etheller.warsmash.parsers.fdf.frames.MenuFrame;
+import com.etheller.warsmash.parsers.fdf.datamodel.MenuItem;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
@@ -138,6 +142,7 @@ public class MenuUI {
 
 	private ClickableFrame mouseDownUIFrame;
 	private ClickableFrame mouseOverUIFrame;
+	private final java.util.Set<Integer> modalKeysDown = new java.util.HashSet<>();
 	private FocusableFrame focusUIFrame;
 
 	private UIFrame mainMenuFrame;
@@ -212,6 +217,8 @@ public class MenuUI {
 	private CampaignMenuData[] campaignDatas;
 	/** When set, {@link #onReturnFromGame()} loads this map instead of restoring menu chrome. */
 	private String pendingChangeLevel;
+	private CMapDifficulty campaignDifficulty = CMapDifficulty.NORMAL;
+	private boolean resolutionChanged;
 	/** When set, the next map screen applies this save file after its scripts boot. */
 	private File pendingSaveFile;
 
@@ -953,6 +960,17 @@ public class MenuUI {
 			this.gameplayPanel = findFrameIn(this.optionsMenu, "GameplayPanel");
 			this.videoPanel = findFrameIn(this.optionsMenu, "VideoPanel");
 			this.soundPanel = findFrameIn(this.optionsMenu, "SoundPanel");
+			for (String name : new String[] { "ChatSupportMenu", "ModelDetailMenu",
+					"AnimQualityMenu", "TextureQualityMenu", "ParticlesMenu", "LightsMenu", "ShadowsMenu",
+					"OcclusionMenu", "ProviderMenu" }) {
+				final UIFrame control = findFrameIn(this.optionsMenu, name);
+				if (control instanceof PopupMenuFrame) {
+					final PopupMenuFrame popup = (PopupMenuFrame) control;
+					this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) popup.getPopupTitleFrame()).getButtonText(), "Unavailable");
+					popup.setEnabled(false);
+				}
+			}
+			wireResolutionOptions();
 			wireOptionsTab("GameplayButton");
 			wireOptionsTab("VideoButton");
 			wireOptionsTab("SoundButton");
@@ -1059,6 +1077,12 @@ public class MenuUI {
 				((GlueTextButtonFrame) optionsOK).setOnClick(new Runnable() {
 					@Override
 					public void run() {
+						if (MenuUI.this.resolutionChanged && MenuUI.this.optionsDraft.getWindowWidth() > 0
+								&& !Gdx.graphics.setWindowedMode(MenuUI.this.optionsDraft.getWindowWidth(),
+										MenuUI.this.optionsDraft.getWindowHeight())) {
+							MenuUI.this.dialog.showError("This window size could not be applied.", null);
+							return;
+						}
 						OptionsSettingsStore.get().copyFrom(MenuUI.this.optionsDraft);
 						try {
 							OptionsSettingsStore.get().save(OptionsSettingsStore.optionsFile());
@@ -1070,6 +1094,8 @@ public class MenuUI {
 						if (MenuUI.this.optionsMenu != null) {
 							MenuUI.this.optionsMenu.setVisible(false);
 						}
+						setMainMenuVisible(true);
+						setMainMenuButtonsEnabled(true);
 						MenuUI.this.menuState = MenuState.MAIN_MENU;
 					}
 				});
@@ -1082,6 +1108,8 @@ public class MenuUI {
 						if (MenuUI.this.optionsMenu != null) {
 							MenuUI.this.optionsMenu.setVisible(false);
 						}
+						setMainMenuVisible(true);
+						setMainMenuButtonsEnabled(true);
 						// Discard the draft, including any live music preview.
 						applyStoredMusicVolume();
 						MenuUI.this.menuState = MenuState.MAIN_MENU;
@@ -1537,6 +1565,7 @@ public class MenuUI {
 
 		this.campaignSelectFrame = this.rootFrame.getFrameByName("CampaignSelectFrame", 0);
 		this.campaignSelectFrame.setVisible(false);
+		wireCampaignDifficulty();
 
 		this.campaignWarcraftIIILogo = (SpriteFrame) this.rootFrame.getFrameByName("WarCraftIIILogo", 0);
 		this.rootFrame.setSpriteFrameModel(this.campaignWarcraftIIILogo, this.rootFrame.getSkinField("MainMenuLogo"));
@@ -1621,7 +1650,7 @@ public class MenuUI {
 								if (!CampaignProgressStore.get().isOpCinematicAvailable(campaignIdx, 0)) {
 									return;
 								}
-								launchCampaignMission(finalIntro);
+								launchCampaignCinematic(finalIntro);
 							}
 						});
 						introButton.setEnabled(CampaignProgressStore.get().isOpCinematicAvailable(campaignIdx, 0));
@@ -1654,7 +1683,7 @@ public class MenuUI {
 								if (!CampaignProgressStore.get().isEdCinematicAvailable(campaignIdx, 0)) {
 									return;
 								}
-								launchCampaignMission(endCinematic);
+								launchCampaignCinematic(endCinematic);
 							}
 						});
 						endButton.setEnabled(CampaignProgressStore.get().isEdCinematicAvailable(campaignIdx, 0));
@@ -1939,6 +1968,7 @@ public class MenuUI {
 		this.rootFrame.positionBounds(this.rootFrame, this.uiViewport);
 
 		this.menuState = MenuState.GOING_TO_MAIN_MENU;
+		setMainMenuButtonsEnabled(true);
 
 		loadSounds();
 
@@ -1951,15 +1981,15 @@ public class MenuUI {
 			this.mainMenuGlueScreenLoop = new UnitSound(0, 0, 0, 0, 0, 0, false);
 		}
 		this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-		this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
 	}
 
 	public void show() {
 		playMusic(this.rootFrame.trySkinField("GlueMusic"), true, 0);
-		this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+		this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 	}
 
 	private void internalStartMap(final String mapFilename, final int localPlayerIndex) {
+		System.out.println("Campaign/map launch: " + mapFilename + " (local player " + localPlayerIndex + ")");
 		this.loadingFrame.setVisible(true);
 		this.loadingBackground.setVisible(true);
 		this.loadingBar.setVisible(true);
@@ -2121,12 +2151,18 @@ public class MenuUI {
 		final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
 		MenuUI.this.rootFrame.setMapStrings(wtsFile);
 		final War3MapConfig war3MapConfig = new War3MapConfig(WarsmashConstants.MAX_PLAYERS);
+		if (this.currentCampaign != null) {
+			war3MapConfig.setGameDifficulty(this.campaignDifficulty);
+		}
 		for (int i = 0; (i < WarsmashConstants.MAX_PLAYERS) && (i < mapInfo.getPlayers().size()); i++) {
 			final CBasePlayer player = war3MapConfig.getPlayer(i);
 			player.setName(MenuUI.this.rootFrame.getTrigStr(mapInfo.getPlayers().get(i).getName()));
 		}
 		Jass2.loadConfig(map, MenuUI.this.uiViewport, MenuUI.this.uiScene, MenuUI.this.rootFrame, war3MapConfig,
 				WarsmashConstants.JASS_FILE_LIST).config();
+		if (this.currentCampaign != null) {
+			war3MapConfig.setGameDifficulty(this.campaignDifficulty);
+		}
 		MenuUI.this.currentMapConfig = war3MapConfig;
 	}
 
@@ -2177,7 +2213,7 @@ public class MenuUI {
 	 * screens define {@code OKButton}), so the load screen resolves its own
 	 * children instead.
 	 */
-	private static UIFrame findFrameIn(final UIFrame root, final String name) {
+	static UIFrame findFrameIn(final UIFrame root, final String name) {
 		if (root == null) {
 			return null;
 		}
@@ -2186,8 +2222,8 @@ public class MenuUI {
 		}
 		if (root instanceof AbstractUIFrame) {
 			final ListIterator<UIFrame> it = ((AbstractUIFrame) root).getChildIterator();
-			while (it.hasNext()) {
-				final UIFrame found = findFrameIn(it.next(), name);
+			while (it.hasPrevious()) {
+				final UIFrame found = findFrameIn(it.previous(), name);
 				if (found != null) {
 					return found;
 				}
@@ -2269,6 +2305,24 @@ public class MenuUI {
 				}
 			}
 		}
+	}
+
+	private void wireResolutionOptions() {
+		final UIFrame frame = findFrameIn(this.optionsMenu, "ResolutionMenu");
+		if (!(frame instanceof PopupMenuFrame)) return;
+		final PopupMenuFrame popup = (PopupMenuFrame) frame;
+		final int[][] sizes = { {800, 600}, {1024, 768}, {1280, 720}, {1280, 960},
+				{1600, 900}, {1920, 1080}, {2560, 1440} };
+		final List<MenuItem> choices = new ArrayList<>();
+		for (int[] size : sizes) choices.add(new MenuItem(size[0] + " x " + size[1] + " (Windowed)", -2));
+		((MenuFrame) popup.getPopupMenuFrame()).setItems(this.uiViewport, choices);
+		popup.setMenuClickListener((button, index) -> {
+			if (index >= 0 && index < sizes.length) {
+				this.optionsDraft.setWindowSize(sizes[index][0], sizes[index][1]);
+				this.resolutionChanged = true;
+				this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) popup.getPopupTitleFrame()).getButtonText(), choices.get(index).getText());
+			}
+		});
 	}
 
 	private void wireOptionsTab(final String buttonName) {
@@ -2365,8 +2419,15 @@ public class MenuUI {
 			return;
 		}
 		this.optionsDraft.copyFrom(OptionsSettingsStore.get());
+		this.resolutionChanged = false;
 		pushOptionsDraftToControls();
+		final UIFrame resolution = findFrameIn(this.optionsMenu, "ResolutionMenu");
+		if (resolution instanceof PopupMenuFrame) {
+			this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) ((PopupMenuFrame) resolution).getPopupTitleFrame()).getButtonText(),
+					Gdx.graphics.getWidth() + " x " + Gdx.graphics.getHeight() + (Gdx.graphics.isFullscreen() ? " (Fullscreen)" : " (Windowed)"));
+		}
 		showOptionsPanel(this.gameplayPanel);
+		setMainMenuVisible(false);
 		setMainMenuButtonsEnabled(false);
 		this.optionsMenu.setVisible(true);
 		this.menuState = MenuState.GOING_TO_OPTIONS;
@@ -2622,6 +2683,7 @@ public class MenuUI {
 				break;
 			case MAIN_MENU:
 				setMainMenuVisible(true);
+				setMainMenuButtonsEnabled(true);
 				this.glueSpriteLayerTopLeft.setSequence("MainMenu Stand");
 				this.glueSpriteLayerTopRight.setSequence("MainMenu Stand");
 				break;
@@ -2738,7 +2800,7 @@ public class MenuUI {
 				}
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 				this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"),
 						this.menuFogSettings);
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));
@@ -2788,7 +2850,7 @@ public class MenuUI {
 						this.currentCampaign.getBackgroundFogSettings());
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
@@ -2812,7 +2874,7 @@ public class MenuUI {
 						this.currentCampaign.getBackgroundFogSettings());
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
@@ -2875,7 +2937,8 @@ public class MenuUI {
 	}
 
 	private FocusableFrame getNextFocusFrame() {
-		return this.rootFrame.getNextFocusFrame();
+		return com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuFocusNavigation.next(
+				this.rootFrame.getFocusableFrames(), this.focusUIFrame, false);
 	}
 
 	public boolean touchDown(final int screenX, final int screenY, final float worldScreenY, final int button) {
@@ -2898,6 +2961,7 @@ public class MenuUI {
 	}
 
 	private void setFocusFrame(final FocusableFrame clickedFocusableFrame) {
+		if (this.focusUIFrame == clickedFocusableFrame) return;
 		if (this.focusUIFrame != null) {
 			this.focusUIFrame.onFocusLost();
 		}
@@ -3093,45 +3157,84 @@ public class MenuUI {
 	}
 
 	public void hide() {
-		this.glueScreenLoop.stop();
+		if (this.glueScreenLoop != null) {
+			this.glueScreenLoop.stop();
+		}
 		stopMusic();
 	}
 
 	public void dispose() {
+		hide();
 		if (this.rootFrame != null) {
 			this.rootFrame.dispose();
 		}
 	}
 
+	private boolean activateMenuBack() {
+		final UIFrame back;
+		switch (this.menuState) {
+		case SINGLE_PLAYER: back = this.singlePlayerCancelButton; break;
+		case SINGLE_PLAYER_SKIRMISH: back = this.skirmishCancelButton; break;
+		case SINGLE_PLAYER_LOAD_SAVED: back = this.loadSaveCancelButton; break;
+		case CAMPAIGN:
+		case MISSION_SELECT: back = this.campaignBackButton; break;
+		case OPTIONS: back = findFrameIn(this.optionsMenu, "CancelButton"); break;
+		default: return false;
+		}
+		if (back instanceof GlueButtonFrame && back.isVisibleOnScreen() && ((GlueButtonFrame) back).isEnabled()) {
+			((GlueButtonFrame) back).onClick(Input.Buttons.LEFT);
+			return true;
+		}
+		return false;
+	}
+
+	private void clearUnavailableFocus() {
+		if (this.focusUIFrame != null && (!this.focusUIFrame.isVisibleOnScreen() || !this.focusUIFrame.isFocusable())) {
+			setFocusFrame(null);
+		}
+	}
+
 	public boolean keyDown(final int keycode) {
+		if (this.modalKeysDown.contains(keycode)) return true;
+		if (this.dialog != null && this.dialog.keyDown(keycode)) {
+			this.modalKeysDown.add(keycode);
+			return true;
+		}
+		clearUnavailableFocus();
+		if (keycode == Input.Keys.ESCAPE && activateMenuBack()) {
+			this.modalKeysDown.add(keycode);
+			return true;
+		}
+		if (keycode == Input.Keys.TAB) return true;
 		if (this.focusUIFrame != null) {
 			this.focusUIFrame.keyDown(keycode);
+			return true;
 		}
 		return false;
 	}
 
 	public boolean keyUp(final int keycode) {
+		if (this.modalKeysDown.remove(keycode)) return true;
+		if (this.dialog != null && this.dialog.isVisible()) return true;
+		clearUnavailableFocus();
 		if (keycode == Input.Keys.TAB) {
-			// accessibility tab focus ui
-			final List<FocusableFrame> focusableFrames = this.rootFrame.getFocusableFrames();
-			final int indexOf = focusableFrames.indexOf(this.focusUIFrame) + 1;
-			for (int i = indexOf; i < focusableFrames.size(); i++) {
-				final FocusableFrame focusableFrame = focusableFrames.get(i);
-				if (focusableFrame.isVisibleOnScreen() && focusableFrame.isFocusable()) {
-					setFocusFrame(focusableFrame);
-					break;
-				}
-			}
+			final boolean backwards = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
+					|| Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT);
+			setFocusFrame(com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuFocusNavigation.next(
+					this.rootFrame.getFocusableFrames(), this.focusUIFrame, backwards));
+			return true;
 		}
-		else {
-			if (this.focusUIFrame != null) {
-				this.focusUIFrame.keyUp(keycode);
-			}
+		if (this.focusUIFrame != null) {
+			this.focusUIFrame.keyUp(keycode);
+			return true;
 		}
 		return false;
 	}
 
 	public boolean keyTyped(final char character) {
+		if (!this.modalKeysDown.isEmpty()) return true;
+		if (this.dialog != null && this.dialog.isVisible()) return true;
+		clearUnavailableFocus();
 		if (this.focusUIFrame != null) {
 			this.focusUIFrame.keyTyped(character);
 		}
@@ -3158,7 +3261,7 @@ public class MenuUI {
 		case MAIN_MENU:
 			this.glueScreenLoop.stop();
 			this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-			this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+			this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 			this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"), this.menuFogSettings);
 			this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));
 			break;
@@ -3183,7 +3286,7 @@ public class MenuUI {
 				this.menuScreen.setModel(currentCampaignBackgroundModel, this.currentCampaign.getBackgroundFogSettings());
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
@@ -3193,7 +3296,7 @@ public class MenuUI {
 				// save): campaign chrome would be wrong, so go to main menu.
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-				this.glueScreenLoop.play(this.uiScene.audioContext, 0f, 0f, 0f);
+				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
 				this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"),
 						this.menuFogSettings);
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));
@@ -3240,6 +3343,40 @@ public class MenuUI {
 
 	public void setPendingChangeLevel(final String mapPath) {
 		this.pendingChangeLevel = mapPath;
+	}
+
+	private void launchCampaignCinematic(final CampaignMission cinematic) {
+		if (cinematic.isMap()) {
+			launchCampaignMission(cinematic);
+			return;
+		}
+		try {
+			this.screenManager.setScreen(CampaignMovieScreen.open(this.screenManager, this.dataSource,
+					cinematic.getMapFilename()));
+		}
+		catch (IOException | RuntimeException e) {
+			this.dialog.showError(e.getMessage(), null);
+		}
+	}
+
+	private void wireCampaignDifficulty() {
+		final UIFrame frame = findFrameIn(this.campaignSelectFrame, "DifficultySelect");
+		if (!(frame instanceof PopupMenuFrame)) {
+			return;
+		}
+		final PopupMenuFrame select = (PopupMenuFrame) frame;
+		final List<MenuItem> choices = new ArrayList<>();
+		for (final String label : new String[] { "Easy", "Normal", "Hard" }) {
+			choices.add(new MenuItem(label, -2));
+		}
+		((MenuFrame) select.getPopupMenuFrame()).setItems(this.uiViewport, choices);
+		this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) select.getPopupTitleFrame()).getButtonText(), choices.get(1).getText());
+		select.setMenuClickListener((button, index) -> {
+			if (index >= 0 && index < 3) {
+				this.campaignDifficulty = CMapDifficulty.VALUES[index];
+				this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) select.getPopupTitleFrame()).getButtonText(), choices.get(index).getText());
+			}
+		});
 	}
 
 	private void launchCampaignMission(final CampaignMission mission) {
@@ -3368,6 +3505,7 @@ public class MenuUI {
 			for (final Music music : this.currentMusics) {
 				if (music != null) {
 					music.stop();
+					music.dispose();
 				}
 			}
 			this.currentMusics = null;

@@ -31,7 +31,7 @@ public class StringFrame extends AbstractRenderableFrame {
 	private float predictedViewportHeight;
 	private float predictedViewportWidth;
 
-	static ShapeRenderer shapeRenderer = new ShapeRenderer();
+	private static ShapeRenderer shapeRenderer;
 	private final Color fontHighlightColor;
 	private final Color fontDisabledColor;
 	private final Color fontColor;
@@ -134,6 +134,7 @@ public class StringFrame extends AbstractRenderableFrame {
 		this.internalFramesContainer.render(batch, baseFont, glyphLayout);
 
 		if (GameUI.DEBUG) {
+			if (shapeRenderer == null) shapeRenderer = new ShapeRenderer();
 			batch.end();
 			shapeRenderer.setProjectionMatrix(batch.getProjectionMatrix());
 			shapeRenderer.setColor(1f, 1f, 1f, 1f);

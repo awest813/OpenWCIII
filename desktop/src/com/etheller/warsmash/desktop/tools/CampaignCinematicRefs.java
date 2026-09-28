@@ -58,6 +58,7 @@ public final class CampaignCinematicRefs {
 		String find = null;
 		String probe = null;
 		String readPath = null;
+		String scriptPath = null;
 		for (int i = 0; i < args.length; i++) {
 			if ("--mpq".equals(args[i])) {
 				archives.add(Paths.get(args[++i]));
@@ -70,6 +71,9 @@ public final class CampaignCinematicRefs {
 			}
 			else if ("--read".equals(args[i])) {
 				readPath = args[++i];
+			}
+			else if ("--script".equals(args[i])) {
+				scriptPath = args[++i];
 			}
 			else {
 				throw new IllegalArgumentException("Unknown option: " + args[i]);
@@ -113,7 +117,19 @@ public final class CampaignCinematicRefs {
 			}
 			collectMapScripts(mpq, channel, new ArchivedFileExtractor(), mapScripts);
 		}
-		if ((find != null) || (probe != null) || (readPath != null)) {
+		if (scriptPath != null) {
+			boolean found = false;
+			for (final Map.Entry<String, String> entry : mapScripts.entrySet()) {
+				if (entry.getKey().replace('/', '\\').equalsIgnoreCase(scriptPath.replace('/', '\\'))) {
+					System.out.println(entry.getValue());
+					found = true;
+				}
+			}
+			if (!found) {
+				throw new IllegalArgumentException("No campaign script found: " + scriptPath);
+			}
+		}
+		if ((find != null) || (probe != null) || (readPath != null) || (scriptPath != null)) {
 			for (final OpenArchive o : open) {
 				o.channel.close();
 			}
@@ -169,8 +185,18 @@ public final class CampaignCinematicRefs {
 	private static String describeModel(final byte[] data) {
 		try {
 			final MdlxModel model = new MdlxModel(ByteBuffer.wrap(data));
+			final float[] min = { Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY };
+			final float[] max = { Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY };
+			model.geosets.forEach(geoset -> {
+				final float[] vertices = geoset.getVertices();
+				for (int i = 0; i < vertices.length; i++) {
+					min[i % 3] = Math.min(min[i % 3], vertices[i]);
+					max[i % 3] = Math.max(max[i % 3], vertices[i]);
+				}
+			});
 			return "model seq=" + model.sequences.size() + " cam=" + model.cameras.size() + " geo="
-					+ model.geosets.size() + " (" + data.length + " bytes)";
+					+ model.geosets.size() + " bounds=" + java.util.Arrays.toString(min) + ".."
+					+ java.util.Arrays.toString(max) + " (" + data.length + " bytes)";
 		}
 		catch (final Exception e) {
 			return "MODEL-PARSE-FAIL: " + e.getMessage();

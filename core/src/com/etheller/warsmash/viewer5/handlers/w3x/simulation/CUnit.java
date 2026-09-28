@@ -1,5 +1,6 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.nightelf.CAbilityUltravision;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -7,6 +8,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +22,7 @@ import com.etheller.interpreter.ast.scope.TriggerExecutionScope;
 import com.etheller.interpreter.ast.scope.trigger.Trigger;
 import com.etheller.warsmash.parsers.jass.scope.CommonTriggerExecutionScope;
 import com.etheller.warsmash.util.War3ID;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffect;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.SequenceUtils;
@@ -180,6 +183,7 @@ public class CUnit extends CWidget {
 	private float currentLifeRegenPerTick;
 	private float currentManaRegenPerTick;
 	private CDefenseType defenseType;
+	private LinkedHashMap<CUpgradeEffect, CDefenseType> defenseTypeUpgrades;
 
 	private int cooldownEndTime = 0;
 	private float flyHeight;
@@ -2651,12 +2655,14 @@ public class CUnit extends CWidget {
 
 			if (oldPlayer != null && newPlayer != null) {
 				if (this.foodMade != 0) {
+					final int transferredFoodMade = this.foodMade;
 					oldPlayer.setUnitFoodMade(this, 0);
-					newPlayer.setUnitFoodMade(this, this.foodMade);
+					newPlayer.setUnitFoodMade(this, transferredFoodMade);
 				}
 				if (this.foodUsed != 0) {
+					final int transferredFoodUsed = this.foodUsed;
 					oldPlayer.setUnitFoodUsed(this, 0);
-					newPlayer.setUnitFoodUsed(this, this.foodUsed);
+					newPlayer.setUnitFoodUsed(this, transferredFoodUsed);
 				}
 				if (getHeroData() == null) {
 					if (this.constructing) {
@@ -2674,9 +2680,13 @@ public class CUnit extends CWidget {
 				}
 			}
 			this.playerIndex = playerIndex;
-			if (changeColor) {
-				simulation.changeUnitColor(this, playerIndex);
-			}
+			// Reconcile both directions: the new owner may lose or gain requirements
+			// and may have different player-level ability restrictions.
+			checkDisabledAbilities(simulation, true);
+			checkDisabledAbilities(simulation, false);
+		}
+		if (changeColor) {
+			simulation.changeUnitColor(this, playerIndex);
 		}
 	}
 
@@ -5356,17 +5366,50 @@ public class CUnit extends CWidget {
 	}
 
 	public CDefenseType getDefenseType() {
-		return this.defenseType;
+		CDefenseType effectiveType = this.defenseType;
+		if (this.defenseTypeUpgrades != null) {
+			for (final CDefenseType upgradeType : this.defenseTypeUpgrades.values()) {
+				effectiveType = upgradeType;
+			}
+		}
+		return effectiveType;
+	}
+
+	public void addDefenseTypeUpgrade(final CUpgradeEffect source,
+			final CDefenseType type) {
+		if (this.defenseTypeUpgrades == null) {
+			this.defenseTypeUpgrades = new LinkedHashMap<>();
+		}
+		// The last applied research wins; removing it reveals the previous source.
+		this.defenseTypeUpgrades.remove(source);
+		this.defenseTypeUpgrades.put(source, type);
+	}
+
+	public void removeDefenseTypeUpgrade(final CUpgradeEffect source) {
+		if (this.defenseTypeUpgrades != null) {
+			this.defenseTypeUpgrades.remove(source);
+			if (this.defenseTypeUpgrades.isEmpty()) this.defenseTypeUpgrades = null;
+		}
 	}
 
 	public void setDefenseType(final CDefenseType defenseType) {
 		this.defenseType = defenseType;
 	}
 
+	public float getSightRadius(final CSimulation game, final boolean dayVision) {
+		if (dayVision) return this.unitType.getSightRadiusDay();
+		for (final CAbility ability : this.abilities) {
+			if (ability instanceof CAbilityUltravision
+					&& ((CAbilityUltravision) ability).grantsNightVision(game, this)) {
+				return this.unitType.getSightRadiusDay();
+			}
+		}
+		return this.unitType.getSightRadiusNight();
+	}
+
 	public void updateFogOfWar(final CSimulation game) {
 		if (!isDead() && !this.hidden) {
-			final float sightRadius = game.isDay() ? this.unitType.getSightRadiusDay()
-					: this.unitType.getSightRadiusNight();
+			final float sightRadius = getSightRadius(game, game.isDay());
 			if (sightRadius > 0) {
 				final float radSq = (sightRadius * sightRadius)
 						/ (CPlayerFogOfWar.GRID_STEP * CPlayerFogOfWar.GRID_STEP);
@@ -5673,8 +5716,7 @@ public class CUnit extends CWidget {
 	public boolean isVisible(final CSimulation simulation, final int toPlayerIndex) {
 		final CPlayer toPlayer = simulation.getPlayer(toPlayerIndex);
 		if (((toPlayerIndex == this.playerIndex) || toPlayer.hasAlliance(this.playerIndex, CAllianceType.SHARED_VISION))
-				&& ((simulation.isDay() ? this.unitType.getSightRadiusDay()
-						: this.unitType.getSightRadiusNight()) > 0)) {
+				&& (getSightRadius(simulation, simulation.isDay()) > 0)) {
 			return true;
 		}
 		if ((this.invisLevels > 0) && ((this.detections & (1 << toPlayerIndex)) == 0)) {

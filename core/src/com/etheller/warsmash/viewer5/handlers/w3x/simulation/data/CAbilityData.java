@@ -1,5 +1,6 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.data;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.nightelf.CAbilityUltravision;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.paladin.CAbilityHolyLight;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.paladin.CAbilityDivineShield;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.paladin.CAbilityResurrect;
@@ -116,6 +117,9 @@ public class CAbilityData {
 	private void registerCodes() {
 		// Native implementations are fallbacks. Ability Builder/JASS registrations
 		// below may override them, but campaigns must work without optional scripts.
+		// Night Elf research-enabled sight:
+		this.codeToAbilityTypeDefinition.put(War3ID.fromString("Ault"),
+				new CAbilityTypeDefinitionSpellBase(CAbilityUltravision::new));
 		// ----Human----
 		// Paladin:
 		this.codeToAbilityTypeDefinition.put(War3ID.fromString("AHhb"),

@@ -193,6 +193,15 @@ public class DesktopLauncher {
 		if (profile != null) {
 			applyProfile(profile, config);
 		}
+		// Saved window size is a default; explicit launch flags still take precedence.
+		final com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore savedOptions =
+				com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore.get();
+		savedOptions.load(com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore.optionsFile());
+		if (profile == null && windowedMode == null && savedOptions.getWindowWidth() > 0) {
+			config.fullscreen = false;
+			config.width = savedOptions.getWindowWidth();
+			config.height = savedOptions.getWindowHeight();
+		}
 		// Individual flags override profile settings.
 		if (Boolean.TRUE.equals(windowedMode)) {
 			config.fullscreen = false;

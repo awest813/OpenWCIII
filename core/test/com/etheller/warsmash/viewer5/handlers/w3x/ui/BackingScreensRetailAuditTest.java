@@ -1,4 +1,6 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
+import com.etheller.warsmash.testutil.RetailTestData;
+
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,11 +34,7 @@ import mpq.MPQArchive;
  */
 class BackingScreensRetailAuditTest {
 
-	private static final String[] ARCHIVE_PATHS = {
-			"F:\\WC3Data\\war3.mpq",
-			"F:\\WC3Data\\War3x.mpq",
-			"F:\\WC3Data\\War3xlocal.mpq",
-	};
+
 
 	private static final String[] MAIN_MENU_MODELS = {
 			"UI\\Glues\\MainMenu\\MainMenu3D\\MainMenu3D.mdx",
@@ -95,7 +93,7 @@ class BackingScreensRetailAuditTest {
 		final List<CloseableSource> closeables = new ArrayList<>();
 		final CompoundDataSource compound = openCompound(closeables);
 		if (compound == null) {
-			return; // Graceful skip on environments without local retail data
+			throw new AssertionError("Required retail archives could not be loaded");
 		}
 
 		try {
@@ -157,7 +155,7 @@ class BackingScreensRetailAuditTest {
 
 	private static CompoundDataSource openCompound(final List<CloseableSource> closeables) {
 		final List<DataSource> sources = new ArrayList<>();
-		for (final String pathStr : ARCHIVE_PATHS) {
+		for (final String pathStr : RetailTestData.requireAll()) {
 			try {
 				final Path p = Paths.get(pathStr);
 				if (Files.exists(p)) {
@@ -167,7 +165,8 @@ class BackingScreensRetailAuditTest {
 					closeables.add(new CloseableSource(ch));
 				}
 			}
-			catch (final Exception ignored) {
+			catch (final Exception failure) {
+				throw new AssertionError("Cannot open retail archive: " + pathStr, failure);
 			}
 		}
 		if (sources.isEmpty()) {

@@ -79,6 +79,8 @@ project(":core") {
 
     test {
         useJUnitPlatform()
+        systemProperty 'warsmash.test.assets', project.findProperty('retailAssets') ?: 'F:/WC3Data'
+        systemProperty 'warsmash.test.requireAssets', project.findProperty('requireRetailData') ?: 'false'
     }
 }
 

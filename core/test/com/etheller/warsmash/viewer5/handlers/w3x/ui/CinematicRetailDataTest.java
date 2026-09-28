@@ -1,4 +1,6 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.ui;
+import com.etheller.warsmash.testutil.RetailTestData;
+
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,8 +33,7 @@ import mpq.MPQArchive;
  * looping sequence + geosets; model cinematic: cameras + sequences + geosets).
  */
 class CinematicRetailDataTest {
-	private static final String[] ARCHIVES = { "F:\\WC3Data\\war3.mpq", "F:\\WC3Data\\War3x.mpq",
-			"F:\\WC3Data\\War3xlocal.mpq", };
+
 
 	private static final String[] SKY_MODELS = { "Environment\\Sky\\BlizzardSky\\BlizzardSky.mdl",
 			"Environment\\Sky\\DalaranSky\\DalaranSky.mdl", "Environment\\Sky\\FelwoodSky\\FelwoodSky.mdl",
@@ -50,9 +51,7 @@ class CinematicRetailDataTest {
 	@Test
 	void skyModelsParseIfPresent() throws Exception {
 		final List<OpenArchive> open = openArchives();
-		if (open.isEmpty()) {
-			return;
-		}
+		assertTrue(!open.isEmpty(), "Retail archives must be loaded");
 		try {
 			for (final String path : SKY_MODELS) {
 				final byte[] data = readAny(open, path);
@@ -70,9 +69,7 @@ class CinematicRetailDataTest {
 	@Test
 	void modelCinematicParsesIfPresent() throws Exception {
 		final List<OpenArchive> open = openArchives();
-		if (open.isEmpty()) {
-			return;
-		}
+		assertTrue(!open.isEmpty(), "Retail archives must be loaded");
 		try {
 			final byte[] data = readAny(open, FIGHT_MODEL);
 			assertNotNull(data, "Model cinematic missing from retail data: " + FIGHT_MODEL);
@@ -98,7 +95,7 @@ class CinematicRetailDataTest {
 
 	private static List<OpenArchive> openArchives() throws Exception {
 		final List<OpenArchive> open = new ArrayList<>();
-		for (final String archive : ARCHIVES) {
+		for (final String archive : RetailTestData.requireAll()) {
 			if (Files.exists(Paths.get(archive))) {
 				final SeekableByteChannel channel = Files.newByteChannel(Paths.get(archive),
 						StandardOpenOption.READ);

@@ -176,7 +176,8 @@ public final class MoviePlayer {
 
 	/**
 	 * Locates an ffmpeg binary: {@code -Dwarsmash.ffmpeg=} first, then the
-	 * {@code WARSMASH_FFMPEG} environment variable, then {@code ffmpeg} on the
+	 * {@code WARSMASH_FFMPEG} environment variable, then {@code FfmpegPath} in
+	 * the INI's Emulator section, then {@code ffmpeg} on the
 	 * PATH. Returns null when none is usable.
 	 */
 	public static String findFfmpeg() {
@@ -187,6 +188,10 @@ public final class MoviePlayer {
 		final String env = System.getenv("WARSMASH_FFMPEG");
 		if ((env != null) && !env.isEmpty() && canRun(env)) {
 			return env;
+		}
+		final String configured = com.etheller.warsmash.util.WarsmashConstants.FFMPEG_PATH;
+		if ((configured != null) && !configured.isEmpty() && canRun(configured)) {
+			return configured;
 		}
 		if (canRun("ffmpeg")) {
 			return "ffmpeg";
@@ -203,7 +208,10 @@ public final class MoviePlayer {
 			}
 			return process.waitFor() == 0;
 		}
-		catch (final IOException | InterruptedException e) {
+		catch (final IOException e) {
+			return false;
+		}
+		catch (final InterruptedException e) {
 			Thread.currentThread().interrupt();
 			return false;
 		}
@@ -223,7 +231,10 @@ public final class MoviePlayer {
 			process.waitFor();
 			return output.toString();
 		}
-		catch (final IOException | InterruptedException e) {
+		catch (final IOException e) {
+			return "";
+		}
+		catch (final InterruptedException e) {
 			Thread.currentThread().interrupt();
 			return "";
 		}

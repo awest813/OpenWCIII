@@ -1,5 +1,6 @@
 package com.etheller.warsmash.parsers.jass;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignPresentationEvents;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -7871,7 +7872,8 @@ public class Jass2 {
 						}
 						// Fire EVENT_GAME_VICTORY for any globally-registered triggers
 						CommonEnvironment.this.simulation.fireGameEvent(JassGameEventsWar3.EVENT_GAME_VICTORY);
-						meleeUI.customVictory(enableScoreScreen);
+						CampaignPresentationEvents.presentForPlayer(whichPlayer == null ? -1 : whichPlayer.getId(),
+								war3MapViewer.getLocalPlayerIndex(), () -> meleeUI.customVictory(enableScoreScreen));
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("CustomDefeat",
@@ -7884,7 +7886,8 @@ public class Jass2 {
 									CommonTriggerExecutionScope::triggerPlayerScope,
 									JassGameEventsWar3.EVENT_PLAYER_DEFEAT);
 						}
-						meleeUI.customDefeat(enableScoreScreen);
+						CampaignPresentationEvents.presentForPlayer(whichPlayer == null ? -1 : whichPlayer.getId(),
+								war3MapViewer.getLocalPlayerIndex(), () -> meleeUI.customDefeat(enableScoreScreen));
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("IsPlayerInForce",

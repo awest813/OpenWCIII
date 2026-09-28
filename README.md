@@ -13,19 +13,30 @@ Warcraft III installation.
 
 ## Verified status
 
-Latest local verification, September 24, 2026, used Windows, Java 17, Gradle 8.6,
+Latest core-test verification, September 27, 2026, used Windows, Java 17, Gradle 8.6,
 and a combined RoC/TFT MPQ asset set:
 
 | Check | Result | What it establishes |
 |---|---|---|
-| Core tests | 222 passed; 0 reported failures, errors, or skips | The assertions exercised by the local suite passed |
+| Core tests | 271 passed; 0 reported failures, errors, or skips | Includes latest origin updates, preload-state preservation, retail fog defaults, and fog-texture row alignment |
+| Cinematic sky rendering | GPU pixel regression passed | Sky renders behind distant terrain; full intro visual parity remains unverified |
 | Campaign loading and idle simulation | 85/85 discovered maps; 300 ticks each | Object loading, checked AI script loading, and short simulation runs |
 | Focused hero carryover test | Passed with retail data | The tested hero retained stats, learned Holy Light, and equipment through a disk gamecache round trip |
+| Research regression | Passed with campaign and standard melee object data | Lumber capacity/harvest accumulation, research timing, and spell-level reversal; not a full skirmish match |
+| Combat research regression | Passed with campaign and standard melee object data | Glaive travel, target exclusion, overlapping flights, damage falloff, armor-table damage, and research removal; no rendered match |
+| Ultravision regression | Passed with campaign and standard melee object data | Actual night fog, research reversal, new units, ownership in both directions, shared sight, building exclusion, and ability removal |
 
 The inventory includes interludes, credits, and bonus maps. This is **not 85
 completed missions**. The idle audit does not execute mission objectives, render
 the game, verify AI strategy, or measure memory leaks. Retail-dependent tests
-may skip or return early when local game data is unavailable.
+report explicit skips when local game data is unavailable. Use the strict retail
+command below to require the archives and reject missing fixtures.
+
+The [menu audit](docs/MENU_AUDIT.md) records input, focus, and dialog fixes and
+remaining visual checks.
+
+The [campaign presentation audit](docs/CAMPAIGN_PRESENTATION_AUDIT.md) covers
+screens, messages, event routing, fixes, and outstanding visual checks.
 
 The [campaign parity plan](docs/WC3_CAMPAIGN_PARITY_AUDIT.md) records evidence,
 known gaps, reproduction commands, and completion criteria. No overall
@@ -58,6 +69,8 @@ needs network access to download Gradle and dependencies on a fresh checkout.
 git clone https://github.com/awest813/OpenWCIII.git
 cd OpenWCIII
 ./gradlew :core:test
+# Require owned retail fixtures rather than skipping absent data:
+./gradlew :core:test -PretailAssets=F:/WC3Data -PrequireRetailData=true
 ```
 
 In Windows PowerShell, replace `./gradlew` with `.\gradlew.bat`.
@@ -111,7 +124,8 @@ are not reliably preserved by that mechanism.
 Validation checks data-source paths, not campaign completeness. The launch task
 currently ignores application exit codes; inspect its output after a failure.
 
-Movie decoding requires ffmpeg on `PATH`, through `WARSMASH_FFMPEG`, or via the
+Movie decoding requires ffmpeg on `PATH`, through `WARSMASH_FFMPEG`, through
+`FfmpegPath` in the INI's `[Emulator]` section, or via the
 `warsmash.ffmpeg` Java system property. Missing movies or decoder support use a
 fallback overlay, which does not count as movie parity.
 

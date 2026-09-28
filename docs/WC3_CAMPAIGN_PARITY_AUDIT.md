@@ -1,6 +1,6 @@
 # Warcraft III campaign parity: status and implementation plan
 
-**Reviewed September 24, 2026. Status: incomplete; no full-parity sign-off.**
+**Reviewed September 27, 2026. Status: incomplete; no full-parity sign-off.**
 
 Scope: RoC and TFT single-player campaigns, chapter transitions, interludes,
 credits, and bonus-campaign branches. Multiplayer, replay, arbitrary custom
@@ -20,7 +20,7 @@ archives were not independently matched to their installer.
 
 | Check | Recorded result | Scope and exclusions |
 |---|---|---|
-| Core suite, latest run | 222 tests; 0 reported failures/errors/skips | Focused assertions, including retail fixtures; not mission playthroughs |
+| Core suite, latest run | 271 tests; 0 failures/errors/skips (retail fixtures required) | Includes latest origin updates, incremental script loading, and fog regressions; not mission playthroughs |
 | Strict idle audit, latest run | 85/85 maps; 300 ticks each; 25,500 total | Object loading, checked AI parsing/initialization, idle simulation; no mission objectives, rendering, or leak measurement |
 | Progression audit, earlier review | 70/70 distinct next-map targets resolved | Static target discovery and map opening; not executed transitions |
 | Backing-screen audit, earlier review | 47/47 checks passed | Selected assets and model data; not visual approval |
@@ -30,8 +30,19 @@ archives were not independently matched to their installer.
 The inventory includes interludes, credits, and bonus submaps. Counts depend on
 the archives and are not a count of completed missions.
 
-Local evidence: `Logs/campaign-regressions-final.txt`,
-`Logs/campaign-strict-final.txt`, and earlier
+Latest core-suite evidence: `Logs/latest-merge-regression.txt` (271 passed).
+Integrated origin/main through `8472ce72`, preserving the local campaign and
+rendering changes. Ownership transfer retains food counts and refreshes ability
+requirements. The AI cache includes retail common.j declarations as well as
+common.ai; the incoming minimal preamble omitted constants needed by campaigns.
+The separate `:desktop:skyBackgroundRenderAudit` also passed: real GPU pixel
+checks verify terrain covers a nearer sky mesh and sky is excluded from later
+world passes. Full cinematic visual parity remains unverified.
+Latest campaign smoke evidence: `Logs/campaign-ownership-vision.txt`.
+Earlier combat research evidence: `Logs/campaign-combat-research.txt`.
+Previous research follow-up evidence: `Logs/campaign-skirmish-research.txt`.
+Earlier evidence: `Logs/campaign-regressions-final.txt`,
+`Logs/campaign-strict-final.txt`, and
 `Logs/campaign-presentation-review.txt`. These are local artifacts, not guaranteed
 contents of a fresh checkout. The generated
 [native report](CAMPAIGN_NATIVE_COVERAGE.md) uses “implementation” for registration
@@ -66,6 +77,120 @@ data is missing. Zero reported skips alone does not prove every fixture ran.
 Focused tests include `StoredUnitDataSimulationTest`, `CampaignHeroCarryoverTest`,
 `CGameSaveTest`, `CampaignProgressStoreTest`, `CPathfindingProcessorTest`, and
 `JassFileFailureTest`. They establish their assertions, not feature-wide parity.
+
+Research follow-up: `HarvestUpgradeSimulationTest` exercises Human01 overrides
+and standard melee object data on a small synthetic pathing grid. It verifies
+Improved Lumber Harvesting, actual harvest-hit accumulation, player isolation,
+newly created/trained workers, research reversal, and configured spell-level
+increments. This is not a standalone skirmish map or match playthrough. The
+`rlum` upgrade effect is implemented; other unsupported upgrade effects remain.
+The full follow-up run passed 223 tests and 85/85 maps at 300 idle ticks each.
+At that point, eight unsupported effect types still appeared: `rart`, `rasd`, `ratc`, `raud`,
+`rauv`, `renw`, `rrai`, and `rspi`.
+
+Combat research follow-up: `CombatUpgradeSimulationTest` exercises Moon Glaives
+and Reinforced Defenses using Human01 overrides and standard melee object data.
+It checks damaging bounce chains, research removal during an in-flight bounce,
+fortified damage reduction, newly created buildings, and independent armor
+overrides. The fixture launches missiles and advances their real projectile updates on a
+flat headless map, without rendering, the simulation scheduler, or mission-script
+execution. The `ratc` and `rart` handlers are now implemented;
+this does not establish full Night Elf or Orc combat parity.
+The combat follow-up passed 225 tests and 85/85 campaign smoke checks at 300
+ticks each. Six unsupported upgrade effects remain in the audit output:
+`rasd`, `raud`, `rauv`, `renw`, `rrai`, and `rspi`.
+
+### Test-quality audit follow-up
+
+The strict retail run passed 231 tests (zero failures/errors/skips), recorded in
+`Logs/retail-test-audit-full.txt` and `Logs/retail-test-audit-counts.txt`.
+Campaign and standard melee object-data cases now appear as separate test cases.
+The shared fixture captures typed missiles and rejects unsupported nonvisual
+renderer calls. It does not substitute for a played skirmish.
+
+The projectile tests check recipients, travel completion, one-time impacts,
+damage falloff, overlapping chains, and research removal while an extra bounce
+is in flight. This exposed and fixed a glaive returning to its initial target.
+The expected two baseline hits and 50% falloff agree with the supplied archives
+and [Blizzard's classic Huntress guide](https://classic.battle.net/war3/nightelf/units/huntress.shtml),
+which also excludes the initial target from later bounces. An independent
+zero-distance projectile regression covers finite impact coordinates.
+Armor tests compare normal, piercing, siege, and magic damage with the loaded
+retail armor table and verify player isolation and unchanged armor points.
+
+Missing archives produce explicit JUnit skips; `-PrequireRetailData=true`
+turns them into failures. A selected missing-data run recorded 13 skips and five
+asset-independent passes; a strict missing-data run failed all four selected
+combat cases as expected (before the two overlapping-flight cases were added).
+These checks prevent absent fixtures from being reported as retail coverage.
+
+Balance expectations are version-specific: this archive set uses a +5 initial
+lumber-capacity upgrade. Do not replace those data-driven expectations with
+values from a different patch's guide. The synthetic Holy Light level-reversal
+check exercises upgrade arithmetic, not a retail priest training scenario.
+Full mission completion, AI strategy, rendered combat, and complete save/resume
+remain unverified.
+
+### Ultravision follow-up
+
+`UltravisionSimulationTest` verifies actual fog visibility with Human01 and
+standard melee object data. The initial test failed because the researched archer
+could not reveal a point beyond its normal night sight; the same test now passes.
+The current full suite passes 233 tests with no failures/errors/skips and retail
+fixtures required (`Logs/campaign-ultravision.txt`). The same run passed all
+85 campaign maps at 300 ticks each (25,500 ticks total, zero failures).
+
+Hunter's Hall research `Reuv` has no direct upgrade effect in these archives.
+Instead, the unit's `Ault` passive requires that research. The registered ability
+now checks its data-defined requirements and current owner; effective sight is
+used by normal and shared-unit fog. Tests cover baseline/day/night visibility,
+research removal/reapplication, new units, another player, ownership transfer,
+unchanged building sight, and ability disabling/removal. This follows the
+[official Night Elf guide](https://classic.battle.net/war3/nightelf/) for researched
+night sight. It is a headless behavior test, not a rendered match or mission.
+
+The six unsupported upgrade-effect IDs remain unchanged: `rauv` belongs to the
+separate `Rguv` campaign glyph. The `AIuv` item alias also inherits a `Reuv`
+requirement in the loaded data; its intended retail item behavior needs separate
+verification and is excluded from this pass's acceptance claims.
+
+### Ownership and ability lifecycle follow-up
+
+The previous ownership check moved a researched archer to an unresearched player
+and back. A new reverse-direction check exposed a stale requirement-disable flag:
+an archer originally created without research remained disabled when received by
+a player who already had Ultravision. Both retail fixtures reproduced this before
+the fix (`Logs/ownership-vision-before.txt`).
+
+`CUnit.setPlayerIndex` now reconciles disabled abilities against the new owner
+when ownership actually changes. The expanded test verifies actual fog in both
+transfer directions, passive activation/removal callbacks exactly once, unchanged
+behavior when assigning the same owner, preservation of explicit script disables,
+and the new owner's player-level ability restrictions. All 233 core tests pass
+with retail fixtures required and zero failures/errors/skips. Latest run evidence:
+`Logs/campaign-ownership-vision.txt`. The same run passed 85/85 campaign smoke
+checks at 300 ticks each (25,500 total; zero failures).
+
+This validates ability eligibility and lifecycle on ownership transfer. It does
+not establish full ownership-transfer parity for research stat bonuses, upkeep,
+food accounting, or AI control.
+
+### Campaign presentation audit
+
+The [screens, messages, and events audit](CAMPAIGN_PRESENTATION_AUDIT.md) records
+September 25 fixes for local-player outcome routing, stale/repeated Continue
+actions, transmission cleanup/timing, locked chapter controls, and accurate movie
+fallback messages. Nine new tests bring the strict retail-data core suite to
+242 passing tests with zero failures/errors/skips. Rendered screen appearance,
+localization, full score screens, and mission event sequences remain unverified.
+
+### Menu input and dialog follow-up
+
+The [menu audit](MENU_AUDIT.md) covers dialog callback ordering, stale responses,
+wrapping Tab/Shift+Tab focus, hidden-field input, modal keyboard capture, scoped
+Escape navigation, and shared disabled/hidden button guards. Six additional
+regressions bring the strict retail-fixture suite to 248 passing tests with no
+failures/errors/skips. Live menu layout and input walkthroughs remain required.
 
 ## Prioritized work and acceptance gates
 
@@ -168,7 +293,7 @@ Use JDK 17 and the Gradle 8.6 wrapper from the repository root. On Windows,
 replace `./gradlew` with `.\gradlew.bat`.
 
 ```bash
-./gradlew :core:test
+./gradlew :core:test -PretailAssets=F:/WC3Data -PrequireRetailData=true
 ./gradlew :desktop:campaignSoakAudit -Pargs="--mpq C:/WC3Data/war3.mpq --mpq C:/WC3Data/War3x.mpq --mpq C:/WC3Data/War3xlocal.mpq --ticks 300"
 ```
 
@@ -191,8 +316,8 @@ Inspect warnings and discovered/tested counts even on success. The soak task's
 3 GB heap limit is not a measured minimum system requirement.
 
 Core reports are in `core/build/reports/tests/test/index.html` and
-`core/build/test-results/test`. For retail tests, check fixture availability as
-well as the reported test counts.
+`core/build/test-results/test`. Retail validation should use the strict fixture flag above and verify zero
+skips as well as the reported test counts.
 
 ## Code map and maintenance
 

@@ -40,8 +40,8 @@ public abstract class CProjectile extends CExtensibleHandleAbstract implements C
 		final float dtsy = ty - sy;
 		final float c = (float) Math.sqrt((dtsx * dtsx) + (dtsy * dtsy));
 
-		final float d1x = dtsx / c;
-		final float d1y = dtsy / c;
+		final float d1x = c == 0 ? 0 : dtsx / c;
+		final float d1y = c == 0 ? 0 : dtsy / c;
 
 		float travelDistance = Math.min(c, this.speed * WarsmashConstants.SIMULATION_STEP_TIME);
 		final boolean done = c <= travelDistance;

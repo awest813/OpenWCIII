@@ -131,6 +131,12 @@ public final class UnitSound {
 		return play(audioContext, x, y, z, (int) (Math.random() * this.sounds.size()));
 	}
 
+	/** Restarts a screen-owned sound without leaving an earlier instance playing. */
+	public long playExclusive(final AudioContext audioContext, final float x, final float y, final float z) {
+		stop();
+		return play(audioContext, x, y, z);
+	}
+
 	public long play(final AudioContext audioContext, final float x, final float y, final float z, final int index) {
 		return play(audioContext, x, y, z, index, null);
 	}

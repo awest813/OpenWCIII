@@ -15,6 +15,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitTypeRequiremen
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUpgradeType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CUpgradeClass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffect;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackTargetCount;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectDefenseType;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectLumberHarvest;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackDamage;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackDice;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackRange;
@@ -94,6 +97,19 @@ public class CUpgradeData {
 					// it later but the syntax is pretty nice and the calculation is cached and only
 					// runs once per upgrade
 					switch (effectId.toString()) {
+					case "ratc":
+						upgradeEffects.add(new CUpgradeEffectAttackTargetCount(
+								upgradeType.getFieldAsInteger(effectBaseMetaKey, 0),
+								upgradeType.getFieldAsInteger(effectModMetaKey, 0)));
+						break;
+					case "rart":
+						upgradeEffects.add(new CUpgradeEffectDefenseType(upgradeType.getFieldAsInteger(effectBaseMetaKey, 0)));
+						break;
+					case "rlum":
+						upgradeEffects.add(new CUpgradeEffectLumberHarvest(
+								upgradeType.getFieldAsInteger(effectBaseMetaKey, 0),
+								upgradeType.getFieldAsInteger(effectModMetaKey, 0)));
+						break;
 					case "ratd":
 						upgradeEffects
 								.add(new CUpgradeEffectAttackDice(upgradeType.getFieldAsInteger(effectBaseMetaKey, 0),

@@ -34,8 +34,8 @@ import com.etheller.warsmash.parsers.w3x.w3i.War3MapW3i;
 import com.etheller.warsmash.parsers.w3x.wpm.War3MapWpm;
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
-import com.etheller.warsmash.util.ImageUtils;
 import com.etheller.warsmash.util.ImageUtils.AnyExtensionImage;
+import com.etheller.warsmash.util.ImageUtils;
 import com.etheller.warsmash.util.RenderMathUtils;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WorldEditStrings;
@@ -45,16 +45,18 @@ import com.etheller.warsmash.viewer5.RawOpenGLTextureResource;
 import com.etheller.warsmash.viewer5.Texture;
 import com.etheller.warsmash.viewer5.gl.DataTexture;
 import com.etheller.warsmash.viewer5.gl.Extensions;
+import com.etheller.warsmash.viewer5.gl.TextureQuality;
 import com.etheller.warsmash.viewer5.gl.WebGL;
 import com.etheller.warsmash.viewer5.handlers.w3x.DynamicShadowManager;
-import com.etheller.warsmash.viewer5.handlers.w3x.SplatModel;
 import com.etheller.warsmash.viewer5.handlers.w3x.SplatModel.SplatMover;
+import com.etheller.warsmash.viewer5.handlers.w3x.SplatModel;
 import com.etheller.warsmash.viewer5.handlers.w3x.Variations;
 import com.etheller.warsmash.viewer5.handlers.w3x.W3xSceneLightManager;
 import com.etheller.warsmash.viewer5.handlers.w3x.W3xShaders;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CFogMaskSettings;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.vision.CPlayerFogOfWar;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 
 public class Terrain {
 	public static final float CELL_SIZE = 128f;
@@ -130,6 +132,11 @@ public class Terrain {
 	private final Map<String, SplatModel> uberSplatModels;
 	private final List<SplatModel> uberSplatModelsList;
 	private int shadowMap;
+	private byte[] boundaryShadowData;
+	private boolean shadowsEnabled = true;
+	private final TextureQuality cliffQuality = new TextureQuality(true);
+	private final TextureQuality waterQuality = new TextureQuality(true);
+	private int waterTextureSize = 1;
 	private int fogOfWarMap;
 	private final FogTextureUpload fogTextureUpload = new FogTextureUpload();
 	public final Map<String, Splat> splats = new HashMap<>();
@@ -395,6 +402,7 @@ public class Terrain {
 				}
 				anyWaterTextureNeedsSRGB |= imageInfo.isNeedsSRGBFix();
 				waterTextures.add(image);
+				this.waterTextureSize = waterImageDimension;
 			}
 			gl.glTexImage3D(GL30.GL_TEXTURE_2D_ARRAY, 0,
 					anyWaterTextureNeedsSRGB ? GL30.GL_SRGB8_ALPHA8 : GL30.GL_RGBA8, waterImageDimension,
@@ -955,6 +963,9 @@ public class Terrain {
 	}
 
 	public void renderGround(final DynamicShadowManager dynamicShadowManager) {
+		if (this.initShadowsFinished && this.shadowsEnabled != OptionsSettingsStore.get().isShadows()) {
+			reloadShadowDataToGPU();
+		}
 		// Render tiles
 
 		this.webGL.useShaderProgram(this.groundShader);
@@ -1024,7 +1035,7 @@ public class Terrain {
 		gl.glUniform1i(this.groundShader.getUniformLocation("fogOfWarMap"), 22);
 		for (int i = 0; i < this.groundTextures.size(); i++) {
 			gl.glActiveTexture(GL30.GL_TEXTURE3 + i);
-			gl.glBindTexture(GL30.GL_TEXTURE_2D_ARRAY, this.groundTextures.get(i).id);
+			this.groundTextures.get(i).bind(gl);
 		}
 
 //		gl.glActiveTexture(GL30.GL_TEXTURE20, /*pathingMap.getTextureStatic()*/);
@@ -1109,7 +1120,7 @@ public class Terrain {
 
 		// Render the cliffs
 		for (final SplatModel splat : this.uberSplatModelsList) {
-			if (splat.isHighPriority() == onTopLayer) {
+			if (splat.isHighPriority() == onTopLayer && (!splat.isShadow() || OptionsSettingsStore.get().isShadows())) {
 				splat.render(gl, shader);
 			}
 		}
@@ -1161,6 +1172,7 @@ public class Terrain {
 		gl.glBindTexture(GL30.GL_TEXTURE_2D, this.waterExists);
 		gl.glActiveTexture(GL30.GL_TEXTURE4);
 		gl.glBindTexture(GL30.GL_TEXTURE_2D_ARRAY, this.waterTextureArray);
+		this.waterQuality.apply(gl, GL30.GL_TEXTURE_2D_ARRAY, this.waterTextureSize, this.waterTextureSize);
 		gl.glActiveTexture(GL30.GL_TEXTURE5);
 		gl.glBindTexture(GL30.GL_TEXTURE_2D, this.fogOfWarMap);
 
@@ -1226,6 +1238,7 @@ public class Terrain {
 		this.cliffShader.setUniformi("cliff_textures", 0);
 		gl.glActiveTexture(GL30.GL_TEXTURE0);
 		gl.glBindTexture(GL30.GL_TEXTURE_2D_ARRAY, this.cliffTextureArray);
+		this.cliffQuality.apply(gl, GL30.GL_TEXTURE_2D_ARRAY, this.cliffTexturesSize, this.cliffTexturesSize);
 		this.cliffShader.setUniformi("height_texture", 1);
 		gl.glActiveTexture(GL30.GL_TEXTURE1);
 		gl.glBindTexture(GL30.GL_TEXTURE_2D, this.groundHeight);
@@ -1246,7 +1259,7 @@ public class Terrain {
 		final List<float[]> shadowList = this.shadows.get(file);
 		final float[] shadowPositionArray = new float[] { shadowX, shadowY };
 		shadowList.add(shadowPositionArray);
-		if (this.initShadowsFinished) {
+		if (this.initShadowsFinished && this.shadowsEnabled) {
 			final Texture texture = this.shadowTextures.get(file);
 
 			final int columns = (this.columns - 1) * 4;
@@ -1291,6 +1304,7 @@ public class Terrain {
 
 		final int shadowSize = columns * rows;
 		this.staticShadowData = new byte[columns * rows];
+		this.boundaryShadowData = new byte[columns * rows];
 		this.shadowData = new byte[columns * rows];
 		if (this.viewer.mapMpq.has("war3map.shd")) {
 			final byte[] buffer;
@@ -1312,23 +1326,28 @@ public class Terrain {
 				final RenderCorner c = this.corners[x >> 2][y >> 2];
 				if (c.getBoundary() != 0) {
 					this.staticShadowData[(y * columns) + x] = outsideArea;
+					this.boundaryShadowData[(y * columns) + x] = outsideArea;
 				}
 			}
 		}
 		for (int y = 0; y < rows; ++y) {
 			for (int x = 0; x < x0; ++x) {
 				this.staticShadowData[(y * columns) + x] = outsideArea;
+				this.boundaryShadowData[(y * columns) + x] = outsideArea;
 			}
 			for (int x = x1; x < columns; ++x) {
 				this.staticShadowData[(y * columns) + x] = outsideArea;
+				this.boundaryShadowData[(y * columns) + x] = outsideArea;
 			}
 		}
 		for (int x = x0; x < x1; ++x) {
 			for (int y = 0; y < y0; ++y) {
 				this.staticShadowData[(y * columns) + x] = outsideArea;
+				this.boundaryShadowData[(y * columns) + x] = outsideArea;
 			}
 			for (int y = y1; y < rows; ++y) {
 				this.staticShadowData[(y * columns) + x] = outsideArea;
+				this.boundaryShadowData[(y * columns) + x] = outsideArea;
 			}
 		}
 		reloadShadowData(centerOffset, columns, rows);
@@ -1348,6 +1367,11 @@ public class Terrain {
 	}
 
 	private void reloadShadowData(final float[] centerOffset, final int columns, final int rows) {
+		this.shadowsEnabled = OptionsSettingsStore.get().isShadows();
+		if (!this.shadowsEnabled) {
+			System.arraycopy(this.boundaryShadowData, 0, this.shadowData, 0, this.boundaryShadowData.length);
+			return;
+		}
 		System.arraycopy(this.staticShadowData, 0, this.shadowData, 0, this.staticShadowData.length);
 		for (final Map.Entry<String, Texture> fileAndTexture : this.shadowTextures.entrySet()) {
 			final String file = fileAndTexture.getKey();
@@ -1598,12 +1622,13 @@ public class Terrain {
 
 	public SplatMover addUnitShadowSplat(final String texture, final float x, final float y, final float x2,
 			final float y2, final float zDepthUpward, final float opacity, final boolean aboveWater) {
-		SplatModel splatModel = this.uberSplatModels.get(texture);
+		SplatModel splatModel = this.uberSplatModels.get("shadow:" + texture);
 		if (splatModel == null) {
 			splatModel = new SplatModel(Gdx.gl30, (Texture) this.viewer.load(texture, PathSolver.DEFAULT, null),
 					new ArrayList<>(), this.centerOffset, new ArrayList<>(), false, false, false, aboveWater);
 			splatModel.color[3] = opacity;
-			addSplatBatchModel(texture, splatModel);
+			splatModel.setShadow(true);
+			addSplatBatchModel("shadow:" + texture, splatModel);
 		}
 		return splatModel.add(x, y, x2, y2, zDepthUpward, this.centerOffset);
 	}

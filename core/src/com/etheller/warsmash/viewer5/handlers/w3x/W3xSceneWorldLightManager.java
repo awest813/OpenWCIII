@@ -10,6 +10,7 @@ import com.etheller.warsmash.viewer5.SceneLightInstance;
 import com.etheller.warsmash.viewer5.SceneLightManager;
 import com.etheller.warsmash.viewer5.gl.DataTexture;
 import com.etheller.warsmash.viewer5.handlers.mdx.LightInstance;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 
 public class W3xSceneWorldLightManager implements SceneLightManager, W3xSceneLightManager {
 	private static final int LIGHT_REPORT_INTERVAL = 3600; // ~60 s at 60 fps
@@ -66,7 +67,8 @@ public class W3xSceneWorldLightManager implements SceneLightManager, W3xSceneLig
 		// GPU textures the light is written into.
 		LightInstance.advanceGeneration();
 
-		final int numberOfLights = this.lights.size() + 1;
+		final int localLightCount = OptionsSettingsStore.get().isLocalLights() ? this.lights.size() : 0;
+		final int numberOfLights = localLightCount + 1;
 		final int floatsNeeded = numberOfLights * 16;
 		if (floatsNeeded > this.unitLightBuffer.capacity()) {
 			this.unitLightBuffer = ByteBuffer.allocateDirect(floatsNeeded * 4).order(ByteOrder.nativeOrder())
@@ -100,7 +102,8 @@ public class W3xSceneWorldLightManager implements SceneLightManager, W3xSceneLig
 		// Single pass over point lights. Each light recomputes its keyframe data at
 		// most once per generation (the first bind() call rebuilds the cache; the
 		// second bind() call bulk-copies from that cache).
-		for (final LightInstance light : this.lights) {
+		for (int i = 0; i < localLightCount; i++) {
+			final LightInstance light = this.lights.get(i);
 			light.bind(unitOffset, this.unitLightBuffer);
 			unitOffset += 16;
 			this.unitLightCount++;

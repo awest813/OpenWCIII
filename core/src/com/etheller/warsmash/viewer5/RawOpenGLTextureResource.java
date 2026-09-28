@@ -7,6 +7,7 @@ import java.nio.ByteOrder;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.GL30;
 import com.etheller.warsmash.viewer5.handlers.ResourceHandler;
+import com.etheller.warsmash.viewer5.gl.TextureQuality;
 
 /**
  * Similar to GdxTextureResource, but now I'm probably replacing use of that one
@@ -20,6 +21,7 @@ import com.etheller.warsmash.viewer5.handlers.ResourceHandler;
  * therefore it should work here as well.
  */
 public abstract class RawOpenGLTextureResource extends Texture {
+	private final TextureQuality textureQuality = new TextureQuality(false);
 	private static final int BYTES_PER_PIXEL = 4;
 	private final int target;
 	protected int handle;
@@ -55,6 +57,7 @@ public abstract class RawOpenGLTextureResource extends Texture {
 	@Override
 	public void internalBind() {
 		this.viewer.gl.glBindTexture(this.target, this.handle);
+		this.textureQuality.apply(this.viewer.gl, this.target, this.width, this.height);
 		this.viewer.gl.glTexParameteri(this.target, GL20.GL_TEXTURE_WRAP_S, this.wrapS);
 		this.viewer.gl.glTexParameteri(this.target, GL20.GL_TEXTURE_WRAP_T, this.wrapT);
 	}
@@ -134,6 +137,8 @@ public abstract class RawOpenGLTextureResource extends Texture {
 
 		this.width = imageWidth;
 		this.height = imageHeight;
+		this.textureQuality.invalidate();
+		gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_BASE_LEVEL, 0);
 //		}
 	}
 

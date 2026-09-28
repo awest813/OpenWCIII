@@ -58,6 +58,52 @@ task skyBackgroundRenderAudit(dependsOn: classes, type: JavaExec) {
     workingDir = project.rootDir
 }
 
+task graphicsSettingsRenderAudit(dependsOn: classes, type: JavaExec) {
+    description = "Checks graphics quality changes against a real OpenGL context."
+    mainClass = "com.etheller.warsmash.desktop.tools.GraphicsSettingsRenderAudit"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.rootDir
+}
+
+task graphicsSettingsMapAudit(dependsOn: classes, type: JavaExec) {
+    description = "Smoke-tests a retail map at a chosen graphics quality using isolated preferences."
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    def auditHome = file("$buildDir/graphics-audit-home")
+    def quality = project.findProperty('graphicsQuality') ?: '0'
+    def auditOutput = new ByteArrayOutputStream()
+    standardOutput = auditOutput
+    errorOutput = auditOutput
+    ignoreExitValue = true
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.startupProbeSeconds', '8'
+    systemProperty 'warsmash.graphicsProbe', 'true'
+    args '--profile=safe', '--width=960', '--height=540', '--fps=30', '--msaa=0', '--novsync',
+            '-nolog', '-loadfile', 'Maps\\Campaign\\Human01.w3m'
+    doFirst {
+        def optionsFile = new File(auditHome, '.warsmash/options.properties')
+        optionsFile.parentFile.mkdirs()
+        optionsFile.text = "modelDetail=$quality\nanimationQuality=$quality\ntextureQuality=$quality\n" +
+                "particleQuality=$quality\nlocalLights=${quality != '0'}\nshadows=${quality != '0'}\n" +
+                "occlusion=true\nmusicEnabled=false\nsoundEnabled=false\n"
+    }
+    doLast {
+        def output = auditOutput.toString('UTF-8')
+        def report = file("$buildDir/graphics-map-${quality}.log")
+        report.text = output
+        // The bundled LWJGL backend exits -1 even after normal shutdown. Require
+        // the render-thread completion marker, rather than masking exit codes alone.
+        if (!output.contains('[StartupProbe] complete') || output.contains('GL ERROR:') ||
+                !output.contains('[GraphicsProbe] quality=2') ||
+                !output.contains('Display: windowed 960x540') || !output.contains('VSync: disabled') ||
+                !output.contains('FPS cap: fg=30, bg=30') || !output.contains('MSAA samples: 0')) {
+            throw new GradleException("Graphics map audit failed; see $report")
+        }
+        println "PASS: retail map rendered and switched graphics quality; report: $report"
+    }
+}
+
 task campaignBackingAudit(dependsOn: classes, type: JavaExec) {
     description = "Audits Warcraft III 3D and 2D menu backing screens, cameras, sequences, and skin resolution against retail archives."
     mainClass = "com.etheller.warsmash.desktop.tools.CampaignBackingScreensAudit"
@@ -134,4 +180,35 @@ task afterEclipseImport(description: "Post processing after project generation",
     printer.setPreserveWhitespace(true)
     printer.print(classpath)
   }
+}
+
+
+task menuGraphicsAudit(dependsOn: classes, type: JavaExec) {
+    description = "Renders and captures the main menu in 4:3, widescreen, and portrait windows."
+    mainClass = "com.etheller.warsmash.desktop.DesktopLauncher"
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    def auditHome = file("$buildDir/menu-audit-home")
+    def captures = file("$buildDir/menu-audit-captures")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.menuAuditDirectory', captures.absolutePath
+    args '--profile=safe', '--width=800', '--height=600', '--fps=30', '--msaa=0', '-nolog'
+    def auditOutput = new ByteArrayOutputStream()
+    standardOutput = auditOutput
+    errorOutput = auditOutput
+    ignoreExitValue = true
+    doFirst {
+        captures.mkdirs()
+        def optionsFile = new File(auditHome, '.warsmash/options.properties')
+        optionsFile.parentFile.mkdirs()
+        optionsFile.text = 'musicEnabled=false\nsoundEnabled=false\n'
+    }
+    doLast {
+        def output = auditOutput.toString('UTF-8')
+        file("$buildDir/menu-audit.log").text = output
+        if (!output.contains('[MenuRenderProbe] complete') || output.contains('GL ERROR:')) {
+            throw new GradleException("Menu audit failed; see $buildDir/menu-audit.log")
+        }
+        println "PASS: menu rendered at three sizes; captures: $captures"
+    }
 }

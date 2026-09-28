@@ -1,6 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.mdx;
 
 import java.util.Arrays;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
@@ -86,6 +87,11 @@ public class Geoset {
 		this.hasAlphaAnim = hasAlphaAnim;
 		this.hasColorAnim = hasColorAnim;
 		this.hasObjectAnim = hasAlphaAnim || hasColorAnim;
+	}
+
+	public boolean isSelectedDetail() {
+		return this.mdlxGeoset.lod == -1 || this.mdlxGeoset.lod ==
+				this.model.lodByQuality[OptionsSettingsStore.get().getModelDetail()];
 	}
 
 	public int getAlpha(final float[] out, final int sequence, final int frame, final int counter) {

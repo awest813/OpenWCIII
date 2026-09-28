@@ -119,7 +119,7 @@ public class CAbilityMove extends AbstractCAbility {
 			}
 			if (behavior == null) {
 				behavior = caster.getFollowBehavior().reset(game, smart ? OrderIds.move : orderId, targetUnit);
-				caster.setDefaultBehavior(behavior);
+				caster.setDefaultBehavior(caster.getFollowBehavior());
 			}
 			return behavior;
 		}

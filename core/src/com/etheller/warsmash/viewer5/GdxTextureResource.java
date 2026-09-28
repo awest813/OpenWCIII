@@ -2,8 +2,10 @@ package com.etheller.warsmash.viewer5;
 
 import com.badlogic.gdx.graphics.Texture.TextureWrap;
 import com.etheller.warsmash.viewer5.handlers.ResourceHandler;
+import com.etheller.warsmash.viewer5.gl.TextureQuality;
 
 public abstract class GdxTextureResource extends Texture {
+	private final TextureQuality textureQuality = new TextureQuality(false);
 	private com.badlogic.gdx.graphics.Texture gdxTexture;
 
 	public GdxTextureResource(final ModelViewer viewer, final ResourceHandler handler, final String extension,
@@ -13,6 +15,7 @@ public abstract class GdxTextureResource extends Texture {
 
 	public void setGdxTexture(final com.badlogic.gdx.graphics.Texture gdxTexture) {
 		this.gdxTexture = gdxTexture;
+		this.textureQuality.invalidate();
 	}
 
 	@Override
@@ -28,6 +31,7 @@ public abstract class GdxTextureResource extends Texture {
 	@Override
 	public void internalBind() {
 		this.gdxTexture.bind();
+		this.textureQuality.apply(this.viewer.gl, this.gdxTexture.glTarget, getWidth(), getHeight());
 	}
 
 	@Override

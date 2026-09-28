@@ -115,6 +115,7 @@ public class BatchGroup extends GenericGroup {
 			for (final int index : this.objects) {
 				final Batch batch = batches.get(index);
 				final Geoset geoset = batch.geoset;
+				if (!geoset.isSelectedDetail()) continue;
 				final Material material = batch.material;
 				final Layer diffuseLayer = material.layers.get(0);
 				final Layer normalsLayer = material.layers.get(1);
@@ -126,7 +127,7 @@ public class BatchGroup extends GenericGroup {
 				final float layerAlpha = instance.layerAlphas[diffuseLayer.index];
 
 				if ((geosetColor[3] > 0.01) && (layerAlpha > 0)) {
-					shader.setUniformf("u_layerAlpha", layerAlpha * geosetColor[3]);
+					shader.setUniformf("u_layerAlpha", layerAlpha * geosetColor[3] * instance.occlusionAlpha);
 					shader.setUniformf("u_filterMode", diffuseLayer.filterMode);
 
 					final int diffuseId = Math.max(0, instance.layerTextures[diffuseLayer.index]);
@@ -193,6 +194,10 @@ public class BatchGroup extends GenericGroup {
 					webGL.bindTexture(environmentMapTexture, 5);
 
 					diffuseLayer.bind(shader);
+					if (instance.occlusionAlpha < 1) {
+						diffuseLayer.bindBlended(shader);
+						gl.glDepthMask(false);
+					}
 
 					geoset.bindHd(shader, batch.skinningType, diffuseLayer.coordId);
 					geoset.render();
@@ -202,11 +207,16 @@ public class BatchGroup extends GenericGroup {
 		else {
 			shader.setUniformi("u_texture", 0);
 
-			shader.setUniform4fv("u_vertexColor", instance.vertexColor, 0, instance.vertexColor.length);
+			shader.setUniformf("u_vertexColor", instance.vertexColor[0], instance.vertexColor[1],
+					instance.vertexColor[2], instance.vertexColor[3]);
+			if (!DynamicShadowManager.IS_SHADOW_MAPPING) {
+				shader.setUniformf("u_occlusionAlpha", instance.occlusionAlpha);
+			}
 
 			for (final int index : this.objects) {
 				final Batch batch = batches.get(index);
 				final Geoset geoset = batch.geoset;
+				if (!geoset.isSelectedDetail()) continue;
 				final Layer layer = batch.layer;
 				final int geosetIndex = geoset.index;
 				final int layerIndex = layer.index;
@@ -239,12 +249,14 @@ public class BatchGroup extends GenericGroup {
 						layer.bindBlended(shader);
 						gl.glBlendFunc(FilterMode.ADDITIVE_ALPHA[0], FilterMode.ADDITIVE_ALPHA[1]);
 					}
-					else if (instance.vertexColor[3] < 1.0f) {
+					else if (instance.vertexColor[3] * instance.occlusionAlpha < 1.0f) {
 						layer.bindBlended(shader);
 					}
 					else {
 						layer.bind(shader);
 					}
+
+					if (instance.occlusionAlpha < 1) gl.glDepthMask(false);
 
 					final Integer replaceable = replaceables.get(layerTexture); // TODO is this OK?
 					Texture texture;
@@ -264,6 +276,11 @@ public class BatchGroup extends GenericGroup {
 					}
 
 					viewer.webGL.bindTexture(texture, 0);
+					if (!DynamicShadowManager.IS_SHADOW_MAPPING) {
+						shader.setUniformi("u_smoothGlow", scene.smoothAdditiveTextures && texture != null
+								&& layer.unshaded != 0 && (layer.filterMode == 3 || layer.filterMode == 4)
+								&& Math.max(texture.getWidth(), texture.getHeight()) <= 64 ? 1 : 0);
+					}
 
 					if (skinningType == SkinningType.ExtendedVertexGroups) {
 						geoset.bindExtended(shader, layer.coordId);

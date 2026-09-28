@@ -25,6 +25,9 @@ public class CDestructable extends CWidget {
 	private final RemovablePathingMapInstance pathingInstance;
 	private final RemovablePathingMapInstance pathingInstanceDeath;
 	private UnitAnimationListenerImpl unitAnimationListenerImpl;
+	private float occluderHeight;
+	public float getOccluderHeight() { return this.occluderHeight; }
+	public void setOccluderHeight(final float height) { this.occluderHeight = Float.isFinite(height) ? Math.max(0, height) : 0; }
 	private boolean invulnerable;
 	private float maxLifeOverride = -1;
 	private boolean blighted;
@@ -37,6 +40,7 @@ public class CDestructable extends CWidget {
 			final RemovablePathingMapInstance pathingInstanceDeath) {
 		super(handleId, x, y, life);
 		this.destType = destTypeInstance;
+		this.occluderHeight = destTypeInstance.getOcclusionHeight();
 		this.pathingInstance = pathingInstance;
 		this.pathingInstanceDeath = pathingInstanceDeath;
 		if ((this.destType.getOcclusionHeight() > 0) && (pathingInstance != null)) {

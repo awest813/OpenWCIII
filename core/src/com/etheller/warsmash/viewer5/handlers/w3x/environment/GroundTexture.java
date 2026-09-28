@@ -7,10 +7,17 @@ import java.nio.Buffer;
 import com.badlogic.gdx.graphics.GL30;
 import com.etheller.warsmash.datasources.DataSource;
 import com.etheller.warsmash.units.Element;
+import com.etheller.warsmash.viewer5.gl.TextureQuality;
 import com.etheller.warsmash.util.ImageUtils;
 import com.etheller.warsmash.util.ImageUtils.AnyExtensionImage;
 
 public class GroundTexture {
+	private final TextureQuality quality = new TextureQuality(true);
+
+	public void bind(final GL30 gl) {
+		gl.glBindTexture(GL30.GL_TEXTURE_2D_ARRAY, this.id);
+		this.quality.apply(gl, GL30.GL_TEXTURE_2D_ARRAY, this.tileSize, this.tileSize);
+	}
 	public int id;
 	private String tileId;
 	private int tileSize;

@@ -2363,14 +2363,19 @@ public class CUnit extends CWidget {
 	}
 
 	public boolean autoAcquireAutocastTargets(final CSimulation game, final boolean disableMove) {
-		if ((this.autocastAbility != null) && !this.autocastAbility.isDisabled()) {
+		if ((this.autocastAbility != null) && this.autocastAbility.isAutoCastOn() && !this.autocastAbility.isDisabled()) {
+			final BooleanAbilityActivationReceiver activation = new BooleanAbilityActivationReceiver().reset();
+			this.autocastAbility.checkCanUse(game, this, this.autocastAbility.getBaseOrderId(), activation);
+			if (!activation.isOk()) {
+				return false;
+			}
 			if (this.autocastAbility.getAutocastType() == AutocastType.NOTARGET) {
 				final BooleanAbilityTargetCheckReceiver<Void> booleanTargetReceiver = BooleanAbilityTargetCheckReceiver
 						.<Void>getInstance().reset();
 				this.autocastAbility.checkCanAutoTargetNoTarget(game, this, this.autocastAbility.getBaseOrderId(),
 						booleanTargetReceiver);
 				if (booleanTargetReceiver.isTargetable()) {
-					return this.order(game, this.autocastAbility.getBaseOrderId(), null);
+					return this.order(game, this.autocastAbility.getBaseOrderId(), null, true);
 				}
 			}
 			else if (this.autocastAbility.getAutocastType() != AutocastType.NONE) {
@@ -2388,8 +2393,7 @@ public class CUnit extends CWidget {
 				game.getWorldCollision().enumUnitsInRect(tempRect,
 						autocastTargetFinderEnum.reset(game, this, this.autocastAbility, disableMove));
 				if (autocastTargetFinderEnum.currentUnitTarget != null) {
-					this.order(game, this.autocastAbility.getBaseOrderId(), autocastTargetFinderEnum.currentUnitTarget);
-					return true;
+					return this.order(game, this.autocastAbility.getBaseOrderId(), autocastTargetFinderEnum.currentUnitTarget, true);
 				}
 			}
 		}
@@ -2427,6 +2431,10 @@ public class CUnit extends CWidget {
 	}
 
 	public void order(final CSimulation game, final COrder order, final boolean queue) {
+		order(game, order, queue, false);
+	}
+
+	private void order(final CSimulation game, final COrder order, final boolean queue, final boolean automatic) {
 		if (isDead()) {
 			return;
 		}
@@ -2463,7 +2471,9 @@ public class CUnit extends CWidget {
 				if (queuedOrder != null) {
 					final int abilityHandleId = queuedOrder.getAbilityHandleId();
 					final CAbility ability = game.getAbility(abilityHandleId);
-					ability.onCancelFromQueue(game, this, queuedOrder.getOrderId());
+					if (ability != null) {
+						ability.onCancelFromQueue(game, this, queuedOrder.getOrderId());
+					}
 				}
 			}
 			this.orderQueue.clear();
@@ -2487,13 +2497,20 @@ public class CUnit extends CWidget {
 			this.stateNotifier.waypointsChanged();
 		}
 		else {
-			setDefaultBehavior(this.stopBehavior);
+			if (!automatic) setDefaultBehavior(this.stopBehavior);
 			beginBehavior(game, beginOrder(game, order));
+			// Autocast is a temporary action, not a replacement for the player's orders.
+			if (automatic) {
+				this.stateNotifier.ordersChanged();
+				return;
+			}
 			for (final COrder queuedOrder : this.orderQueue) {
 				if (queuedOrder != null) {
 					final int abilityHandleId = queuedOrder.getAbilityHandleId();
 					final CAbility ability = game.getAbility(abilityHandleId);
-					ability.onCancelFromQueue(game, this, queuedOrder.getOrderId());
+					if (ability != null) {
+						ability.onCancelFromQueue(game, this, queuedOrder.getOrderId());
+					}
 				}
 			}
 			this.orderQueue.clear();
@@ -2503,8 +2520,17 @@ public class CUnit extends CWidget {
 	}
 
 	public boolean order(final CSimulation simulation, final int orderId, final AbilityTarget target) {
+		return order(simulation, orderId, target, false);
+	}
+
+	private boolean order(final CSimulation simulation, final int orderId, final AbilityTarget target,
+			final boolean automatic) {
+		if (automatic && (isDead() || !this.acceptingOrders
+				|| (this.currentBehavior != null && !this.currentBehavior.interruptable()))) {
+			return false;
+		}
 		if (orderId == OrderIds.stop) {
-			order(simulation, new COrderNoTarget(0, orderId, false), false);
+			order(simulation, new COrderNoTarget(0, orderId, false), false, automatic);
 			return true;
 		}
 		for (final CAbility ability : this.abilities) {
@@ -2516,7 +2542,7 @@ public class CUnit extends CWidget {
 							.<Void>getInstance().reset();
 					ability.checkCanTargetNoTarget(simulation, this, orderId, booleanTargetReceiver);
 					if (booleanTargetReceiver.isTargetable()) {
-						order(simulation, new COrderNoTarget(ability.getHandleId(), orderId, false), false);
+						order(simulation, new COrderNoTarget(ability.getHandleId(), orderId, false), false, automatic);
 						return true;
 					}
 				}
@@ -2530,7 +2556,7 @@ public class CUnit extends CWidget {
 							final boolean pointTargetable = booleanTargetReceiver.isTargetable();
 							if (pointTargetable) {
 								order(simulation, new COrderTargetPoint(ability.getHandleId(), orderId, target, false),
-										false);
+										false, automatic);
 							}
 							return pointTargetable;
 						}
@@ -2542,7 +2568,7 @@ public class CUnit extends CWidget {
 							final boolean widgetTargetable = booleanTargetReceiver.isTargetable();
 							if (widgetTargetable) {
 								order(simulation, new COrderTargetWidget(ability.getHandleId(), orderId,
-										target.getHandleId(), false), false);
+										target.getHandleId(), false), false, automatic);
 							}
 							return widgetTargetable;
 						}
@@ -3570,6 +3596,11 @@ public class CUnit extends CWidget {
 		@Override
 		public boolean call(final CUnit unit) {
 			if (this.type != AutocastType.NONE) {
+				if (!this.source.canReach(unit, this.source.acquisitionRange)
+						|| ((this.disableMove || this.source.isMovementDisabled())
+								&& !this.source.canReach(unit, this.ability.getCastRange()))) {
+					return false;
+				}
 				switch (this.type) {
 				case ATTACKINGALLY:
 				case ATTACKINGENEMY:
@@ -3772,8 +3803,8 @@ public class CUnit extends CWidget {
 
 		@Override
 		public boolean call(final CUnit unit) {
-			if ((this.source.getAttackBehavior() != null)
-					&& !this.source.getFirstAbilityOfType(CAbilityAttack.class).isDisabled()) {
+			final CAbilityAttack attackAbility = this.source.getFirstAbilityOfType(CAbilityAttack.class);
+			if ((this.source.getAttackBehavior() != null) && attackAbility != null && !attackAbility.isDisabled()) {
 				// TODO this "attack behavior null" check was added for some weird Root edge
 				// case with NE, maybe
 				// refactor it later
@@ -3782,6 +3813,8 @@ public class CUnit extends CWidget {
 						&& !unit.isUnitType(CUnitTypeJass.SLEEPING)) {
 					for (final CUnitAttack attack : this.source.getCurrentAttacks()) {
 						if (this.source.canReach(unit, this.source.acquisitionRange)
+								&& (!(this.disableMove || this.source.isMovementDisabled())
+										|| this.source.canReach(unit, attack.getRange()))
 								&& unit.canBeTargetedBy(this.game, this.source, attack.getTargetsAllowed())
 								&& (this.source.distance(unit) >= this.source.getUnitType().getMinimumAttackRange())) {
 							if (!(unit.isUnitType(CUnitTypeJass.ETHEREAL)
@@ -5707,7 +5740,7 @@ public class CUnit extends CWidget {
 	}
 
 	public void setAutocastAbility(final CAutocastAbility autocastAbility) {
-		if (this.autocastAbility != null) {
+		if (this.autocastAbility != null && this.autocastAbility != autocastAbility) {
 			this.autocastAbility.setAutoCastOff();
 		}
 		this.autocastAbility = autocastAbility;

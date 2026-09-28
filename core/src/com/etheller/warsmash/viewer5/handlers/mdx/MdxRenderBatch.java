@@ -107,6 +107,7 @@ public class MdxRenderBatch extends RenderBatch {
 				for (final Integer object : group.objects) {
 					final Batch batch = batches.get(object);
 					final Geoset geoset = batch.geoset;
+				if (!geoset.isSelectedDetail()) continue;
 					final Layer layer = batch.layer;
 					final Texture texture = textures.get(layer.textureId);
 

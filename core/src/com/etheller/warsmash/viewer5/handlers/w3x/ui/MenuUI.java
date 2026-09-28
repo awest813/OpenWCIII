@@ -74,6 +74,7 @@ import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.util.WorldEditStrings;
 import com.etheller.warsmash.viewer5.FogSettings;
 import com.etheller.warsmash.viewer5.Scene;
+import com.etheller.warsmash.viewer5.gl.Extensions;
 import com.etheller.warsmash.viewer5.handlers.mdx.MdxViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.SequenceUtils;
@@ -950,8 +951,7 @@ public class MenuUI {
 		}
 
 		// Main-menu Options (retail OptionsMenu.fdf when the UI data ships it).
-		// Sliders and checkboxes persist into OptionsSettingsStore; music volume
-		// and the music toggle apply live, the rest await engine backends.
+		// Edit a draft until OK; only music volume is previewed before committing.
 		this.creditsAvailable = hasCampaignMap("Maps\\Campaign\\WarCraftIIICredits.w3m")
 				|| hasCampaignMap("Maps\\Campaign\\BonusCredits.w3m");
 		try {
@@ -960,9 +960,7 @@ public class MenuUI {
 			this.gameplayPanel = findFrameIn(this.optionsMenu, "GameplayPanel");
 			this.videoPanel = findFrameIn(this.optionsMenu, "VideoPanel");
 			this.soundPanel = findFrameIn(this.optionsMenu, "SoundPanel");
-			for (String name : new String[] { "ChatSupportMenu", "ModelDetailMenu",
-					"AnimQualityMenu", "TextureQualityMenu", "ParticlesMenu", "LightsMenu", "ShadowsMenu",
-					"OcclusionMenu", "ProviderMenu" }) {
+			for (String name : new String[] { "ChatSupportMenu", "ProviderMenu" }) {
 				final UIFrame control = findFrameIn(this.optionsMenu, name);
 				if (control instanceof PopupMenuFrame) {
 					final PopupMenuFrame popup = (PopupMenuFrame) control;
@@ -971,6 +969,20 @@ public class MenuUI {
 				}
 			}
 			wireResolutionOptions();
+			wireVideoChoice("OcclusionMenu", new String[] { "Off", "On" },
+					value -> this.optionsDraft.setOcclusion(value == 1));
+			wireVideoChoice("ModelDetailMenu", new String[] { "Low", "Medium", "High" },
+					value -> this.optionsDraft.setModelDetail(value));
+			wireVideoChoice("AnimQualityMenu", new String[] { "Low", "Medium", "High" },
+					value -> this.optionsDraft.setAnimationQuality(value));
+			wireVideoChoice("TextureQualityMenu", new String[] { "Low", "Medium", "High" },
+					value -> this.optionsDraft.setTextureQuality(value));
+			wireVideoChoice("ShadowsMenu", new String[] { "Off", "On" },
+					value -> this.optionsDraft.setShadows(value == 1));
+			wireVideoChoice("ParticlesMenu", new String[] { "Low", "Medium", "High" },
+					value -> this.optionsDraft.setParticleQuality(value));
+			wireVideoChoice("LightsMenu", new String[] { "Off", "On" },
+					value -> this.optionsDraft.setLocalLights(value == 1));
 			wireOptionsTab("GameplayButton");
 			wireOptionsTab("VideoButton");
 			wireOptionsTab("SoundButton");
@@ -1077,20 +1089,15 @@ public class MenuUI {
 				((GlueTextButtonFrame) optionsOK).setOnClick(new Runnable() {
 					@Override
 					public void run() {
-						if (MenuUI.this.resolutionChanged && MenuUI.this.optionsDraft.getWindowWidth() > 0
-								&& !Gdx.graphics.setWindowedMode(MenuUI.this.optionsDraft.getWindowWidth(),
-										MenuUI.this.optionsDraft.getWindowHeight())) {
-							MenuUI.this.dialog.showError("This window size could not be applied.", null);
+						final String videoError = VideoOptions.applyAndSave(MenuUI.this.optionsDraft,
+								OptionsSettingsStore.get(), MenuUI.this.resolutionChanged, Gdx.graphics,
+								Extensions.gamma, OptionsSettingsStore.optionsFile());
+						if (videoError != null) {
+							MenuUI.this.dialog.showError(videoError, null);
 							return;
 						}
-						OptionsSettingsStore.get().copyFrom(MenuUI.this.optionsDraft);
-						try {
-							OptionsSettingsStore.get().save(OptionsSettingsStore.optionsFile());
-						}
-						catch (final IOException e) {
-							System.err.println("Options: failed to save " + e.getMessage());
-						}
 						applyStoredMusicVolume();
+						playMenuAmbience();
 						if (MenuUI.this.optionsMenu != null) {
 							MenuUI.this.optionsMenu.setVisible(false);
 						}
@@ -1985,7 +1992,7 @@ public class MenuUI {
 
 	public void show() {
 		playMusic(this.rootFrame.trySkinField("GlueMusic"), true, 0);
-		this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+		playMenuAmbience();
 	}
 
 	private void internalStartMap(final String mapFilename, final int localPlayerIndex) {
@@ -2296,6 +2303,16 @@ public class MenuUI {
 		}
 	}
 
+	private void playMenuAmbience() {
+		if (this.glueScreenLoop == null) return;
+		if (OptionsSettingsStore.get().isAmbientSounds()) {
+			this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+		}
+		else {
+			this.glueScreenLoop.stop();
+		}
+	}
+
 	private void applyMenuMusicVolume(final int percent) {
 		if (this.currentMusics != null) {
 			final float volume = Math.max(0, Math.min(100, percent)) / 100f;
@@ -2315,14 +2332,45 @@ public class MenuUI {
 				{1600, 900}, {1920, 1080}, {2560, 1440} };
 		final List<MenuItem> choices = new ArrayList<>();
 		for (int[] size : sizes) choices.add(new MenuItem(size[0] + " x " + size[1] + " (Windowed)", -2));
+		choices.add(new MenuItem("Desktop (Fullscreen)", -2));
 		((MenuFrame) popup.getPopupMenuFrame()).setItems(this.uiViewport, choices);
 		popup.setMenuClickListener((button, index) -> {
-			if (index >= 0 && index < sizes.length) {
-				this.optionsDraft.setWindowSize(sizes[index][0], sizes[index][1]);
+			if (index >= 0 && index <= sizes.length) {
+				if (index < sizes.length) {
+					this.optionsDraft.setWindowSize(sizes[index][0], sizes[index][1]);
+				}
+				else {
+					this.optionsDraft.setWindowSize(Gdx.graphics.getDisplayMode().width, Gdx.graphics.getDisplayMode().height);
+				}
+				this.optionsDraft.setFullscreen(index == sizes.length);
 				this.resolutionChanged = true;
 				this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) popup.getPopupTitleFrame()).getButtonText(), choices.get(index).getText());
 			}
 		});
+	}
+
+	private void wireVideoChoice(final String name, final String[] labels, final IntConsumer onChange) {
+		final UIFrame frame = findFrameIn(this.optionsMenu, name);
+		if (!(frame instanceof PopupMenuFrame)) return;
+		final PopupMenuFrame popup = (PopupMenuFrame) frame;
+		final List<MenuItem> choices = new ArrayList<>();
+		for (final String label : labels) choices.add(new MenuItem(label, -2));
+		((MenuFrame) popup.getPopupMenuFrame()).setItems(this.uiViewport, choices);
+		popup.setEnabled(true);
+		popup.setMenuClickListener((button, index) -> {
+			if (index >= 0 && index < labels.length) {
+				onChange.accept(index);
+				setVideoChoiceText(name, labels[index]);
+			}
+		});
+	}
+
+	private void setVideoChoiceText(final String name, final String text) {
+		final UIFrame frame = findFrameIn(this.optionsMenu, name);
+		if (frame instanceof PopupMenuFrame) {
+			this.rootFrame.setText((StringFrame) ((GlueTextButtonFrame) ((PopupMenuFrame) frame)
+					.getPopupTitleFrame()).getButtonText(), text);
+		}
 	}
 
 	private void wireOptionsTab(final String buttonName) {
@@ -2396,6 +2444,14 @@ public class MenuUI {
 	}
 
 	private void pushOptionsDraftToControls() {
+		final String[] qualityLabels = { "Low", "Medium", "High" };
+		setVideoChoiceText("ModelDetailMenu", qualityLabels[this.optionsDraft.getModelDetail()]);
+		setVideoChoiceText("AnimQualityMenu", qualityLabels[this.optionsDraft.getAnimationQuality()]);
+		setVideoChoiceText("TextureQualityMenu", qualityLabels[this.optionsDraft.getTextureQuality()]);
+		setVideoChoiceText("OcclusionMenu", this.optionsDraft.isOcclusion() ? "On" : "Off");
+		setVideoChoiceText("ShadowsMenu", this.optionsDraft.isShadows() ? "On" : "Off");
+		setVideoChoiceText("ParticlesMenu", qualityLabels[this.optionsDraft.getParticleQuality()]);
+		setVideoChoiceText("LightsMenu", this.optionsDraft.isLocalLights() ? "On" : "Off");
 		setOptionsSlider("MouseScrollSlider", this.optionsDraft.getMouseScrollSpeed());
 		setOptionsSlider("KeyScrollSlider", this.optionsDraft.getKeyScrollSpeed());
 		setOptionsSlider("GammaSlider", this.optionsDraft.getGamma());
@@ -2490,12 +2546,14 @@ public class MenuUI {
 		if (!this.hideUI) {
 			final BitmapFont font = this.rootFrame.getFont();
 			final BitmapFont font20 = this.rootFrame.getFont20();
-			font.setColor(Color.YELLOW);
-			if (WarsmashConstants.SHOW_FPS) {
+			if (Boolean.getBoolean("warsmash.showMenuFps")) {
+				final float previousColor = font.getColor().toFloatBits();
+				font.setColor(Color.YELLOW);
 				final String fpsString = "FPS: " + Gdx.graphics.getFramesPerSecond();
 				glyphLayout.setText(font, fpsString);
 				font.draw(batch, fpsString, (getMinWorldWidth() - glyphLayout.width) / 2,
 						1100 * this.heightRatioCorrection);
+				Color.abgr8888ToColor(font.getColor(), previousColor);
 			}
 			this.rootFrame.render(batch, font20, glyphLayout);
 		}
@@ -2800,7 +2858,7 @@ public class MenuUI {
 				}
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+				playMenuAmbience();
 				this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"),
 						this.menuFogSettings);
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));
@@ -2850,7 +2908,7 @@ public class MenuUI {
 						this.currentCampaign.getBackgroundFogSettings());
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+				playMenuAmbience();
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
@@ -2874,7 +2932,7 @@ public class MenuUI {
 						this.currentCampaign.getBackgroundFogSettings());
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+				playMenuAmbience();
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
@@ -3261,7 +3319,7 @@ public class MenuUI {
 		case MAIN_MENU:
 			this.glueScreenLoop.stop();
 			this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-			this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+			playMenuAmbience();
 			this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"), this.menuFogSettings);
 			this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));
 			break;
@@ -3286,7 +3344,7 @@ public class MenuUI {
 				this.menuScreen.setModel(currentCampaignBackgroundModel, this.currentCampaign.getBackgroundFogSettings());
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.uiSounds.getSound(currentCampaignAmbientSound);
-				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+				playMenuAmbience();
 				final DataTable skinData = this.rootFrame.getSkinData();
 				final String cursorSkin = getRaceNameByCursorID(this.currentCampaign.getCursor());
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, skinData.get(cursorSkin).getField("Cursor"));
@@ -3296,7 +3354,7 @@ public class MenuUI {
 				// save): campaign chrome would be wrong, so go to main menu.
 				this.glueScreenLoop.stop();
 				this.glueScreenLoop = this.mainMenuGlueScreenLoop;
-				this.glueScreenLoop.playExclusive(this.uiScene.audioContext, 0f, 0f, 0f);
+				playMenuAmbience();
 				this.menuScreen.setModel(this.rootFrame.getSkinField("GlueSpriteLayerBackground"),
 						this.menuFogSettings);
 				this.rootFrame.setSpriteFrameModel(this.cursorFrame, this.rootFrame.getSkinField("Cursor"));

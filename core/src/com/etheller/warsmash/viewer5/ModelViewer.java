@@ -277,6 +277,7 @@ public abstract class ModelViewer {
 	}
 
 	public void updateAndRender() {
+		com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CSoundFilename.refreshSettings();
 		this.update();
 		this.startFrame();
 		this.render();

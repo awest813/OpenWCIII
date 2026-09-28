@@ -15,6 +15,7 @@ import com.etheller.warsmash.viewer5.AudioContext;
 import com.etheller.warsmash.viewer5.AudioPanner;
 import com.etheller.warsmash.viewer5.gl.Extensions;
 import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.RenderUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 
 public final class UnitSound {
 	private static final UnitSound SILENT = new UnitSound(0, 0, 0, 0, 0, 0, false);
@@ -110,6 +111,7 @@ public final class UnitSound {
 	}
 
 	public boolean playUnitResponse(final AudioContext audioContext, final RenderUnit unit, final int index) {
+		if (!OptionsSettingsStore.get().isUnitSounds()) return false;
 		final long millisTime = TimeUtils.millis();
 		if (millisTime < unit.lastUnitResponseEndTimeMillis) {
 			return false;
@@ -143,7 +145,7 @@ public final class UnitSound {
 
 	public long play(final AudioContext audioContext, final float x, final float y, final float z, final int index,
 			final Boolean loopOverride) {
-		if (this.sounds.isEmpty()) {
+		if (this.sounds.isEmpty() || index < 0 || index >= this.sounds.size()) {
 			return -1;
 		}
 
@@ -174,6 +176,22 @@ public final class UnitSound {
 		}
 		this.lastPlayedSound = source.buffer;
 		return soundId;
+	}
+
+	/** Creates a script-owned voice without borrowing this label's global last-played state. */
+	public com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CSoundFilename createPlayback(
+			final AudioContext context, final boolean loop, final boolean spatial, final boolean stopOutOfRange,
+			final int fadeIn, final int fadeOut) {
+		if (this.sounds.isEmpty()) return null;
+		final Sound buffer = this.sounds.get((int) (Math.random() * this.sounds.size()));
+		final var playback = new com.etheller.warsmash.viewer5.handlers.w3x.simulation.sound.CSoundFilename(
+				buffer, context, loop, stopOutOfRange, fadeIn, fadeOut, "");
+		playback.setNormalizedVolume(this.volume);
+		playback.setPitch(this.pitch + ((float) Math.random() * 2 - 1) * this.pitchVariance);
+		playback.setMinDistance(this.minDistance);
+		playback.setDistanceCutoff(this.distanceCutoff);
+		playback.setSpatial(spatial);
+		return playback;
 	}
 
 	public int getSoundCount() {

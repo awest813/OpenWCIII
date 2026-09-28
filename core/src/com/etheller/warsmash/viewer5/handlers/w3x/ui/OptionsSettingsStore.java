@@ -4,6 +4,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
 /**
@@ -11,9 +15,9 @@ import java.util.Properties;
  *
  * <p>Values are 0-100 percentages unless noted. Settings take live effect
  * where the engine has a backend today (music volume: menu music and
- * in-mission music players) and are otherwise stored so later passes can honor
- * them (sound volume, scroll speeds, subtitles, gamma, toggles). Files that
- * predate a key load with that key's default.</p>
+ * in-mission music players), display mode and gamma, and particle/local-light
+ * rendering. Other consumers read their relevant settings independently. Files
+ * that predate a key load with that key's default.</p>
  *
  * <p>Pure Java with no LibGDX dependency so it can be unit tested headlessly.
  * The menu edits a draft copy and commits it on OK; Cancel discards the draft.</p>
@@ -44,6 +48,14 @@ public final class OptionsSettingsStore {
 	private int gamma = DEFAULT_GAMMA;
 	private int windowWidth;
 	private int windowHeight;
+	private boolean fullscreen;
+	private int particleQuality = 2;
+	private int modelDetail = 2;
+	private int animationQuality = 2;
+	private int textureQuality = 2;
+	private boolean shadows = true;
+	private boolean occlusion = true;
+	private boolean localLights = true;
 
 	public static OptionsSettingsStore get() {
 		return INSTANCE;
@@ -74,6 +86,14 @@ public final class OptionsSettingsStore {
 		this.gamma = other.gamma;
 		this.windowWidth = other.windowWidth;
 		this.windowHeight = other.windowHeight;
+		this.fullscreen = other.fullscreen;
+		this.particleQuality = other.particleQuality;
+		this.modelDetail = other.modelDetail;
+		this.animationQuality = other.animationQuality;
+		this.textureQuality = other.textureQuality;
+		this.shadows = other.shadows;
+		this.occlusion = other.occlusion;
+		this.localLights = other.localLights;
 	}
 
 	public int getMusicVolume() {
@@ -118,8 +138,7 @@ public final class OptionsSettingsStore {
 
 	/**
 	 * Volume actually sent to sound effects: 0 when sound is disabled,
-	 * otherwise {@link #getSoundVolume()}. No SFX backend consumes this yet; it
-	 * is stored so later passes can honor it.
+	 * otherwise {@link #getSoundVolume()}. Consumed by the shared sound-source playback path.
 	 */
 	public int getEffectiveSoundVolume() {
 		return this.soundEnabled ? this.soundVolume : 0;
@@ -221,6 +240,31 @@ public final class OptionsSettingsStore {
 		this.gamma = clamp(gamma);
 	}
 
+	/** Neutral at 50, with a usable positive gamma range of 0.5 to 2.0. */
+	public float getDisplayGamma() {
+		return (float) Math.pow(2, (this.gamma - DEFAULT_GAMMA) / 50.0);
+	}
+
+	public boolean isFullscreen() { return this.fullscreen; }
+	public void setFullscreen(final boolean fullscreen) { this.fullscreen = fullscreen; }
+	public int getParticleQuality() { return this.particleQuality; }
+	public void setParticleQuality(final int quality) {
+		this.particleQuality = Math.max(0, Math.min(2, quality));
+	}
+	public float getParticleDensity() { return (this.particleQuality + 1) / 3f; }
+	public int getModelDetail() { return this.modelDetail; }
+	public void setModelDetail(final int value) { this.modelDetail = Math.max(0, Math.min(2, value)); }
+	public int getAnimationQuality() { return this.animationQuality; }
+	public void setAnimationQuality(final int value) { this.animationQuality = Math.max(0, Math.min(2, value)); }
+	public int getTextureQuality() { return this.textureQuality; }
+	public void setTextureQuality(final int value) { this.textureQuality = Math.max(0, Math.min(2, value)); }
+	public boolean isOcclusion() { return this.occlusion; }
+	public void setOcclusion(final boolean enabled) { this.occlusion = enabled; }
+	public boolean isShadows() { return this.shadows; }
+	public void setShadows(final boolean value) { this.shadows = value; }
+	public boolean isLocalLights() { return this.localLights; }
+	public void setLocalLights(final boolean enabled) { this.localLights = enabled; }
+
 	/** Restores defaults (useful for tests). */
 	public void reset() {
 		this.musicVolume = DEFAULT_MUSIC_VOLUME;
@@ -241,6 +285,14 @@ public final class OptionsSettingsStore {
 		this.gamma = DEFAULT_GAMMA;
 		this.windowWidth = 0;
 		this.windowHeight = 0;
+		this.fullscreen = false;
+		this.particleQuality = 2;
+		this.modelDetail = 2;
+		this.animationQuality = 2;
+		this.textureQuality = 2;
+		this.shadows = true;
+		this.occlusion = true;
+		this.localLights = true;
 	}
 
 	public int getWindowWidth() { return this.windowWidth; }
@@ -255,10 +307,8 @@ public final class OptionsSettingsStore {
 
 	/** Persists this store to {@code file}, creating parent directories as needed. */
 	public void save(final File file) throws IOException {
-		final File dir = file.getParentFile();
-		if ((dir != null) && !dir.exists()) {
-			dir.mkdirs();
-		}
+		final Path target = file.toPath().toAbsolutePath();
+		Files.createDirectories(target.getParent());
 		final Properties props = new Properties();
 		props.setProperty("musicVolume", Integer.toString(this.musicVolume));
 		props.setProperty("musicEnabled", Boolean.toString(this.musicEnabled));
@@ -278,8 +328,28 @@ public final class OptionsSettingsStore {
 		props.setProperty("gamma", Integer.toString(this.gamma));
 		props.setProperty("windowWidth", Integer.toString(this.windowWidth));
 		props.setProperty("windowHeight", Integer.toString(this.windowHeight));
-		try (FileOutputStream out = new FileOutputStream(file)) {
-			props.store(out, "OpenWCIII options");
+		props.setProperty("fullscreen", Boolean.toString(this.fullscreen));
+		props.setProperty("particleQuality", Integer.toString(this.particleQuality));
+		props.setProperty("modelDetail", Integer.toString(this.modelDetail));
+		props.setProperty("animationQuality", Integer.toString(this.animationQuality));
+		props.setProperty("textureQuality", Integer.toString(this.textureQuality));
+		props.setProperty("occlusion", Boolean.toString(this.occlusion));
+		props.setProperty("shadows", Boolean.toString(this.shadows));
+		props.setProperty("localLights", Boolean.toString(this.localLights));
+		final Path temporary = Files.createTempFile(target.getParent(), "options-", ".tmp");
+		try {
+			try (FileOutputStream out = new FileOutputStream(temporary.toFile())) {
+				props.store(out, "OpenWCIII options");
+			}
+			try {
+				Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			}
+			catch (final AtomicMoveNotSupportedException e) {
+				Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+			}
+		}
+		finally {
+			Files.deleteIfExists(temporary);
 		}
 	}
 
@@ -295,7 +365,7 @@ public final class OptionsSettingsStore {
 		try (FileInputStream in = new FileInputStream(file)) {
 			props.load(in);
 		}
-		catch (final IOException e) {
+		catch (final IOException | IllegalArgumentException e) {
 			System.err.println("OptionsSettingsStore: failed to load " + file + ": " + e.getMessage());
 			return;
 		}
@@ -315,6 +385,14 @@ public final class OptionsSettingsStore {
 		this.environmentalAudio = getBool(props, "environmentalAudio", this.environmentalAudio);
 		this.positionalAudio = getBool(props, "positionalAudio", this.positionalAudio);
 		this.gamma = getInt(props, "gamma", this.gamma);
+		this.fullscreen = getBool(props, "fullscreen", this.fullscreen);
+		setParticleQuality(getInt(props, "particleQuality", this.particleQuality));
+		setModelDetail(getInt(props, "modelDetail", this.modelDetail));
+		setAnimationQuality(getInt(props, "animationQuality", this.animationQuality));
+		setTextureQuality(getInt(props, "textureQuality", this.textureQuality));
+		setOcclusion(getBool(props, "occlusion", this.occlusion));
+		setShadows(getBool(props, "shadows", this.shadows));
+		this.localLights = getBool(props, "localLights", this.localLights);
 		try {
 			int width = Integer.parseInt(props.getProperty("windowWidth", "0"));
 			int height = Integer.parseInt(props.getProperty("windowHeight", "0"));

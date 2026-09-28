@@ -10,6 +10,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetC
 public interface CAutocastAbility {
 	int getBaseOrderId();
 
+	/** Range used when automatic casting must not move the caster. */
+	float getCastRange();
+
 	boolean isDisabled();
 
 	AutocastType getAutocastType();

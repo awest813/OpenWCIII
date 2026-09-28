@@ -287,6 +287,12 @@ public final class CampaignBackingScreensAudit {
 			}
 			System.out.printf("  PASS [%s]: %s%n", desc, path);
 			System.out.printf("        cams=%d, fov=%.4frad, seqs=%s%n", cams, fov, seqNames);
+			if (cams > 0) {
+				final var camera = mdlx.cameras.get(0);
+				System.out.printf("        near=%.2f far=%.2f position=%s target=%s%n",
+						camera.getNearClippingPlane(), camera.getFarClippingPlane(),
+						java.util.Arrays.toString(camera.getPosition()), java.util.Arrays.toString(camera.getTargetPosition()));
+			}
 			return cams >= 1 && seqs >= 1;
 		}
 		catch (final Exception e) {

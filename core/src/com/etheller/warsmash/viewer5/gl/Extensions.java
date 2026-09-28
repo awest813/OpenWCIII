@@ -9,6 +9,8 @@ public class Extensions {
 
 	public static AudioExtension audio;
 
+	public static GammaControl gamma;
+
 	public static int GL_LINE = 0;
 	public static int GL_FILL = 0;
 }

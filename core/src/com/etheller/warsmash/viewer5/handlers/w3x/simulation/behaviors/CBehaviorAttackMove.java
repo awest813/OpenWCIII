@@ -11,7 +11,6 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 	private final CUnit unit;
 	private AbilityPointTarget target;
 	private boolean justAutoAttacked = false;
-	private boolean endedMove = false;
 
 	public CBehaviorAttackMove(final CUnit unit) {
 		this.unit = unit;
@@ -19,7 +18,7 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 
 	public CBehavior reset(final AbilityPointTarget target) {
 		this.target = target;
-		this.endedMove = false;
+		this.justAutoAttacked = false;
 		return this;
 	}
 
@@ -65,6 +64,11 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 
 	@Override
 	public void endMove(final CSimulation game, final boolean interrupted) {
+	}
+
+	@Override
+	public void onMoveGiveUp(final CSimulation game) {
+		this.unit.setDefaultBehavior(this.unit.getStopBehavior());
 	}
 
 	@Override

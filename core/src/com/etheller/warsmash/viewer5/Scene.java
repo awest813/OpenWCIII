@@ -64,6 +64,8 @@ public abstract class Scene {
 	private final SceneLightManager lightManager;
 	public FogSettings fogSettings = new FogSettings();
 	public boolean show = true;
+	/** Smooth magnified low-resolution glow artwork in cinematic/menu backdrops. */
+	public boolean smoothAdditiveTextures;
 
 	public Scene(final ModelViewer viewer, final SceneLightManager lightManager) {
 		final CanvasProvider canvas = viewer.canvas;

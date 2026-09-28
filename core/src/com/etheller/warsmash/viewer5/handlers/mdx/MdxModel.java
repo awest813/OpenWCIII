@@ -34,6 +34,7 @@ import com.hiveworkshop.rms.parsers.mdlx.MdlxTexture.WrapMode;
 import com.hiveworkshop.rms.parsers.mdlx.MdlxTextureAnimation;
 
 public class MdxModel extends com.etheller.warsmash.viewer5.Model<MdxHandler> {
+	public final int[] lodByQuality = { 0, 0, 0 };
 	public boolean reforged = false;
 	public boolean hd = false;
 	public SolverParams solverParams = new SolverParams();

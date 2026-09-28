@@ -10,4 +10,6 @@ public interface AudioExtension {
 
 	long play(Sound buffer, final float volume, final float pitch, final float x, final float y, final float z,
 			final boolean is3DSound, float maxDistance, float refDistance, boolean looping);
+	default void setPosition(Sound sound, long id, float x, float y, float z, boolean spatial,
+			float maxDistance, float refDistance) { }
 }

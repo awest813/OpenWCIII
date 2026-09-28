@@ -213,6 +213,11 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	public MappedData unitMetaData = new MappedData();
 	public List<RenderWidget> widgets = new ArrayList<>();
 	public List<RenderUnit> units = new ArrayList<>();
+	private final TreeOcclusion treeOcclusion = new TreeOcclusion();
+	private boolean occlusionEnabled = true;
+	public boolean isOcclusionEnabled() { return this.occlusionEnabled; }
+	public void setOcclusionEnabled(final boolean enabled) { this.occlusionEnabled = enabled; }
+
 	public List<RenderEffect> projectiles = new ArrayList<>();
 	public boolean unitsReady;
 	public War3Map mapMpq;
@@ -1307,6 +1312,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 			for (final RenderWidget unit : this.widgets) {
 				unit.updateAnimations(this);
 			}
+			this.treeOcclusion.update(this, deltaTime);
 			final Iterator<RenderEffect> projectileIterator = this.projectiles.iterator();
 			while (projectileIterator.hasNext()) {
 				final RenderEffect projectile = projectileIterator.next();

@@ -9,26 +9,35 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 
 public class CBehaviorFollow extends CAbstractRangedBehavior {
 
-	private int higlightOrderId;
+	private int highlightOrderId;
 	private boolean justAutoAttacked = false;
+	private boolean initializing;
 
 	public CBehaviorFollow(final CUnit unit) {
 		super(unit);
 	}
 
-	public CBehavior reset(CSimulation game, final int higlightOrderId, final CWidget target) {
-		this.higlightOrderId = higlightOrderId;
-		return innerReset(game, target);
+	public CBehavior reset(CSimulation game, final int highlightOrderId, final CWidget target) {
+		this.highlightOrderId = highlightOrderId;
+		this.justAutoAttacked = false;
+		this.initializing = true;
+		try {
+			return innerReset(game, target);
+		}
+		finally {
+			this.initializing = false;
+		}
 	}
 
 	@Override
 	public int getHighlightOrderId() {
-		return this.higlightOrderId;
+		return this.highlightOrderId;
 	}
 
 	@Override
 	public boolean isWithinRange(final CSimulation simulation) {
-		if (this.justAutoAttacked = this.unit.autoAcquireTargets(simulation, false)) {
+		if (this.justAutoAttacked || (!this.initializing
+				&& (this.justAutoAttacked = this.unit.autoAcquireTargets(simulation, false)))) {
 			return true;
 		}
 		return this.unit.canReach(this.target, this.unit.getAcquisitionRange());
@@ -37,6 +46,10 @@ public class CBehaviorFollow extends CAbstractRangedBehavior {
 	@Override
 	protected CBehavior update(final CSimulation simulation, final boolean withinFacingWindow) {
 
+		if (this.justAutoAttacked) {
+			this.justAutoAttacked = false;
+			return this.unit.getCurrentBehavior();
+		}
 		this.unit.getUnitAnimationListener().playAnimation(false, PrimaryTag.STAND, SequenceUtils.EMPTY, 1.0f, false);
 		return this;
 	}
@@ -49,16 +62,13 @@ public class CBehaviorFollow extends CAbstractRangedBehavior {
 
 	@Override
 	protected boolean checkTargetStillValid(final CSimulation simulation) {
-		if (this.justAutoAttacked) {
-			this.justAutoAttacked = false;
-			this.unit.getMoveBehavior().reset(this.target, this, false);
-		}
 		return this.target.visit(AbilityTargetStillAliveVisitor.INSTANCE);
 	}
 
 	@Override
 	protected void resetBeforeMoving(final CSimulation simulation) {
-
+		// Combat and spells reuse the same move behavior; restore the followed target.
+		this.unit.getMoveBehavior().reset(this.target, this, false);
 	}
 
 	@Override

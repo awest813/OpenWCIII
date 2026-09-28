@@ -1,5 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.mdx;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
+
 public class ParticleEmitter extends MdxEmitter<MdxComplexInstance, ParticleEmitterObject, Particle> {
 
 	private static final float[] emissionRateHeap = new float[1];
@@ -17,7 +19,7 @@ public class ParticleEmitter extends MdxEmitter<MdxComplexInstance, ParticleEmit
 
 			emitterObject.getEmissionRate(emissionRateHeap, instance.sequence, instance.frame, instance.counter);
 
-			this.currentEmission += emissionRateHeap[0] * dt;
+			this.currentEmission += emissionRateHeap[0] * dt * OptionsSettingsStore.get().getParticleDensity();
 		}
 	}
 

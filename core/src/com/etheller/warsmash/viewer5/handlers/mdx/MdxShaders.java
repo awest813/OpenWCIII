@@ -574,7 +574,7 @@ public class MdxShaders {
 						"    }\r\n" : "\r\n")
 				+ //
 				"  color = clamp(color, 0.0, 1.0) + diffuse * lambertFactorSum + emissive;\r\n" + //
-				"  fragColor = vec4(color, baseColor.a);\r\n" + //
+				"  fragColor = vec4(color, baseColor.a * v_layerAlpha);\r\n" + //
 				"}\r\n" + //
 				"void main() {\r\n" + //
 				"  #if defined(ONLY_DIFFUSE)\r\n" + //
@@ -712,7 +712,25 @@ public class MdxShaders {
 
 	public static final String fsComplex = Shaders.quatTransform + "\r\n\r\n" + //
 			"    uniform sampler2D u_texture;\r\n" + //
+			"    uniform bool u_smoothGlow;\r\n" + //
+			// Positive cubic B-spline weights avoid ringing/negative light at dark edges.
+			// Four bilinear reads reconstruct a smooth, magnified low-resolution halo.
+			"    vec4 sampleGlow(vec2 uv, vec2 size) {\r\n" +
+			"      vec2 p = uv * size - 0.5;\r\n" +
+			"      vec2 f = fract(p), base = floor(p);\r\n" +
+			"      vec2 f2 = f * f, f3 = f2 * f;\r\n" +
+			"      vec2 w0 = (1.0 - 3.0*f + 3.0*f2 - f3) / 6.0;\r\n" +
+			"      vec2 w1 = (4.0 - 6.0*f2 + 3.0*f3) / 6.0;\r\n" +
+			"      vec2 w2 = (1.0 + 3.0*f + 3.0*f2 - 3.0*f3) / 6.0;\r\n" +
+			"      vec2 w3 = f3 / 6.0;\r\n" +
+			"      vec2 g0 = w0 + w1, g1 = w2 + w3;\r\n" +
+			"      vec2 a = (base - 0.5 + w1 / g0) / size;\r\n" +
+			"      vec2 b = (base + 1.5 + w3 / g1) / size;\r\n" +
+			"      return mix(mix(texture2D(u_texture, a), texture2D(u_texture, vec2(b.x, a.y)), g1.x),\r\n" +
+			"                 mix(texture2D(u_texture, vec2(a.x, b.y)), texture2D(u_texture, b), g1.x), g1.y);\r\n" +
+			"    }\r\n" +
 			"    uniform vec4 u_vertexColor;\r\n" + //
+			"    uniform float u_occlusionAlpha;\r\n" + //
 			"    uniform float u_filterMode;\r\n" + //
 			"    uniform bool u_unfogged;\r\n" + //
 			"    uniform vec4 u_fogColor;\r\n" + //
@@ -730,6 +748,12 @@ public class MdxShaders {
 			"      // Scale animation\r\n" + //
 			"      uv = v_uvScale * (uv - 0.5) + 0.5;\r\n" + //
 			"      vec4 texel = texture2D(u_texture, uv);\r\n" + //
+			"      if (u_smoothGlow) {\r\n" +
+			"        vec2 size = vec2(textureSize(u_texture, 0));\r\n" +
+			"        if (max(length(dFdx(uv * size)), length(dFdy(uv * size))) < 1.0) {\r\n" +
+			"          texel = sampleGlow(uv, size);\r\n" +
+			"        }\r\n" +
+			"      }\r\n" +
 			"      vec4 color = texel * v_color;\r\n" + //
 			"      // 1bit Alpha\r\n" + //
 			"      if (u_vertexColor.a == 1.0 && u_filterMode == 1.0 && color.a < 0.75) {\r\n" + //
@@ -740,6 +764,7 @@ public class MdxShaders {
 			"        discard;\r\n" + //
 			"      }\r\n" + //
 			Shaders.fogSystem(true, "u_filterMode < 3.0 || u_filterMode > 4.0") + //
+			"      color.a *= u_occlusionAlpha;\r\n" + // Fade after authored alpha cutouts.
 			"      gl_FragColor = color;\r\n" + //
 			"    }";
 

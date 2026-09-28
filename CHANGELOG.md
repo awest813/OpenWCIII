@@ -19,7 +19,24 @@ Changes are grouped by category:
 
 ## [Unreleased]
 
+### render
+- Wire retail Video options into model and animation detail, texture quality,
+  particles, local lights, shadows, tree occlusion, display mode, and gamma.
+  Preserve source data for reversible changes and report failed display rollback.
+- Correct menu camera framing and portrait centering, partial border tiles, and
+  overlay depth state. Smooth enlarged additive glow textures in menu backdrops.
+- Add real GPU graphics regressions and menu/map capture audits with isolated
+  preferences, including backdrop coverage and same-frame glow comparisons.
+
 ### fix
+- Correct Hold Position and autocast range checks, preserve queued player orders
+  during automatic casts, and repair follow, patrol, and attack-move transitions.
+- Guard cancellation of queued orders whose abilities are absent or removed.
+- Apply sound-effects volume/mute and response/ambience toggles to playback;
+  give script sounds independent handles and live volume, pitch, position, and
+  positional-audio updates.
+- Normalize desktop launch arguments consistently and persist graphics settings
+  with validation, atomic replacement where supported, and rollback on failure.
 - Integrated origin/main through `8472ce72`; preserved ownership-transfer food
   counts and complete retail AI declarations in the new script cache.
 - Campaign preload scripts preserve live mission globals instead of resetting
@@ -197,6 +214,8 @@ Changes are grouped by category:
   pending and documented in the parity audit.
 
 ### qol
+- Overhaul the README with local asset setup, launch controls, current feature
+  status, reproducible verification, known gaps, and links to detailed audits.
 - **Campaign progression spine audit**: Added `:desktop:campaignProgressionAudit`
   and CLI tool `CampaignProgressionAudit.java`, auditing all 85 retail campaign
   maps across Reign of Chaos and The Frozen Throne. 100% of all 70 distinct

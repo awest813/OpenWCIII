@@ -110,6 +110,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 			this.viewer.enableAudio();
 
 			this.scene = this.viewer.addSimpleScene();
+			this.scene.smoothAdditiveTextures = true;
 			this.scene.enableAudio();
 
 			this.uiScene = this.viewer.addSimpleScene();
@@ -570,6 +571,8 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	private final float[] cameraPositionTemp = new float[3];
 	private final float[] cameraTargetTemp = new float[3];
 	private final boolean firstFrame = true;
+	private final com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuRenderProbe menuRenderProbe =
+			new com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuRenderProbe();
 	private Scene scene;
 
 	@Override
@@ -592,6 +595,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 			}
 		}
 		this.viewer.updateAndRender();
+		this.menuRenderProbe.afterRender(this.viewer, this.scene);
 
 		Gdx.gl30.glDisable(GL30.GL_SCISSOR_TEST);
 
@@ -609,32 +613,16 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 
 	@Override
 	public void resize(final int width, final int height) {
-		this.tempRect.width = width;
-		this.tempRect.height = height;
-		this.tempRect.x = 0;
-		this.tempRect.y = 0;
-		if (!WarsmashConstants.FULL_SCREEN_MENU_BACKDROP) {
-			final float fourThirdsHeight = (this.tempRect.height * 4) / 3;
-			if (fourThirdsHeight < this.tempRect.width) {
-				final float dx = this.tempRect.width - fourThirdsHeight;
-				this.tempRect.width = fourThirdsHeight;
-				this.tempRect.x = dx / 2;
-			}
-			else {
-				final float threeFourthsWidth = (this.tempRect.width * 3) / 4;
-				if (threeFourthsWidth < this.tempRect.height) {
-					final float dy = this.tempRect.height - threeFourthsWidth;
-					this.tempRect.height = threeFourthsWidth;
-					this.tempRect.y = dy;
-				}
-			}
-		}
+		if (width <= 0 || height <= 0 || this.cameraManager == null || this.menuUI == null) return;
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuViewport.fit(this.tempRect, width, height,
+				WarsmashConstants.FULL_SCREEN_MENU_BACKDROP);
 		this.cameraManager.camera.viewport(this.tempRect);
 
 //		super.resize(width, height);
 
 		this.uiViewport.update(width, height);
 		this.uiCamera.position.set(getMinWorldWidth() / 2, getMinWorldHeight() / 2, 0);
+		this.uiCamera.update();
 
 		this.menuUI.resize();
 		updateUIScene();
@@ -728,7 +716,11 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 				final float aspect = (this.camera.rect.height > 0)
 						? (this.camera.rect.width / this.camera.rect.height)
 						: (4f / 3f);
-				final float fovY = (float) (2.0 * Math.atan(Math.tan(WarsmashGdxMenuScreen.this.modelCamera.fieldOfView / 2.0) / aspect));
+				// Warcraft scales its authored FOV by the viewport diagonal. Treating it
+				// as a horizontal angle exposes the finite lower edge of glue scenes.
+				// See docs/MENU_GRAPHICS_AUDIO_AUDIT.md for the projection reference.
+				final float fovY = WarsmashGdxMenuScreen.this.modelCamera.fieldOfView
+						/ (float) Math.sqrt(aspect * aspect + 1);
 				this.camera.perspective(fovY, aspect,
 						WarsmashGdxMenuScreen.this.modelCamera.nearClippingPlane,
 						WarsmashGdxMenuScreen.this.modelCamera.farClippingPlane);
@@ -820,8 +812,10 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 
 	private void renderLibGDXContent() {
 
-		Gdx.gl30.glClear(GL30.GL_DEPTH_BUFFER_BIT);
 		Gdx.gl30.glDisable(GL30.GL_SCISSOR_TEST);
+		Gdx.gl30.glDepthMask(true);
+		Gdx.gl30.glClear(GL30.GL_DEPTH_BUFFER_BIT);
+		Gdx.gl30.glDisable(GL30.GL_DEPTH_TEST);
 
 		Gdx.gl30.glDisable(GL30.GL_CULL_FACE);
 

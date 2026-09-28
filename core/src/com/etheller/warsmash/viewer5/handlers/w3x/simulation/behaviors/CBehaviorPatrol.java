@@ -1,10 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
-import java.util.Queue;
 
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItem;
@@ -21,15 +18,18 @@ public class CBehaviorPatrol implements CRangedBehavior {
 	private final CUnit unit;
 	private AbilityPointTarget target;
 	private AbilityPointTarget startPoint;
-	private List<AbilityTarget> targets = new ArrayList<>();
+	private final List<AbilityTarget> targets = new ArrayList<>();
 	private int iter = 1;
 	private boolean justAutoAttacked = false;
+	private boolean moveGaveUp;
 
 	public CBehaviorPatrol(final CUnit unit) {
 		this.unit = unit;
 	}
 
 	public CBehavior reset(final AbilityPointTarget target) {
+		this.justAutoAttacked = false;
+		this.moveGaveUp = false;
 		targets.clear();
 		this.target = target;
 		this.startPoint = new AbilityPointTarget(this.unit.getX(), this.unit.getY());
@@ -74,6 +74,11 @@ public class CBehaviorPatrol implements CRangedBehavior {
 			return this.unit.getCurrentBehavior();
 		}
 		
+		// Starting or resuming a patrol must finish the current leg before advancing.
+		if (!this.moveGaveUp && this.unit.distance(this.target.x, this.target.y) > 16f) {
+			return this.unit.getMoveBehavior().reset(this.target, this, false);
+		}
+		this.moveGaveUp = false;
 		iter++;
 		if (iter >= this.targets.size()) {
 			iter = 0;
@@ -112,6 +117,11 @@ public class CBehaviorPatrol implements CRangedBehavior {
 	@Override
 	public void endMove(final CSimulation game, final boolean interrupted) {
 
+	}
+
+	@Override
+	public void onMoveGiveUp(final CSimulation game) {
+		this.moveGaveUp = true;
 	}
 
 

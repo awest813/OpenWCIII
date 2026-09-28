@@ -133,8 +133,8 @@ class MdxShadersTest {
 	@Test
 	void fsHd_usesFragColorInLambertOutput() {
 		final String fsHd = MdxShaders.fsHd();
-		assertTrue(fsHd.contains("fragColor = vec4(color, baseColor.a)"),
-				"fsHd lambert() must write to fragColor");
+		assertTrue(fsHd.contains("fragColor = vec4(color, baseColor.a * v_layerAlpha)"),
+				"fsHd lambert() must write layer/occlusion opacity to fragColor");
 	}
 
 	// ---------------------------------------------------------------

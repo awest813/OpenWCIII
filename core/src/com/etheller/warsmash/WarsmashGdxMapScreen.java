@@ -338,6 +338,20 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 			this.startupProbeElapsed += delta;
 			if (this.startupProbeElapsed >= this.startupProbeReport) {
 				this.startupProbeReport += 5;
+				if (Boolean.getBoolean("warsmash.graphicsProbe")) {
+					final com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore graphics =
+							com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore.get();
+					final int quality = this.startupProbeReport == 5 ? graphics.getTextureQuality() : 2;
+					graphics.setTextureQuality(quality);
+					graphics.setModelDetail(quality);
+					graphics.setAnimationQuality(quality);
+					graphics.setParticleQuality(quality);
+					graphics.setShadows(quality != 0);
+					graphics.setLocalLights(quality != 0);
+					graphics.setOcclusion(this.startupProbeReport == 5);
+					System.out.println("[GraphicsProbe] quality=" + quality + " shadows=" + graphics.isShadows()
+							+ " occlusion=" + graphics.isOcclusion());
+				}
 				final com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation simulation = this.viewer.simulation;
 				System.out.println("[StartupProbe] tick=" + simulation.getGameTurnTick()
 						+ " initialized=" + this.commonEnv.isInitializationComplete()
@@ -362,7 +376,10 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 					}
 				}
 			}
-			if (this.startupProbeElapsed >= this.startupProbeSeconds) Gdx.app.exit();
+			if (this.startupProbeElapsed >= this.startupProbeSeconds) {
+				System.out.println("[StartupProbe] complete");
+				Gdx.app.exit();
+			}
 		}
 
 		Gdx.gl30.glDisable(GL30.GL_SCISSOR_TEST);

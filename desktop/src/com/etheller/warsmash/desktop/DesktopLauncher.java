@@ -104,78 +104,78 @@ public class DesktopLauncher {
 		Boolean vSyncEnabled = null;
 		LaunchProfile profile = null;
 		final List<String> unknownArgs = new ArrayList<>();
-		for (int argIndex = 0; argIndex < arg.length; argIndex++) {
-			if ("-help".equals(arg[argIndex]) || "--help".equals(arg[argIndex]) || "-h".equals(arg[argIndex])) {
+		for (int argIndex = 0; argIndex < normalizedArgs.length; argIndex++) {
+			if ("-help".equals(normalizedArgs[argIndex]) || "--help".equals(normalizedArgs[argIndex]) || "-h".equals(normalizedArgs[argIndex])) {
 				printHelpAndExit();
 			}
-			else if ((arg.length > (argIndex + 1)) && ("-profile".equals(arg[argIndex]) || "--profile".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1)) && ("-profile".equals(normalizedArgs[argIndex]) || "--profile".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
 				profile = LaunchProfile.parse(normalizedArgs[argIndex]);
 			}
-			else if ("-window".equals(arg[argIndex]) || "-windowed".equals(arg[argIndex])
-					|| "--windowed".equals(arg[argIndex])) {
+			else if ("-window".equals(normalizedArgs[argIndex]) || "-windowed".equals(normalizedArgs[argIndex])
+					|| "--windowed".equals(normalizedArgs[argIndex])) {
 				windowedMode = Boolean.TRUE;
 				if ((normalizedArgs.length > (argIndex + 2)) && isInteger(normalizedArgs[argIndex + 1]) && isInteger(normalizedArgs[argIndex + 2])) {
 					argIndex++;
-					windowedWidth = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
+					windowedWidth = parseIntWithFallback(normalizedArgs[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
 					argIndex++;
-					windowedHeight = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height", 1);
+					windowedHeight = parseIntWithFallback(normalizedArgs[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height", 1);
 				}
 				else {
 					windowedWidth = DEFAULT_WINDOWED_WIDTH;
 					windowedHeight = DEFAULT_WINDOWED_HEIGHT;
 				}
 			}
-			else if ((arg.length > (argIndex + 1)) && ("-width".equals(arg[argIndex]) || "--width".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1)) && ("-width".equals(normalizedArgs[argIndex]) || "--width".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
-				windowedWidth = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
+				windowedWidth = parseIntWithFallback(normalizedArgs[argIndex], DEFAULT_WINDOWED_WIDTH, "window width", 1);
 				if (windowedMode == null) {
 					windowedMode = Boolean.TRUE;
 				}
 			}
-			else if ((arg.length > (argIndex + 1))
-					&& ("-height".equals(arg[argIndex]) || "--height".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1))
+					&& ("-height".equals(normalizedArgs[argIndex]) || "--height".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
-				windowedHeight = parseIntWithFallback(arg[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height", 1);
+				windowedHeight = parseIntWithFallback(normalizedArgs[argIndex], DEFAULT_WINDOWED_HEIGHT, "window height", 1);
 				if (windowedMode == null) {
 					windowedMode = Boolean.TRUE;
 				}
 			}
-			else if ("-fullscreen".equals(arg[argIndex]) || "--fullscreen".equals(arg[argIndex])) {
+			else if ("-fullscreen".equals(normalizedArgs[argIndex]) || "--fullscreen".equals(normalizedArgs[argIndex])) {
 				windowedMode = Boolean.FALSE;
 			}
-			else if ("-nolog".equals(arg[argIndex])) {
+			else if ("-nolog".equals(normalizedArgs[argIndex])) {
 				noLogs = true;
 			}
-			else if ("-log".equals(arg[argIndex]) || "--log".equals(arg[argIndex])) {
+			else if ("-log".equals(normalizedArgs[argIndex]) || "--log".equals(normalizedArgs[argIndex])) {
 				noLogs = false;
 			}
-			else if ((arg.length > (argIndex + 1))
-					&& ("-logdir".equals(arg[argIndex]) || "--logdir".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1))
+					&& ("-logdir".equals(normalizedArgs[argIndex]) || "--logdir".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
-				logDirectory = arg[argIndex];
+				logDirectory = normalizedArgs[argIndex];
 			}
-			else if ("-vsync".equals(arg[argIndex])) {
+			else if (("-vsync".equals(normalizedArgs[argIndex]) || "--vsync".equals(normalizedArgs[argIndex]))) {
 				vSyncEnabled = Boolean.TRUE;
 			}
-			else if ("-novsync".equals(normalizedArgs[argIndex])) {
+			else if (("-novsync".equals(normalizedArgs[argIndex]) || "--novsync".equals(normalizedArgs[argIndex]))) {
 				vSyncEnabled = Boolean.FALSE;
 			}
-			else if ((arg.length > (argIndex + 1)) && ("-fps".equals(arg[argIndex]) || "--fps".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1)) && ("-fps".equals(normalizedArgs[argIndex]) || "--fps".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
-				targetFps = parseIntWithFallback(arg[argIndex], 0, "target FPS", 0);
+				targetFps = parseIntWithFallback(normalizedArgs[argIndex], 0, "target FPS", 0);
 			}
-			else if ((arg.length > (argIndex + 1))
-					&& ("-msaa".equals(arg[argIndex]) || "--msaa".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1))
+					&& ("-msaa".equals(normalizedArgs[argIndex]) || "--msaa".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
-				msaaSamples = parseIntWithFallback(arg[argIndex], 0, "MSAA samples", 0);
+				msaaSamples = parseIntWithFallback(normalizedArgs[argIndex], 0, "MSAA samples", 0);
 			}
-			else if ((arg.length > (argIndex + 1))
-					&& ("-loadfile".equals(arg[argIndex]) || "--loadfile".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1))
+					&& ("-loadfile".equals(normalizedArgs[argIndex]) || "--loadfile".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
 				fileToLoad = normalizedArgs[argIndex];
 			}
-			else if ((arg.length > (argIndex + 1)) && ("-ini".equals(arg[argIndex]) || "--ini".equals(arg[argIndex]))) {
+			else if ((normalizedArgs.length > (argIndex + 1)) && ("-ini".equals(normalizedArgs[argIndex]) || "--ini".equals(normalizedArgs[argIndex]))) {
 				argIndex++;
 				iniPath = normalizedArgs[argIndex];
 			}
@@ -198,7 +198,7 @@ public class DesktopLauncher {
 				com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore.get();
 		savedOptions.load(com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore.optionsFile());
 		if (profile == null && windowedMode == null && savedOptions.getWindowWidth() > 0) {
-			config.fullscreen = false;
+			config.fullscreen = savedOptions.isFullscreen();
 			config.width = savedOptions.getWindowWidth();
 			config.height = savedOptions.getWindowHeight();
 		}
@@ -259,6 +259,19 @@ public class DesktopLauncher {
 		Gdx.app.postRunnable(new Runnable() {
 			@Override
 			public void run() {
+				Extensions.gamma = gamma -> {
+					try {
+						org.lwjgl.opengl.Display.setDisplayConfiguration(gamma, 0, 1);
+						return true;
+					}
+					catch (final org.lwjgl.LWJGLException | RuntimeException e) {
+						System.err.println("Display gamma unavailable: " + e.getMessage());
+						return false;
+					}
+				};
+				if (savedOptions.getGamma() != com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore.DEFAULT_GAMMA) {
+					Extensions.gamma.setGamma(savedOptions.getDisplayGamma());
+				}
 				if ((finalFileToLoad != null) && finalFileToLoad.toLowerCase().endsWith(".toc")) {
 					warsmashGdxMultiScreenGame.setScreen(new WarsmashGdxFDFTestRenderScreen(warsmashIni,
 							warsmashGdxMultiScreenGame, finalFileToLoad));
@@ -278,7 +291,7 @@ public class DesktopLauncher {
 	private static void applyProfile(final LaunchProfile profile, final LwjglApplicationConfiguration config) {
 		switch (profile) {
 		case SAFE:
-			System.out.println("[Profile] safe — reduced effects, no MSAA, windowed 1280x720, vsync on");
+			System.out.println("[Profile] safe — no MSAA, windowed 1280x720, vsync on");
 			config.fullscreen = false;
 			config.width = DEFAULT_WINDOWED_WIDTH;
 			config.height = DEFAULT_WINDOWED_HEIGHT;
@@ -298,6 +311,7 @@ public class DesktopLauncher {
 			config.backgroundFPS = 30;
 			break;
 		case HIGH:
+			config.fullscreen = true;
 			System.out.println("[Profile] high — fullscreen, 4x MSAA, vsync on, uncapped fps");
 			config.samples = 4;
 			config.vSyncEnabled = true;
@@ -506,6 +520,12 @@ public class DesktopLauncher {
 					final float z, final boolean is3dSound, final float maxDistance, final float refDistance,
 					final boolean looping) {
 				return ((OpenALSound) buffer).play(volume, pitch, x, y, z, is3dSound, maxDistance, refDistance, looping);
+			}
+
+			@Override
+			public void setPosition(final Sound sound, final long id, final float x, final float y, final float z,
+					final boolean spatial, final float maxDistance, final float refDistance) {
+				((OpenALSound) sound).setPosition(id, x, y, z, spatial, maxDistance, refDistance);
 			}
 
 			@Override

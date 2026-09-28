@@ -21,6 +21,10 @@ import com.etheller.warsmash.viewer5.ViewerTextureRenderable;
  * plan to simply port the RivSoft stuff, and come back later.
  */
 public class SplatModel implements Comparable<SplatModel> {
+	private boolean shadow;
+	public boolean isShadow() { return this.shadow; }
+	public void setShadow(final boolean shadow) { this.shadow = shadow; }
+
 	private static final int MAX_VERTICES = 65000;
 	private static final float NO_ABS_HEIGHT = -257f;
 	private final ViewerTextureRenderable texture;

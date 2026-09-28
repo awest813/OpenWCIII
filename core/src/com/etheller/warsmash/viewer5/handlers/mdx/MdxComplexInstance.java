@@ -25,8 +25,10 @@ import com.etheller.warsmash.viewer5.SkeletalNode;
 import com.etheller.warsmash.viewer5.Texture;
 import com.etheller.warsmash.viewer5.TextureMapper;
 import com.etheller.warsmash.viewer5.UpdatableObject;
+import com.etheller.warsmash.viewer5.WorldScene;
 import com.etheller.warsmash.viewer5.gl.DataTexture;
 import com.etheller.warsmash.viewer5.handlers.w3x.DynamicShadowManager;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 import com.hiveworkshop.rms.parsers.mdlx.MdlxGeoset;
 
 public class MdxComplexInstance extends ModelInstance {
@@ -73,9 +75,12 @@ public class MdxComplexInstance extends ModelInstance {
 	public Texture[] replaceableTextures_diffuse = new Texture[WarsmashConstants.REPLACEABLE_TEXTURE_LIMIT];
 	public Texture[] replaceableTextures_normal = new Texture[WarsmashConstants.REPLACEABLE_TEXTURE_LIMIT];
 	public Texture[] replaceableTextures_orm = new Texture[WarsmashConstants.REPLACEABLE_TEXTURE_LIMIT];
+	private final AnimationSampleClock poseClock = new AnimationSampleClock();
 	private float animationSpeed = 1.0f;
 	private float blendTime;
 	private float blendTimeRemaining;
+	public boolean occluded;
+	public float occlusionAlpha = 1;
 	public boolean additiveOverrideMeshMode = false;
 	private boolean hasAnyUnselectableMesh = false;
 
@@ -314,6 +319,10 @@ public class MdxComplexInstance extends ModelInstance {
 		final List<GenericObject> sortedGenericObjects = model.sortedGenericObjects;
 		final Scene scene = this.scene;
 
+		final int quality = scene instanceof WorldScene
+				? OptionsSettingsStore.get().getAnimationQuality() : 2;
+		final boolean samplePose = this.poseClock.advance(dt, sequence, quality, forced);
+
 		// Update the nodes
 		for (int i = 0, l = sortedNodes.length; i < l; i++) {
 			final GenericObject genericObject = sortedGenericObjects.get(i);
@@ -340,7 +349,7 @@ public class MdxComplexInstance extends ModelInstance {
 				final Vector3 localScale = node.localScale;
 
 				// Only update the local node data if there is a need to
-				if (forced || variants.generic[sequence]) {
+				if (forced || (samplePose && variants.generic[sequence])) {
 					wasDirty = true;
 
 					// Translation
@@ -532,7 +541,7 @@ public class MdxComplexInstance extends ModelInstance {
 	public void renderOpaque(final Matrix4 mvp) {
 		final MdxModel model = (MdxModel) this.model;
 
-		if (!this.additiveOverrideMeshMode) {
+		if (!this.additiveOverrideMeshMode && this.occlusionAlpha >= 1) {
 			for (final GenericGroup group : model.opaqueGroups) {
 				group.render(this, mvp);
 			}
@@ -551,7 +560,7 @@ public class MdxComplexInstance extends ModelInstance {
 		}
 		final MdxModel model = (MdxModel) this.model;
 
-		if (this.additiveOverrideMeshMode) {
+		if (this.additiveOverrideMeshMode || this.occlusionAlpha < 1) {
 			for (final GenericGroup group : model.opaqueGroups) {
 				group.render(this, this.scene.camera.viewProjectionMatrix);
 			}

@@ -17,6 +17,101 @@ class OptionsSettingsStoreTest {
 	File tmpDir;
 
 	@Test
+	void savesReplaceExistingOptionsWithoutLeavingTemporaryFiles() throws Exception {
+		final OptionsSettingsStore store = new OptionsSettingsStore();
+		final File file = new File(tmpDir, "options.properties");
+		store.save(file);
+		store.setGamma(80);
+		store.setParticleQuality(1);
+		store.save(file);
+		final OptionsSettingsStore loaded = new OptionsSettingsStore();
+		loaded.load(file);
+		assertEquals(80, loaded.getGamma());
+		assertEquals(1, loaded.getParticleQuality());
+		assertEquals(1, tmpDir.list().length);
+	}
+
+	@Test
+	void malformedPropertiesEscapeDoesNotCrashOrReplacePreferences() throws Exception {
+		final File file = new File(tmpDir, "broken.properties");
+		Files.write(file.toPath(), ("gamma=70\ninvalid=" + '\\' + "uZZZZ\n")
+				.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		final OptionsSettingsStore store = new OptionsSettingsStore();
+		store.setGamma(60);
+		store.load(file);
+		assertEquals(60, store.getGamma());
+	}
+
+	@Test
+	void graphicsSettingsSurviveRestartAndCancelLeavesSavedValuesAlone() throws Exception {
+		final OptionsSettingsStore saved = new OptionsSettingsStore();
+		final OptionsSettingsStore draft = new OptionsSettingsStore();
+		draft.copyFrom(saved);
+		draft.setParticleQuality(0);
+		draft.setLocalLights(false);
+		draft.setWindowSize(1920, 1080);
+		draft.setFullscreen(true);
+		draft.setGamma(75);
+		draft.setModelDetail(0);
+		draft.setAnimationQuality(1);
+		draft.setTextureQuality(0);
+		draft.setShadows(false);
+		draft.setOcclusion(false);
+		assertEquals(2, saved.getParticleQuality());
+		assertTrue(saved.isLocalLights());
+		assertEquals(50, saved.getGamma());
+		final File file = new File(tmpDir, "graphics.properties");
+		draft.save(file);
+		saved.load(file);
+		assertEquals(0, saved.getParticleQuality());
+		assertFalse(saved.isLocalLights());
+		assertTrue(saved.isFullscreen());
+		assertEquals(1920, saved.getWindowWidth());
+		assertEquals(75, saved.getGamma());
+		assertEquals(0, saved.getModelDetail());
+		assertEquals(1, saved.getAnimationQuality());
+		assertEquals(0, saved.getTextureQuality());
+		assertFalse(saved.isShadows());
+		assertFalse(saved.isOcclusion());
+		draft.copyFrom(saved);
+		assertTrue(draft.isFullscreen());
+		assertFalse(draft.isLocalLights());
+		assertEquals(0, draft.getParticleQuality());
+		assertEquals(0, draft.getModelDetail());
+		assertEquals(1, draft.getAnimationQuality());
+		assertEquals(0, draft.getTextureQuality());
+		assertFalse(draft.isShadows());
+		assertFalse(draft.isOcclusion());
+		saved.reset();
+		assertEquals(2, saved.getParticleQuality());
+		assertTrue(saved.isLocalLights());
+		assertFalse(saved.isFullscreen());
+		assertEquals(2, saved.getModelDetail());
+		assertEquals(2, saved.getAnimationQuality());
+		assertEquals(2, saved.getTextureQuality());
+		assertTrue(saved.isShadows());
+		assertTrue(saved.isOcclusion());
+	}
+
+	@Test
+	void legacyWindowSettingsAndInvalidGraphicsValuesLoadSafely() throws Exception {
+		final File file = new File(tmpDir, "legacy.properties");
+		Files.write(file.toPath(), ("windowWidth=1280\nwindowHeight=720\nparticleQuality=999\n"
+				+ "localLights=invalid\ngamma=-100\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		final OptionsSettingsStore store = new OptionsSettingsStore();
+		store.load(file);
+		assertFalse(store.isFullscreen());
+		assertEquals(1280, store.getWindowWidth());
+		assertEquals(2, store.getParticleQuality());
+		assertTrue(store.isLocalLights());
+		assertEquals(0.5f, store.getDisplayGamma());
+		store.setGamma(50);
+		assertEquals(1f, store.getDisplayGamma());
+		store.setGamma(100);
+		assertEquals(2f, store.getDisplayGamma());
+	}
+
+	@Test
 	void windowSizeRoundTripsAndDraftEditsDoNotChangeStoredSettings() throws Exception {
 		final OptionsSettingsStore saved = new OptionsSettingsStore();
 		saved.setWindowSize(1280, 720);

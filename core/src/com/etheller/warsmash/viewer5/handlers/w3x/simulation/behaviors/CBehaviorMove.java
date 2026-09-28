@@ -345,7 +345,7 @@ public class CBehaviorMove implements CBehavior {
 
 	private void onMoveGiveUp(final CSimulation simulation) {
 		if (this.rangedBehavior != null) {
-			this.rangedBehavior.endMove(simulation, true);
+			this.rangedBehavior.onMoveGiveUp(simulation);
 		}
 	}
 

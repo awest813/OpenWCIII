@@ -5324,9 +5324,16 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("ShowDestructable",
 					(arguments, globalScope, triggerScope) -> null);
 			jassProgramVisitor.getJassNativeManager().createNative("GetDestructableOccluderHeight",
-					(arguments, globalScope, triggerScope) -> RealJassValue.ZERO);
+					(arguments, globalScope, triggerScope) -> {
+						final CDestructable dest = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						return dest == null ? RealJassValue.ZERO : new RealJassValue(dest.getOccluderHeight());
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("SetDestructableOccluderHeight",
-					(arguments, globalScope, triggerScope) -> null);
+					(arguments, globalScope, triggerScope) -> {
+						final CDestructable dest = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
+						if (dest != null) dest.setOccluderHeight(arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue());
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("RemoveWeatherEffect",
 					(arguments, globalScope, triggerScope) -> {
 						final WeatherEffect whichEffect = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
@@ -7100,7 +7107,10 @@ public class Jass2 {
 			// counterpart, and single-player no-ops.
 			final JassFunction ignoredNative = (arguments, globalScope, triggerScope) -> null;
 			jassProgramVisitor.getJassNativeManager().createNative("CameraSetSmoothingFactor", ignoredNative);
-			jassProgramVisitor.getJassNativeManager().createNative("EnableOcclusion", ignoredNative);
+			jassProgramVisitor.getJassNativeManager().createNative("EnableOcclusion", (arguments, globalScope, triggerScope) -> {
+				war3MapViewer.setOcclusionEnabled(arguments.get(0).visit(BooleanJassValueVisitor.getInstance()));
+				return null;
+			});
 			jassProgramVisitor.getJassNativeManager().createNative("EnableWorldFogBoundary", ignoredNative);
 			jassProgramVisitor.getJassNativeManager().createNative("SetAllyColorFilterState", ignoredNative);
 			jassProgramVisitor.getJassNativeManager().createNative("UnitAddIndicator", ignoredNative);

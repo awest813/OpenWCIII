@@ -35,6 +35,50 @@ class CampaignProgressStoreTest {
 	}
 
 	@Test
+	void missionReplayUsesStartupProgressWithoutChangingCurrentProfilePersistence() {
+		final Preferences prefs = preferences();
+		final CampaignProgressStore store = CampaignProgressStore.get();
+		store.loadProfile(prefs, "Arthas"); store.seedCampaignEntries(1, 9);
+		final Map<String, String> startup = store.snapshot();
+		store.setMissionAvailable(1, 1, true);
+		final Map<String, String> current = store.snapshot();
+		final Map<String, ?> persisted = prefs.get();
+		store.restoreSnapshot(startup, true);
+		assertFalse(store.isMissionAvailable(1, 1));
+		store.setMissionAvailable(1, 2, true); store.forceCampaignSelectScreen();
+		assertEquals(persisted, prefs.get());
+		store.restoreSnapshot(current, false);
+		assertTrue(store.isMissionAvailable(1, 1)); assertFalse(store.isMissionAvailable(1, 2));
+		assertFalse(store.consumeForceCampaignSelectScreen());
+		store.loadProfile(prefs, "Arthas"); store.seedCampaignEntries(1, 9);
+		assertTrue(store.isMissionAvailable(1, 1)); assertFalse(store.isMissionAvailable(1, 2));
+	}
+
+	@Test
+	void freshProfileGatesChaptersAndEndingWhileUnlocksSurviveReload() {
+		final Preferences prefs = preferences();
+		final CampaignProgressStore store = CampaignProgressStore.get();
+		store.loadProfile(prefs, "Arthas");
+		store.seedCampaignEntries(1, 9);
+		assertTrue(store.isMissionAvailable(1, 0));
+		assertFalse(store.isMissionAvailable(1, 1));
+		assertFalse(store.isMissionAvailable(1, 8));
+		assertTrue(store.isOpCinematicAvailable(1, 0));
+		assertFalse(store.isEdCinematicAvailable(1, 0));
+		store.setMissionAvailable(1, 1, true);
+		store.setEdCinematicAvailable(1, 0, true);
+		store.loadProfile(prefs, "Arthas");
+		store.seedCampaignEntries(1, 9);
+		assertTrue(store.isMissionAvailable(1, 1));
+		assertFalse(store.isMissionAvailable(1, 2));
+		assertTrue(store.isEdCinematicAvailable(1, 0));
+		store.loadProfile(prefs, "Thrall");
+		store.seedCampaignEntries(1, 9);
+		assertFalse(store.isMissionAvailable(1, 1));
+		assertFalse(store.isEdCinematicAvailable(1, 0));
+	}
+
+	@Test
 	void progressSurvivesReloadAndMenuDefaults() {
 		final Preferences prefs = preferences();
 		final CampaignProgressStore store = CampaignProgressStore.get();

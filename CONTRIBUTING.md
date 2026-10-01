@@ -58,8 +58,8 @@ Validate your asset paths before launching:
 
 ## Coding Conventions
 
-The codebase currently uses **Java 8 syntax** running on Java 17. Please keep
-new code within that constraint until a deliberate migration is planned.
+The core, desktop, and JASS parser modules target **Java 17**. Keep new code
+compatible with Java 17; CI builds with Java 17 and 21.
 
 ### Style
 

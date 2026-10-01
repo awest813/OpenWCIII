@@ -29,6 +29,10 @@ public final class GameCameraManager extends CameraManager {
 	private CameraRates customCameraRates;
 	private Vector2 panDestination;
 	private Vector2 panRate;
+	private Vector2 quickPosition;
+	private float setupHeight;
+	private Float setupHeightDestination;
+	private float setupHeightRate;
 	private Float zOffsetDestination;
 	private float zOffsetRate;
 	private float targetNoiseMag;
@@ -41,6 +45,7 @@ public final class GameCameraManager extends CameraManager {
 
 	public GameCameraManager(final CameraPreset[] presets, final CameraRates cameraRates) {
 		this.presets = presets;
+		this.setupHeight = presets[0].getHeight();
 		this.cameraRates = new CameraRates(cameraRates.aoa, cameraRates.fov, cameraRates.rotation * 3,
 				cameraRates.distance, cameraRates.forward, cameraRates.strafe);
 		this.cameraPanControls = new CameraPanControls();
@@ -65,28 +70,41 @@ public final class GameCameraManager extends CameraManager {
 	}
 
 	@Override
-	public void updateCamera() {
+	public void updateCamera() { updateCamera(Gdx.graphics.getDeltaTime()); }
+
+	public void updateCamera(final float deltaTime) {
+		if (this.setupHeightDestination != null) {
+			final float previousHeight = this.setupHeight;
+			this.setupHeight = applyAtRate(this.setupHeight, this.setupHeightDestination, this.setupHeightRate, deltaTime);
+			this.target.z += this.setupHeight - previousHeight;
+			if (Math.abs(this.setupHeight - this.setupHeightDestination) <= 0.01f) {
+				this.target.z += this.setupHeightDestination - this.setupHeight;
+				this.setupHeight = this.setupHeightDestination;
+				this.setupHeightDestination = null;
+			}
+		}
 		final CameraSetup setup = getCurrentSetup();
 		final CameraRates cameraRate = getCurrentRates();
-		updateCamera(setup, cameraRate);
+		updateCamera(setup, cameraRate, deltaTime);
 		if (this.panDestination != null) {
-			this.target.x = applyAtRate(this.target.x, this.panDestination.x, this.panRate.x);
-			this.target.y = applyAtRate(this.target.y, this.panDestination.y, this.panRate.y);
+			this.target.x = applyAtRate(this.target.x, this.panDestination.x, this.panRate.x, deltaTime);
+			this.target.y = applyAtRate(this.target.y, this.panDestination.y, this.panRate.y, deltaTime);
 			if (Math.abs(this.target.x - this.panDestination.x) <= 1.0f
 					&& Math.abs(this.target.y - this.panDestination.y) <= 1.0f) {
 				this.target.x = this.panDestination.x;
 				this.target.y = this.panDestination.y;
-				clearPan();
+				this.panDestination = null;
+				this.panRate = null;
 			}
 		}
 		if (this.zOffsetDestination != null) {
-			this.targetZOffset = applyAtRate(this.targetZOffset, this.zOffsetDestination, this.zOffsetRate);
+			this.targetZOffset = applyAtRate(this.targetZOffset, this.zOffsetDestination, this.zOffsetRate, deltaTime);
 			if (Math.abs(this.targetZOffset - this.zOffsetDestination) <= 0.01f) {
 				this.targetZOffset = this.zOffsetDestination;
 				this.zOffsetDestination = null;
 			}
 		}
-		updateNoise(Gdx.graphics.getDeltaTime());
+		updateNoise(deltaTime);
 	}
 
 	private void updateNoise(final float dt) {
@@ -124,6 +142,7 @@ public final class GameCameraManager extends CameraManager {
 
 	public void stopCamera() {
 		clearPan();
+		this.setupHeightDestination = null;
 		this.zOffsetDestination = null;
 		this.customCameraRates = null;
 		setTargetNoise(0f, 0f);
@@ -155,7 +174,9 @@ public final class GameCameraManager extends CameraManager {
 		return setup;
 	}
 
-	private void updateCamera(final CameraSetup cameraPreset, final CameraRates cameraRate) {
+	private void updateCamera(final CameraSetup cameraPreset, final CameraRates cameraRate) { updateCamera(cameraPreset, cameraRate, Gdx.graphics.getDeltaTime()); }
+
+	private void updateCamera(final CameraSetup cameraPreset, final CameraRates cameraRate, final float deltaTime) {
 		this.quatHeap2.idt();
 		this.quatHeap.idt();
 		final float newHorizontalAngle;
@@ -166,11 +187,11 @@ public final class GameCameraManager extends CameraManager {
 			newHorizontalAngle = (float) Math.toRadians(cameraPreset.getRotation() - 90);
 		}
 		this.horizontalAngle = applyAtRateAngle(this.horizontalAngle, newHorizontalAngle,
-				(float) Math.toRadians(cameraRate.rotation));
+				(float) Math.toRadians(cameraRate.rotation), deltaTime);
 		this.quatHeap.setFromAxisRad(0, 0, 1, this.horizontalAngle);
-		this.distance = applyAtRate(this.distance, cameraPreset.getDistance(), cameraRate.distance);
+		this.distance = applyAtRate(this.distance, cameraPreset.getDistance(), cameraRate.distance, deltaTime);
 		this.verticalAngle = applyAtRateAngle(this.verticalAngle, (float) Math.toRadians(cameraPreset.getAoa() - 270),
-				(float) Math.toRadians(cameraRate.aoa));
+				(float) Math.toRadians(cameraRate.aoa), deltaTime);
 		this.quatHeap2.setFromAxisRad(1, 0, 0, this.verticalAngle);
 		this.quatHeap.mul(this.quatHeap2);
 
@@ -180,15 +201,18 @@ public final class GameCameraManager extends CameraManager {
 		this.position.scl(this.distance);
 		this.position = this.position.add(this.target);
 		this.fov = applyAtRate(this.fov, (float) Math.toRadians(cameraPreset.getFov() / 2),
-				(float) Math.toRadians(cameraRate.fov));
+				(float) Math.toRadians(cameraRate.fov), deltaTime);
 		if (this.camera != null) {
 			this.camera.perspective(this.fov, this.camera.getAspect(), cameraPreset.getNearZ(), cameraPreset.getFarZ());
 			this.camera.moveToAndFace(this.position, this.target, this.worldUp);
 		}
 	}
 
-	public static float applyAtRate(final float oldValue, final float newValue, float rate) {
-		rate *= Gdx.graphics.getDeltaTime();
+	public static float applyAtRate(final float oldValue, final float newValue, final float rate) { return applyAtRate(oldValue, newValue, rate, Gdx.graphics.getDeltaTime()); }
+
+	public static float applyAtRate(final float oldValue, final float newValue, float rate, final float deltaTime) {
+		if (rate == Float.POSITIVE_INFINITY) return newValue;
+		rate *= deltaTime;
 		final float deltaDistance = newValue - oldValue;
 		if (Math.abs(deltaDistance) < rate) {
 			return newValue;
@@ -198,8 +222,11 @@ public final class GameCameraManager extends CameraManager {
 		}
 	}
 
-	public static float applyAtRateAngle(final float oldValue, final float newValue, float rate) {
-		rate *= Gdx.graphics.getDeltaTime();
+	public static float applyAtRateAngle(final float oldValue, final float newValue, final float rate) { return applyAtRateAngle(oldValue, newValue, rate, Gdx.graphics.getDeltaTime()); }
+
+	public static float applyAtRateAngle(final float oldValue, final float newValue, float rate, final float deltaTime) {
+		if (rate == Float.POSITIVE_INFINITY) return newValue;
+		rate *= deltaTime;
 		final float deltaDistance = newValue - oldValue;
 		final float absDistance = Math.abs(deltaDistance);
 		if ((absDistance <= rate) || ((TWO_PI - absDistance) <= rate)) {
@@ -292,7 +319,12 @@ public final class GameCameraManager extends CameraManager {
 	}
 
 	public void updateTargetZ(final float groundHeight) {
-		this.target.z = groundHeight + this.presets[this.currentPreset].getHeight() + this.targetZOffset;
+		this.target.z = groundHeight + this.setupHeight + this.targetZOffset;
+	}
+
+	/** Script bookmark for Space; setting it must not move or interrupt the live camera. */
+	public void setQuickPosition(final float x, final float y) {
+		this.quickPosition = new Vector2(x, y);
 	}
 
 	public void scrolled(final int amount) {
@@ -307,7 +339,11 @@ public final class GameCameraManager extends CameraManager {
 	}
 
 	public boolean keyDown(final int keycode) {
-		if (keycode == Input.Keys.LEFT) {
+		if (keycode == Input.Keys.SPACE && this.quickPosition != null) {
+			setTarget(this.quickPosition.x, this.quickPosition.y);
+			return true;
+		}
+		else if (keycode == Input.Keys.LEFT) {
 			this.cameraPanControls.left = true;
 			return true;
 		}
@@ -367,9 +403,26 @@ public final class GameCameraManager extends CameraManager {
 	}
 
 	private void clearCustomSetup() {
+		clearCustomSetup(0);
+	}
+
+	private void clearCustomSetup(final float heightDuration) {
 		this.customSetup = null;
 		this.customCameraRates = null;
 		clearPan();
+		setSetupHeight(getCurrentSetup().getHeight(), heightDuration);
+	}
+
+	private void setSetupHeight(final float height, final float duration) {
+		if (duration > 0) {
+			this.setupHeightDestination = height;
+			this.setupHeightRate = Math.abs(height - this.setupHeight) / duration;
+		}
+		else {
+			this.target.z += height - this.setupHeight;
+			this.setupHeight = height;
+			this.setupHeightDestination = null;
+		}
 	}
 
 	public Rectangle getCameraBounds() {
@@ -408,6 +461,7 @@ public final class GameCameraManager extends CameraManager {
 			final float forceDuration) {
 		final CameraSetup previousSetup = getCurrentSetup();
 		this.customSetup = cameraSetup;
+		setSetupHeight(cameraSetup.getHeight(), forceDuration);
 		if (forceDuration > 0) {
 			final float aoaRate = (cameraSetup.getAoa() - previousSetup.getAoa()) / forceDuration;
 			final float fovRate = (cameraSetup.getFov() - previousSetup.getFov()) / forceDuration;
@@ -429,6 +483,7 @@ public final class GameCameraManager extends CameraManager {
 
 	public void applyCameraSetup(CustomCameraSetup cameraSetup, boolean doPan, boolean panTimed) {
 		this.customSetup = cameraSetup;
+		setSetupHeight(cameraSetup.getHeight(), 0);
 		if (doPan) {
 			if (panTimed) {
 				panTo(cameraSetup.getDestPositionX(), cameraSetup.getDestPositionY());
@@ -441,7 +496,7 @@ public final class GameCameraManager extends CameraManager {
 
 	public void resetToGameCamera(float duration) {
 		final CameraSetup previousSetup = getCurrentSetup();
-		clearCustomSetup();
+		clearCustomSetup(duration);
 		if (duration == 0) {
 			this.customCameraRates = new CameraRates(9999, 9999, 9999, 9999, this.cameraRates.forward,
 					this.cameraRates.strafe);
@@ -481,5 +536,65 @@ public final class GameCameraManager extends CameraManager {
 		clearPan();
 		this.panDestination = new Vector2(x, y);
 		this.panRate = new Vector2(this.cameraRates.strafe, this.cameraRates.forward);
+	}
+
+	/** Frame-clock camera progress cannot be reconstructed by accelerated simulation ticks. */
+	public void writeCheckpoint(final java.io.DataOutputStream out) throws java.io.IOException {
+		out.writeInt(this.currentPreset);
+		for (final float value : new float[] { this.target.x, this.target.y, this.target.z, this.horizontalAngle,
+				this.verticalAngle, this.distance, this.fov, this.targetZOffset, this.zOffsetRate,
+				this.targetNoiseMag, this.targetNoiseVel, this.sourceNoiseMag, this.sourceNoiseVel,
+				this.noiseTime, this.noiseOffsetX, this.noiseOffsetY }) out.writeFloat(value);
+		out.writeBoolean(this.panDestination != null);
+		if (this.panDestination != null) {
+			out.writeFloat(this.panDestination.x); out.writeFloat(this.panDestination.y);
+			out.writeFloat(this.panRate.x); out.writeFloat(this.panRate.y);
+		}
+		out.writeBoolean(this.zOffsetDestination != null);
+		if (this.zOffsetDestination != null) out.writeFloat(this.zOffsetDestination);
+		out.writeBoolean(this.customCameraRates != null);
+		if (this.customCameraRates != null) for (final float value : new float[] { this.customCameraRates.aoa,
+				this.customCameraRates.fov, this.customCameraRates.rotation, this.customCameraRates.distance,
+				this.customCameraRates.forward, this.customCameraRates.strafe }) out.writeFloat(value);
+		out.writeBoolean(this.quickPosition != null);
+		if (this.quickPosition != null) { out.writeFloat(this.quickPosition.x); out.writeFloat(this.quickPosition.y); }
+		out.writeFloat(this.setupHeight); out.writeFloat(this.setupHeightRate);
+		out.writeBoolean(this.setupHeightDestination != null);
+		if (this.setupHeightDestination != null) out.writeFloat(this.setupHeightDestination);
+		// Setup and controller handles are reconstructed by their original script calls.
+	}
+
+	public void readCheckpoint(final java.io.DataInputStream in) throws java.io.IOException {
+		final int preset = in.readInt();
+		if (preset < 0 || preset >= this.presets.length) throw new java.io.IOException("Invalid saved camera preset");
+		this.currentPreset = preset;
+		this.target.set(readFinite(in), readFinite(in), readFinite(in));
+		this.horizontalAngle = readFinite(in); this.verticalAngle = readFinite(in);
+		this.distance = readFinite(in); this.fov = readFinite(in); this.targetZOffset = readFinite(in);
+		this.zOffsetRate = readFinite(in); this.targetNoiseMag = readFinite(in); this.targetNoiseVel = readFinite(in);
+		this.sourceNoiseMag = readFinite(in); this.sourceNoiseVel = readFinite(in);
+		this.noiseTime = readFinite(in); this.noiseOffsetX = readFinite(in); this.noiseOffsetY = readFinite(in);
+		this.panDestination = null; this.panRate = null;
+		if (in.readBoolean()) {
+			this.panDestination = new Vector2(readFinite(in), readFinite(in));
+			this.panRate = new Vector2(readFinite(in), readFinite(in));
+		}
+		this.zOffsetDestination = in.readBoolean() ? readFinite(in) : null;
+		this.customCameraRates = in.readBoolean() ? new CameraRates(readRate(in), readRate(in), readRate(in),
+				readRate(in), readRate(in), readRate(in)) : null;
+		this.quickPosition = in.readBoolean() ? new Vector2(readFinite(in), readFinite(in)) : null;
+		this.setupHeight = readFinite(in); this.setupHeightRate = readRate(in);
+		this.setupHeightDestination = in.readBoolean() ? readFinite(in) : null;
+	}
+
+	private static float readFinite(final java.io.DataInputStream in) throws java.io.IOException {
+		final float value = in.readFloat();
+		if (!Float.isFinite(value)) throw new java.io.IOException("Invalid saved camera value");
+		return value;
+	}
+	private static float readRate(final java.io.DataInputStream in) throws java.io.IOException {
+		final float value = in.readFloat();
+		if (Float.isNaN(value) || value < 0) throw new java.io.IOException("Invalid saved camera rate");
+		return value;
 	}
 }

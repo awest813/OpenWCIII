@@ -32,7 +32,7 @@ public final class SkyBackgroundRenderAudit {
             @Override public void create() {
                 try {
                     verify();
-                    System.out.println("PASS: sky color preserved; distant terrain visible; sky drawn once per pass");
+                    System.out.println("PASS: sky color preserved; distant terrain visible; sky drawn once per pass; hidden scenes preserve framebuffer");
                 }
                 catch (Throwable error) { failure.set(error); }
                 finally { Gdx.app.exit(); }
@@ -77,6 +77,14 @@ public final class SkyBackgroundRenderAudit {
         scene.renderOpaque(sky);
         scene.renderTranslucent(sky);
         // Left: terrain farther than the sky's authored geometry. Right: sky.
+        assertPixel(16, 32, 0, 255, 0);
+        assertPixel(48, 32, 255, 0, 0);
+        // Hidden portraits must not clear a black rectangle over the world.
+        Scene hiddenPortrait = new SimpleScene(viewer, null);
+        hiddenPortrait.show = false;
+        hiddenPortrait.startFrame();
+        hiddenPortrait.renderOpaque();
+        hiddenPortrait.renderTranslucent();
         assertPixel(16, 32, 0, 255, 0);
         assertPixel(48, 32, 255, 0, 0);
         if (sky.opaqueCalls != 1 || sky.translucentCalls != 1) {

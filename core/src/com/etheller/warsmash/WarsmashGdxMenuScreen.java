@@ -596,6 +596,10 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 		}
 		this.viewer.updateAndRender();
 		this.menuRenderProbe.afterRender(this.viewer, this.scene);
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.CampaignFlowProbe.afterMenuRender();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.CampaignPersistenceProbe.afterMenuRender();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OutcomeMenuProbe.afterMenuRender();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.afterMenuRender();
 
 		Gdx.gl30.glDisable(GL30.GL_SCISSOR_TEST);
 
@@ -938,11 +942,13 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 	}
 
 	public void startMap(final String finalFileToLoad) {
-		this.menuUI.startMap(finalFileToLoad);
+		if (finalFileToLoad.toLowerCase(java.util.Locale.ROOT).endsWith(".w3s")) this.menuUI.requestLoadSave(new java.io.File(finalFileToLoad));
+		else this.menuUI.startMap(finalFileToLoad);
 	}
 
-	public void setPendingChangeLevel(final String mapPath) {
-		this.menuUI.setPendingChangeLevel(mapPath);
+	public void setPendingChangeLevel(final String mapPath,
+			final com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig config) {
+		this.menuUI.setPendingChangeLevel(mapPath, config);
 	}
 
 	public void onReturnFromGame() {

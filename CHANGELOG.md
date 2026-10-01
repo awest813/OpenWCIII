@@ -29,6 +29,88 @@ Changes are grouped by category:
   preferences, including backdrop coverage and same-frame glow comparisons.
 
 ### fix
+- Execute explicitly called trigger actions through their first sleep before
+  continuing the caller. This fixes Human04's opening reading Jaina before
+  nested hero-loading triggers assign her. Reject null script order targets
+  without aborting the calling trigger, and mirror JASS failures to stderr.
+  Add nested-initialization and sleeping-continuation regressions.
+- Extend ordinary-order campaign evidence through Human03's village/granary
+  objectives, optional fountain and matching Arthas/Jaina restoration in Human04.
+  Freeze long audit runtimes so rebuilding another run cannot replace their
+  loaded jars. Human04–09 completion and the full campaign remain unverified.
+- Recognize acolyte gold jobs, wisp tree jobs and entangled-mine boarding in AI
+  worker allocation. Count boarded wisps through mine cargo to avoid assigning
+  extra gold workers. Place summoned mines at the exact parent center and infer
+  missing legacy retail placement flags from standard mine abilities.
+- Extend fresh-process mission continuation audits to Orc, Undead and Night Elf
+  harvesting, construction, training and research. Add a 96-unit ranged battle
+  with two AI captains, missiles in flight and matching combat death events;
+  both branches match after 2,400 further ticks in a cleared arena.
+- Add an ordinary-order Human01 main-objective playthrough audit. Actual combat
+  drives victory and Human02's unlock; both Continue screens, earned hero
+  carryover and persistent chapter availability are checked together.
+- Extend that route through Timmy's rescue and the ledger quest. Capture a real
+  quest-item Quick Save, resume it in a fresh process, and compare the completed
+  objectives, earned ring, consumed strength tome, skills, stats and XP through
+  victory and Human02. Respect disabled user control during scripted scenes.
+- Add a retail Human02 ordinary-order audit for harvested-income construction,
+  six-footman training, Blademaster combat, victory menus, the story interlude
+  and Human03's carried hero. Include an optional Human01 start and capture
+  the base objectives, interlude and next chapter. Correct the interlude's menu
+  index in unlock checks; keep an injured hero behind the troops and conserve
+  healing mana in the audit driver.
+- Store `SetCameraQuickPosition` as a Space-key bookmark instead of panning the
+  live camera into fog. Apply scripted camera height and interpolate it through
+  forced-duration transitions, fixing Human02Interlude's view below terrain.
+  Preserve the bookmark and height interpolation in mission presentation saves.
+- Preserve separate AI gold/lumber jobs and choose idle builders before gatherers.
+  Count queued units and pending research toward AI production goals; skip
+  unavailable or full producers and unmet tech requirements. Extend fresh-process
+  mission continuation coverage to simultaneous harvesting, farm construction,
+  unit training and research using retail Human data.
+- Make destructable removal idempotent, including repeated death callbacks.
+  Clear removed objects from simulation handles, spatial queries, render widgets
+  and decals instead of crashing on duplicate removal or retaining stale objects.
+- Preserve active camera pans, independent height transitions, cine-filter progress
+  and remaining cinematic transmission timers/text in v7 mission checkpoints.
+  Exclude reconstruction time from the first live simulation/UI/camera frame.
+  Extend fresh-process continuation coverage to active projectiles, AI sleeping
+  workers, captain assault groups and assigned guard posts.
+- Include freshly created units and exclude queued removals in AI queries, hash
+  AI captain/guard runtime state, and verify dynamically loaded AI script bytes.
+- Add v7 mission checkpoints that reconstruct the simulation and JASS runtime
+  from startup with recorded orders, dialog/selection/chat events, host queries,
+  profile progress, and gamecache reads. Validate engine/map/script identity and
+  runtime state before resuming; reject older partial saves and failed replay.
+  Wire menu/native Save/Load/Reload and the defeat load picker to this service.
+  Keep save slots per profile and retire deleted profiles' files recoverably.
+  Add a separate-process retail Human01 checkpoint/continuation and
+  defeat/load/victory/Human02 carryover regression. This fixture does not certify
+  all missions or cinematic/audio parity.
+- Isolate campaign hero gamecaches per player profile. Preserve legacy shared
+  caches for the startup profile and retire deleted profiles' caches so recreating
+  their names starts fresh. Verify two profiles across five separate client launches.
+- Expand mission outcome panels with chapter titles, difficulty, remaining
+  resources and surviving forces. Dim the battlefield, suppress late gameplay
+  overlays, and prevent held camera input from moving beneath script dialogs.
+- Preserve the actual local outcome when quitting victory/defeat dialogs.
+  Add clearer result summaries, retry/quit choices, cancellable in-game restart,
+  and modal keyboard/mouse handling with guarded alternative actions. Center
+  and fit script dialogs, resolve map messages, and hide leftover result-screen
+  HUD/portrait layers. Provide a defeat Load picker with Back to the originating
+  dialog. Add a three-size desktop menu regression.
+- Preserve current and selected difficulty separately through campaign retries
+  and chapter transitions, including retail Reduce Difficulty and Restart.
+- Seed fresh campaign profiles with later missions and ending movies locked;
+  retain explicit script unlocks across reloads and profile switches.
+- Enable in-game Restart and use restart-specific presentation. Route dialog
+  hotkeys through the same button action as mouse clicks so score Continue works.
+- Close configuration-only map archives after loading. Add a live retail-script
+  Human01-to-Human02 regression for defeat, retry, victory, carryover, unlock
+  persistence, and menu return. An optional objective-event mode exercises
+  Arthas death, the village objective update, and the final enemy-group death
+  condition, including checks against premature victory/unlocks. Direct
+  positioning and kills remain fixtures; campaign-wide playthroughs are unverified.
 - Correct Hold Position and autocast range checks, preserve queued player orders
   during automatic casts, and repair follow, patrol, and attack-move transitions.
 - Guard cancellation of queued orders whose abilities are absent or removed.

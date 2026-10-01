@@ -23,17 +23,17 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.SimulationRend
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.command.CommandErrorListener;
 
 /** Headless flat-map fixture using supplied retail object data, not a played retail mission. */
-final class RetailSimulationTestSupport {
+public final class RetailSimulationTestSupport {
     private RetailSimulationTestSupport() { }
-    static CSimulation simulation(final War3Map map) throws Exception {
+    public static CSimulation simulation(final War3Map map) throws Exception {
         return simulation(map, map.readModifications());
     }
 
-    static CSimulation simulation(final War3Map map, final Warcraft3MapRuntimeObjectData data) throws Exception {
+    public static CSimulation simulation(final War3Map map, final Warcraft3MapRuntimeObjectData data) throws Exception {
         return simulation(map, data, args -> { });
     }
 
-    static CSimulation simulation(final War3Map map, final Warcraft3MapRuntimeObjectData data,
+    public static CSimulation simulation(final War3Map map, final Warcraft3MapRuntimeObjectData data,
             final java.util.function.Consumer<com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.projectile.CAttackProjectileMissile> projectiles) throws Exception {
         WarsmashConstants.RACE_MANAGER = new CRaceManager();
         WarsmashConstants.RACE_MANAGER.addRace("Human", 1, 1);
@@ -68,7 +68,9 @@ final class RetailSimulationTestSupport {
                     case "createUnit": return ((CSimulation) args[0]).internalCreateUnit((War3ID) args[1],
                             (Integer) args[2], (Float) args[3], (Float) args[4], (Float) args[5], null);
                     case "createItem": return ((CSimulation) args[0]).internalCreateItem((War3ID) args[1], (Float) args[2], (Float) args[3]);
-                    case "getBuildingPathingPixelMap": return PathingGrid.BLANK_PATHING;
+                    case "getBuildingPathingPixelMap":
+                    case "getDestructablePathingPixelMap":
+                    case "getDestructablePathingDeathPixelMap": return PathingGrid.BLANK_PATHING;
                     }
                     if (method.getReturnType() == SimulationRenderComponentModel.class) return SimulationRenderComponentModel.DO_NOTHING;
                     if (method.getReturnType() == SimulationRenderComponent.class) return SimulationRenderComponent.DO_NOTHING;

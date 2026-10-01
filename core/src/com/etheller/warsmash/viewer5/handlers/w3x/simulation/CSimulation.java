@@ -89,6 +89,15 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.TextTagConfigT
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.command.CommandErrorListener;
 
 public class CSimulation implements CPlayerAPI, CFogMaskSettings {
+	private com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionCheckpoint missionCheckpoint;
+	private boolean updating;
+	public void setMissionCheckpoint(final com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionCheckpoint value) { this.missionCheckpoint = value; }
+	public com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionCheckpoint getMissionCheckpoint() { return this.missionCheckpoint; }
+	public boolean isUpdating() { return this.updating; }
+	public void recordMissionInput(final int kind, final int a, final int b, final int c, final int d,
+			final int e, final float x, final float y, final boolean queue, final String text) {
+		if (this.missionCheckpoint != null && !this.updating) this.missionCheckpoint.record(kind, a, b, c, d, e, x, y, queue, text);
+	}
 	private final CAbilityData abilityData;
 	private final CUnitData unitData;
 	private final CDestructableData destructableData;
@@ -139,6 +148,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	private boolean daytime;
 	private final Set<CDestructable> ownedTreeSet = new HashSet<>();
 	private GlobalScope globalScope;
+	private final java.util.Map<Integer, com.etheller.warsmash.parsers.jass.JassAIEnvironment> aiEnvironments = new java.util.TreeMap<>();
 	private final List<GlobalScope> aiGlobalScopes = new ArrayList<>();
 	private boolean fogMaskEnabled = true;
 	private boolean fogEnabled = true;
@@ -542,6 +552,13 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	}
 
 	public void update() {
+		this.updating = true;
+		try { updateStep(); }
+		finally { this.updating = false; }
+		if (this.missionCheckpoint != null) this.missionCheckpoint.afterTick();
+	}
+
+	private void updateStep() {
 		if (this.gamePaused) {
 			this.gameTurnTick++;
 			for (final CTimer timer : this.addedTimers) {
@@ -581,6 +598,9 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		for (final CDestructable destructable : this.removedDestructables) {
 			this.simulationRenderController.removeDestructable(destructable);
 			destructable.onRemove(this);
+			this.worldCollision.removeDestructable(destructable);
+			this.destructables.remove(destructable);
+			this.handleIdToDestructable.remove(destructable.getHandleId());
 		}
 		this.removedDestructables.clear();
 		final Iterator<CEffect> projectileIterator = this.projectiles.iterator();
@@ -1173,8 +1193,11 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	}
 
 	public void removeDestructable(CDestructable dest) {
-		dest.setLife(this, 0);
+		if (dest == null || this.handleIdToDestructable.get(dest.getHandleId()) != dest
+				|| this.removedDestructables.contains(dest)) return;
+		// Mark before death callbacks, which may request removal again.
 		this.removedDestructables.add(dest);
+		dest.setLife(this, 0);
 	}
 
 	public SimulationRenderComponentModel createSpellEffectOverDestructable(final CUnit source,
@@ -1261,6 +1284,7 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 	}
 
 	public void setGamePaused(final boolean gamePaused) {
+		if (this.gamePaused != gamePaused) recordMissionInput(11, 0, 0, 0, 0, 0, 0, 0, gamePaused, "");
 		this.gamePaused = gamePaused;
 	}
 
@@ -1274,7 +1298,17 @@ public class CSimulation implements CPlayerAPI, CFogMaskSettings {
 		}
 	}
 
+	public void addAiEnvironment(final com.etheller.warsmash.parsers.jass.JassAIEnvironment environment) {
+		this.aiEnvironments.put(environment.getAiPlayerIndex(), environment);
+		addAiGlobalScope(environment.getGlobalScope());
+	}
+
+	public com.etheller.warsmash.parsers.jass.JassAIEnvironment getAiEnvironment(final int player) { return this.aiEnvironments.get(player); }
+
+	public int getActiveProjectileCount() { return this.projectiles.size() + this.newProjectiles.size(); }
+
 	public void removeAiGlobalScope(final GlobalScope aiScope) {
+		this.aiEnvironments.values().removeIf(environment -> environment.getGlobalScope() == aiScope);
 		this.aiGlobalScopes.remove(aiScope);
 	}
 

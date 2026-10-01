@@ -2,9 +2,85 @@
 
 **Reviewed September 27, 2026. Status: incomplete; no full-parity sign-off.**
 
+September 28 follow-up: the [campaign flow audit](CAMPAIGN_FLOW_AUDIT.md) now
+executes retail Human01 defeat/retry and victory actions through Human02's hero
+restoration, unlock persistence, and menu return in the desktop client. This is
+a script-driven transition regression, not an objective-driven playthrough;
+the earlier evidence and remaining campaign-wide criteria below still apply.
+
+September 29 follow-up: the same audit also passes with objective-event
+fixtures: Arthas death causes defeat, a region event updates the village
+objective, partial enemy-group deaths leave victory/unlocks blocked, and the
+final death drives victory and Human02 carryover. The core suite was rerun:
+322 passed, zero failures/errors/skips, retail fixtures required. See the
+[scenario and archive fingerprints](CAMPAIGN_FLOW_AUDIT.md#objective-event-regression--september-29-2026).
+Direct positioning and kills are fixtures; complete normal playthroughs,
+process-relaunch persistence, and other branches remained unverified at that stage. These
+bounded results leave the campaign-wide acceptance gates below open.
+
+September 29 persistence follow-up: hero gamecaches are now profile-scoped.
+The [process-relaunch audit](CAMPAIGN_FLOW_AUDIT.md#process-relaunch-and-profile-isolation--september-29-2026)
+uses five separate client launches to check two profiles' distinct carried heroes
+and unlocks, then deletion/recreation with a fresh fallback hero. Legacy shared
+caches are preserved and assigned once to the startup profile. This adds bounded
+relaunch/isolation evidence; it does not verify normal campaign playthroughs or
+complete save/resume. Victory/defeat presentation and input evidence is recorded
+in the [outcome menu audit](OUTCOME_MENUS_AUDIT.md).
+The strict retail-data core suite at that stage passed 329 tests with zero failures,
+errors, or skips (`Logs/campaign-profile-persistence-final.txt`).
+
+September 29 mission-save follow-up: v7 checkpoints now reconstruct the running
+mission and interpreter from recorded startup and tick inputs. The
+[save/resume audit](MISSION_SAVE_RESUME_AUDIT.md) covers a separate-process
+Human01 continuation, resaving the loaded mission, defeat-to-load, victory and
+Human02 carryover, plus engine/state mismatch rejection and menu recovery.
+The strict suite at that stage passed 355 tests with zero failures/errors/skips. The combined
+active-projectile/AI captain/guard/worker/RTS-camera/filter/subtitle fixture also
+passes across process relaunch. The September 30 follow-up also verifies
+simultaneous harvesting, construction, training and research for all four races
+through fresh-process continuation. A 96-unit ranged battle in a cleared arena
+also matches its uninterrupted continuation after 39 combat deaths. Larger or
+combined-arms battles, normal campaign strategy, multi-town
+expansion, long sessions and model/video/audio cinematic coverage remain open.
+
+September 30 ordinary-play follow-up: the
+[Human01 playthrough](CAMPAIGN_FLOW_AUDIT.md#ordinary-order-playthrough--september-30-2026)
+completes its main objectives through ordinary player orders, then verifies
+actual victory, both Continue screens, earned hero carryover into Human02 and
+persistent unlocks. Its extended route also passes Timmy's rescue and ledger
+return, then repeats the remaining objectives and transition from a fresh-process
+mid-mission quest-item checkpoint. Both branches retain the earned ring,
+strength tome gain, 572 XP and learned skills. Subsequent chapters, other
+difficulties and full campaigns remain open.
+
+September 30 two-chapter follow-up: the
+[Human02 audit](CAMPAIGN_FLOW_AUDIT.md#human02-main-objectives-and-the-human03-transition--september-30-2026)
+extends the ordinary-order chain through harvested-income construction, six
+trained footmen, the Blademaster's combat death, native victory menus and the
+unskipped story interlude into Human03. The carried hero has 753 XP, matching
+skills/stats/name and the earned ring; profile reload preserves the interlude
+and Human03 unlocks while Human04 stays locked. Captures exposed quick-position
+and scripted-camera-height defects. Fresh captures verify the corrected base
+view and interpolated interlude descent; broader cinematic/audio acceptance
+remains open. Human02's optional quest/save-resume and later objectives remain open.
+The final camera changes passed **359 strict retail-data core tests**, with zero
+failures/errors/skips, and a fresh-process checkpoint continuation at matching
+saved and future ticks. See the [camera render follow-up](CAMPAIGN_FLOW_AUDIT.md#camera-render-follow-up--september-30-2026)
+for captures, isolated homes and the saved-state fingerprints.
+
 Scope: RoC and TFT single-player campaigns, chapter transitions, interludes,
 credits, and bonus-campaign branches. Multiplayer, replay, arbitrary custom
 campaigns, and Warcraft II formats require separate plans.
+
+September 30 Human03 follow-up: ordinary player orders completed its village
+investigation, granary combat and optional fountain. Earned Arthas/Jaina state
+matched restoration in Human04. The subsequent run exposed and fixed nested
+trigger initialization ordering and null script order targets; it was not a
+full-campaign pass. The strict core suite now passes **361 tests with zero
+failures/errors/skips**, and the fresh-process checkpoint regression passes
+after these changes. See the [Human03 evidence and limitations](CAMPAIGN_FLOW_AUDIT.md#human03-objectives-and-human04-initialization--september-30-2026).
+Human02 optional/save-resume, Human04–Human09 completion and full campaigns
+remain open.
 
 A registered native can be a no-op; a parsed map can be unwinnable. This plan
 separates implemented code, bounded verification, and remaining behavior.
@@ -20,7 +96,7 @@ archives were not independently matched to their installer.
 
 | Check | Recorded result | Scope and exclusions |
 |---|---|---|
-| Core suite, latest run | 271 tests; 0 failures/errors/skips (retail fixtures required) | Includes latest origin updates, incremental script loading, and fog regressions; not mission playthroughs |
+| Core suite, September 27 baseline | 271 tests; 0 failures/errors/skips (retail fixtures required) | Includes latest origin updates, incremental script loading, and fog regressions; not mission playthroughs |
 | Strict idle audit, latest run | 85/85 maps; 300 ticks each; 25,500 total | Object loading, checked AI parsing/initialization, idle simulation; no mission objectives, rendering, or leak measurement |
 | Progression audit, earlier review | 70/70 distinct next-map targets resolved | Static target discovery and map opening; not executed transitions |
 | Backing-screen audit, earlier review | 47/47 checks passed | Selected assets and model data; not visual approval |
@@ -30,7 +106,7 @@ archives were not independently matched to their installer.
 The inventory includes interludes, credits, and bonus submaps. Counts depend on
 the archives and are not a count of completed missions.
 
-Latest core-suite evidence: `Logs/latest-merge-regression.txt` (271 passed).
+September 27 core-suite evidence: `Logs/latest-merge-regression.txt` (271 passed).
 Integrated origin/main through `8472ce72`, preserving the local campaign and
 rendering changes. Ownership transfer retains food counts and refreshes ability
 requirements. The AI cache includes retail common.j declarations as well as
@@ -64,11 +140,11 @@ data is missing. Zero reported skips alone does not prove every fixture ran.
 | Area | Present / bounded evidence | Remaining gap |
 |---|---|---|
 | Campaign menus | Profile-specific persistent availability, default seeding, selection, guarded loading | Verify fresh profiles, unlock order, cinematic availability, and returns in real campaigns |
-| Chapter transitions | ChangeLevel routing, score Continue flow, failure recovery, archive lifetime fixes | Execute victory/defeat/retry and every branch |
-| Hero gamecache | Stats, skills, name, inventory, disk persistence; retail test covers equipped Paladin and Holy Light healing | Verify actual chapter scripts, other heroes/items, and bonus transitions |
-| Saved games | v5 primitive globals/arrays, resources, clock/camera; older formats readable; safer writes; restore after startup | Full battlefield, handles, triggers, timers, and execution state missing from gameplay resume |
-| Entity save scaffold | Collection/serialization helpers, including pending creation/removal handling | Not wired into complete gameplay save/load; restore creates entities without preserving script identity |
-| Campaign AI | Script environment, native registrations, expansion/guard/assault code and focused tests | Verify economy, production, research, attacks, defense, targeting, and timing |
+| Chapter transitions | ChangeLevel routing, score Continue flow, failure recovery, archive lifetime fixes; ordinary-order Human01 main/optional objectives and a resumed branch, plus Human02 main objectives, interlude and Human03 carryover | Execute Human02's optional quest, later objectives, other victory/defeat/retry branches and full campaigns |
+| Hero gamecache | Stats, skills, name, inventory, profile-scoped disk persistence; Human01/Human02 scripts restore two profiles' distinct heroes after process relaunch and preserve the ordinary-play hero's earned XP/skills | Verify other heroes/items/campaigns, bonus transitions, and subsequent normal playthroughs |
+| Saved games | v7 deterministic reconstruction with handle/VM identity, gamecache/progress baselines, input/host observations, state validation and atomic writes; Human01 separate-process continuation and chapter transition fixture, active projectiles, AI captain/guard/worker state, timed RTS camera/filter/subtitles, four-race economies and a 96-unit ranged battle in a cleared arena | Larger or combined-arms battles, multi-town expansion, long missions and model/video/audio coverage unverified; older partial saves cannot resume |
+| Entity save scaffold | Legacy collection/serialization helpers remain readable and unit-tested | Gameplay resume uses replay, avoiding entity replacement and disconnected script references |
+| Campaign AI | Script environment, expansion/guard/assault code and focused tests; controlled four-race harvest/build/train/research continuation, separate worker jobs, boarded wisps, mine placement, queued targets and producer validation; two 48-unit captain assault groups across save/resume | Verify normal campaign AI, expansion/reallocation, combined-arms attacks, terrain navigation, defense, targeting and timing |
 | Abilities/pathing | Human skill fallbacks, legacy aura defaults, corrected equipment bonuses, isolated search state | Missing ability and upgrade behavior; broader combat/movement verification |
 | Mission UI | Quests, dialogs, leaderboard/multiboard, victory/defeat interfaces | Several basic overlays; verify layout, input, hotkeys, and timing |
 | Cinematics/audio | External ffmpeg movies, sky/camera support, music state/fade-in, stacked sound registry | Model playback, camera roll, fade-out, non-music volume effects, rendered/audio review |
@@ -207,7 +283,7 @@ retail asset/version baseline.
   with explicit unavailable-data reporting.
 - [ ] Record revision, archive fingerprints, settings, seed, scenario actions,
   ticks, errors, and warnings with every run.
-- [ ] Complete one opening mission through its actual victory trigger and next
+- [x] Complete one opening mission through its actual victory trigger and next
   chapter before expanding coverage.
 
 **Exit evidence:** a reproducible fresh-profile run through objectives and the
@@ -220,8 +296,11 @@ next chapter with no unexplained script errors. Retain idle checks as smoke test
 - [ ] Handle the legacy destructable modifications currently discarded.
 - [ ] Identify behaviorless ability/native fallbacks reached by missions and
   implement the required effects with outcome-based tests.
-- [ ] Exercise AI economy, production, research, expansion, guard allocation,
-  attacks, and victory-critical interactions in a live simulation.
+- [x] Verify controlled harvesting, construction, training and research for all
+  four races, plus captain/guard state and a 96-unit ranged battle, across
+  fresh-process mission continuation.
+- [ ] Exercise normal campaign AI, expansion, dynamic worker/guard allocation,
+  combined-arms attacks, terrain navigation and other victory-critical interactions.
 - [ ] Verify terrain/pathing, transports, scripted units, and special mechanics
   where the mission inventory demonstrates their use.
 
@@ -231,8 +310,8 @@ without implementing its behavior does not satisfy the gate.
 
 ### P0 — Complete mission save/resume
 
-- [ ] Design identity-preserving restoration before wiring entity helpers into
-  gameplay. Reconnect script references without duplicating map objects.
+- [x] Implement identity-preserving reconstruction through recorded startup and
+  simulation inputs, avoiding duplicate entities and disconnected script handles.
 - [ ] Restore required unit/item/destructable state, orders, abilities, buffs,
   cooldowns, upgrades, and player state.
 - [ ] Restore handles/handle arrays, triggers, timers, queued and sleeping scripts,
@@ -241,6 +320,11 @@ without implementing its behavior does not satisfy the gate.
   without damaging the last usable save.
 - [ ] Compare uninterrupted play with save/quit/relaunch/resume during battle,
   a sleeping trigger, a timed objective, hero inventory changes, and a transition.
+
+The bounded retail checkpoint evidence and remaining limitations are recorded in
+[MISSION_SAVE_RESUME_AUDIT.md](MISSION_SAVE_RESUME_AUDIT.md). The Human01 fixture
+exercises a sleeping trigger, timer, dialog input, inventory, orders and transition;
+broad campaign save/resume parity remains an open verification gate.
 
 **Exit evidence:** resumed missions preserve identity and objectives and remain
 completable. Primitive-state restoration does not satisfy this gate.

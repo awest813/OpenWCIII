@@ -80,13 +80,17 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	private Scene uiScene;
 	private WarsmashUI meleeUI;
+	private MeleeUI baseMeleeUI;
 
 	private Music currentMusic;
 	private final WarsmashGdxMultiScreenGame screenManager;
 	private final WarsmashGdxMenuScreen menuScreen;
 	private final CPlayerUnitOrderListener uiOrderListener;
 	private CommonEnvironment commonEnv;
-	private File pendingSaveFile;
+	private boolean loadFailed;
+    private File pendingSaveFile;
+    private CGameSave pendingSave;
+    private com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionCheckpoint checkpoint;
 	private final int startupProbeSeconds = Integer.getInteger("warsmash.startupProbeSeconds", 0);
 	private float startupProbeElapsed;
 	private int startupProbeReport;
@@ -206,11 +210,12 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 				});
 		baseMeleeUI.setChangeLevelHandler((newLevel, doScoreScreen) -> {
 			// Score screen (when requested) is handled inside MeleeUI before this runs.
-			WarsmashGdxMapScreen.this.menuScreen.setPendingChangeLevel(newLevel);
+			WarsmashGdxMapScreen.this.menuScreen.setPendingChangeLevel(newLevel, this.viewer.getMapConfig());
 			WarsmashGdxMapScreen.this.menuScreen.onReturnFromGame();
 			WarsmashGdxMapScreen.this.screenManager.setScreen(WarsmashGdxMapScreen.this.menuScreen);
 		});
 		final MeleeToggleUI toggleUI = new MeleeToggleUI(baseMeleeUI, Arrays.asList(baseMeleeUI));
+		this.baseMeleeUI = baseMeleeUI;
 		this.meleeUI = toggleUI;
 		final OptionsSettingsStore options = OptionsSettingsStore.get();
 		options.load(OptionsSettingsStore.optionsFile());
@@ -234,39 +239,69 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		catch (final IOException e) {
 			throw new RuntimeException(e);
 		}
-		this.commonEnv = Jass2.loadCommon(this.viewer.mapMpq, this.uiViewport, this.uiScene, this.viewer, this.meleeUI,
-				WarsmashConstants.JASS_FILE_LIST);
-		this.commonEnv.main();
-		if ((this.menuScreen != null) && (this.menuScreen.getMenuUI() != null)) {
-			this.pendingSaveFile = this.menuScreen.getMenuUI().consumePendingSaveFile();
-		}
-	}
+        if (this.menuScreen != null && this.menuScreen.getMenuUI() != null) {
+            this.pendingSaveFile = this.menuScreen.getMenuUI().consumePendingSaveFile();
+        }
+        this.pendingSave = this.pendingSaveFile == null ? null : CGameSave.tryLoad(this.pendingSaveFile);
+        if (this.pendingSaveFile != null && (this.pendingSave == null || this.pendingSave.checkpoint == null)) {
+            failSaveLoad("No complete mission checkpoint in " + this.pendingSaveFile);
+            return;
+        }
+        this.checkpoint = new com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionCheckpoint(
+            this.viewer.simulation, this.pendingSave == null ? null : this.pendingSave.checkpoint);
+        this.checkpoint.bind(this.viewer, baseMeleeUI);
+        this.checkpoint.setLastSaveFile(this.pendingSaveFile);
+        this.checkpoint.setSinglePlayer(this.uiOrderListener instanceof com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListenerDelaying);
+        this.checkpoint.setBeforeSave(() -> {
+            if (this.uiOrderListener instanceof com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListenerDelaying)
+                ((com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListenerDelaying) this.uiOrderListener).publishDelayedActions();
+        });
+        if (!this.checkpoint.isLoading()) {
+            this.checkpoint.getLog().localPlayer = this.viewer.getLocalPlayerIndex();
+            this.checkpoint.getLog().difficulty = this.viewer.getMapConfig().getGameDifficulty().ordinal();
+            this.checkpoint.getLog().defaultDifficulty = this.viewer.getMapConfig().getDefaultGameDifficulty().ordinal();
+        }
+        this.checkpoint.setLoadHandler(file -> Gdx.app.postRunnable(() -> {
+            this.menuScreen.onReturnFromGame();
+            this.screenManager.setScreen(this.menuScreen);
+            this.menuScreen.getMenuUI().requestLoadSave(file);
+        }));
+        try {
+            this.checkpoint.verifyScripts(this.viewer.mapMpq, WarsmashConstants.JASS_FILE_LIST);
+            this.commonEnv = Jass2.loadCommon(this.viewer.mapMpq, this.uiViewport, this.uiScene, this.viewer, this.meleeUI,
+                    WarsmashConstants.JASS_FILE_LIST);
+            this.commonEnv.main();
+        }
+        catch (final Exception error) {
+            this.checkpoint.releaseProgress();
+            if (this.pendingSave == null) throw new IllegalStateException("Cannot start mission", error);
+            failSaveLoad(error.getMessage());
+        }
+    }
 
-	/**
-	 * Applies a save handed off by main-menu Load Saved: the map was just booted
-	 * fresh, so wait for its queued main script to finish before re-applying
-	 * globals/arrays, resources, clock and camera. Unit positions are not restored (see
-	 * {@code CGameSave}).
-	 */
-	private void applyPendingSave() {
-		if ((this.pendingSaveFile == null) || (this.commonEnv == null) || !this.commonEnv.isInitializationComplete()) {
-			return;
-		}
-		final File saveFile = this.pendingSaveFile;
-		this.pendingSaveFile = null;
-		final CGameSave save = CGameSave.tryLoad(saveFile);
-		if (save == null) {
-			System.err.println("LoadSaved: no valid save in " + saveFile);
-			return;
-		}
-		final GlobalScope globals = this.viewer.simulation.getGlobalScope();
-		if (globals == null) {
-			System.err.println("LoadSaved: simulation globals not ready");
-			return;
-		}
-		Jass2.CommonEnvironment.restoreSaveGameState(save, globals, this.viewer.simulation, this.meleeUI);
-		System.out.println("LoadSaved: restored " + save.globals.size() + " globals from " + saveFile.getName());
-	}
+    private void failSaveLoad(final String error) {
+        if (this.loadFailed) return;
+        this.loadFailed = true;
+        if (this.checkpoint != null) this.checkpoint.releaseProgress();
+        System.err.println("LoadSaved: " + error);
+        com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.afterLoadFailure(error);
+        Gdx.app.postRunnable(() -> {
+            this.menuScreen.onReturnFromGame();
+            this.screenManager.setScreen(this.menuScreen);
+            this.menuScreen.getMenuUI().reportSaveLoadError(error);
+        });
+    }
+
+    private void applyPendingSave() {
+        if (this.pendingSave == null || this.checkpoint.isRestoring()) return;
+        if (this.pendingSave.checkpoint.presentation.length == 0) {
+            this.baseMeleeUI.getCameraManager().target.x = this.pendingSave.cameraX;
+            this.baseMeleeUI.getCameraManager().target.y = this.pendingSave.cameraY;
+        }
+        this.baseMeleeUI.showGameMessage("Game loaded: " + this.pendingSaveFile.getName(), 3f);
+        this.pendingSave = null;
+        this.pendingSaveFile = null;
+    }
 
 	public static DataSource parseDataSources(final DataTable warsmashIni) {
 		final Element dataSourcesConfig = warsmashIni.get("DataSources");
@@ -327,6 +362,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public void render(final float delta) {
+        if (this.loadFailed) return;
 		this.uiCamera.update();
 		Gdx.gl30.glEnable(GL30.GL_SCISSOR_TEST);
 		final float deltaTime = Gdx.graphics.getDeltaTime();
@@ -334,6 +370,20 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.meleeUI.update(deltaTime);
 		this.viewer.updateAndRender();
 		applyPendingSave();
+        com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.afterMapRender(this.viewer, this.baseMeleeUI, this.commonEnv);
+        if (this.checkpoint.getFailure() != null) { failSaveLoad(this.checkpoint.getFailure()); return; }
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.CampaignFlowProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.CampaignPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.Human02PlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.HumanCampaignPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OutcomeMenuProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.CampaignPersistenceProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
 		if (this.startupProbeSeconds > 0) {
 			this.startupProbeElapsed += delta;
 			if (this.startupProbeElapsed >= this.startupProbeReport) {
@@ -408,6 +458,10 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		this.batch.begin();
 		this.meleeUI.render(this.batch, this.glyphLayout);
 		this.batch.end();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OutcomeMenuProbe.afterUIRender();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.Human02PlaythroughProbe.afterUIRender();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.HumanCampaignPlaythroughProbe.afterUIRender();
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.afterUIRender();
 
 		Gdx.gl30.glEnable(GL30.GL_SCISSOR_TEST);
 		Gdx.gl30.glBindVertexArray(WarsmashGdxGame.VAO);
@@ -434,6 +488,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean keyDown(final int keycode) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		if ((keycode == Input.Keys.B) && Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)) {
 			Gdx.input.setCursorCatched(!Gdx.input.isCursorCatched());
 		}
@@ -449,6 +504,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean keyUp(final int keycode) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		this.meleeUI.keyUp(keycode);
 		return true;
 	}
@@ -460,6 +516,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean touchDown(final int screenX, final int screenY, final int pointer, final int button) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		final float worldScreenY = this.viewer.canvas.getHeight() - screenY;
 
 		if (this.meleeUI.touchDown(screenX, screenY, worldScreenY, button)) {
@@ -470,6 +527,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean touchUp(final int screenX, final int screenY, final int pointer, final int button) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		final float worldScreenY = this.viewer.canvas.getHeight() - screenY;
 
 		if (this.meleeUI.touchUp(screenX, screenY, worldScreenY, button)) {
@@ -480,6 +538,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean touchDragged(final int screenX, final int screenY, final int pointer) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		final float worldScreenY = this.viewer.canvas.getHeight() - screenY;
 		if (this.meleeUI.touchDragged(screenX, screenY, worldScreenY, pointer)) {
 			return false;
@@ -489,6 +548,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean mouseMoved(final int screenX, final int screenY) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		final float worldScreenY = this.viewer.canvas.getHeight() - screenY;
 		if (this.meleeUI.mouseMoved(screenX, screenY, worldScreenY)) {
 			return false;
@@ -498,6 +558,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean scrolled(final float amountX, final float amountY) {
+        if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
 		this.meleeUI.scrolled(amountX, amountY);
 		return false;
 	}

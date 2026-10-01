@@ -38,6 +38,7 @@ import com.etheller.warsmash.units.Element;
 import com.etheller.warsmash.viewer5.Scene;
 import net.warsmash.parsers.jass.SmashJassParser;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitClassification;
@@ -45,14 +46,21 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUpgradeType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.HandleIdAllocator;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbilityMove;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.cargohold.CAbilityLoad;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.build.AbstractCAbilityBuild;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityHarvest;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityAcolyteHarvest;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.CAbilityWispHarvest;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityEntangledMine;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityGoldMine;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.mine.CAbilityGoldMinable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAbilityQueue;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.upgrade.CAbilityUpgrade;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorCategory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorReturnResources;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorWispHarvest;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
@@ -64,6 +72,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.C
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.unit.BuildOnBuildingIntersector;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.PointAbilityTargetCheckReceiver;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ResourceType;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CWidgetAbilityTargetCheckReceiver;
 import com.etheller.warsmash.util.War3ID;
 
 /**
@@ -307,7 +317,7 @@ public class JassAIEnvironment {
 							&& arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
 					if (p != null && simulation != null) {
 						int count = 0;
-						for (final CUnit unit : simulation.getUnits()) {
+						for (final CUnit unit : simulation.getUnitsIncludingPending()) {
 							if (unit != null && !unit.isDead() && unit.getPlayerIndex() == p.getId() && unit.isBuilding()) {
 								if (includeUnfinished || (!unit.isConstructing() && !unit.isUpgrading())) {
 									count++;
@@ -931,7 +941,7 @@ public class JassAIEnvironment {
 					float tx = 0f;
 					float ty = 0f;
 					int count = 0;
-					for (final CUnit unit : JassAIEnvironment.this.simulation.getUnits()) {
+					for (final CUnit unit : JassAIEnvironment.this.simulation.getUnitsIncludingPending()) {
 						if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == target.getId())) {
 							tx += unit.getX();
 							ty += unit.getY();
@@ -955,7 +965,7 @@ public class JassAIEnvironment {
 					float tx = 0f;
 					float ty = 0f;
 					int count = 0;
-					for (final CUnit unit : JassAIEnvironment.this.simulation.getUnits()) {
+					for (final CUnit unit : JassAIEnvironment.this.simulation.getUnitsIncludingPending()) {
 						if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == target.getId())) {
 							tx += unit.getX();
 							ty += unit.getY();
@@ -1004,7 +1014,7 @@ public class JassAIEnvironment {
 		int count = 0;
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
 		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead()) {
 				continue;
 			}
@@ -1047,7 +1057,7 @@ public class JassAIEnvironment {
 		}
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
 		int added = 0;
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if (added >= count) {
 				break;
 			}
@@ -1074,7 +1084,7 @@ public class JassAIEnvironment {
 	}
 
 	private void issueAllCombatUnitsAttack(final float x, final float y) {
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
 				continue;
 			}
@@ -1131,7 +1141,7 @@ public class JassAIEnvironment {
 			return this.captainHomeX;
 		}
 		if (this.simulation != null) {
-			for (final CUnit unit : this.simulation.getUnits()) {
+			for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 				if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
 					return unit.getX();
 				}
@@ -1145,7 +1155,7 @@ public class JassAIEnvironment {
 			return this.captainHomeY;
 		}
 		if (this.simulation != null) {
-			for (final CUnit unit : this.simulation.getUnits()) {
+			for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 				if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
 					return unit.getY();
 				}
@@ -1157,6 +1167,23 @@ public class JassAIEnvironment {
 	private AbilityPointTarget findBuildLocation(final CUnitType unitType, final float centerX, final float centerY) {
 		final BufferedImage buildingPathingPixelMap = unitType.getBuildingPathingPixelMap();
 		final boolean canBeBuiltOnThem = unitType.isCanBeBuiltOnThem();
+		if (canBeBuiltOnThem) {
+			// Overlays must use the parent's exact center; a radial sample cannot find it.
+			AbilityPointTarget nearest = null;
+			float nearestDistance = Float.MAX_VALUE;
+			for (final CUnit parent : this.simulation.getUnitsIncludingPending()) {
+				if (parent.isDead() || parent.isHidden() || !parent.getUnitType().isCanBuildOnMe()) continue;
+				final float dx = parent.getX() - centerX, dy = parent.getY() - centerY;
+				final float distance = dx * dx + dy * dy;
+				if (distance < nearestDistance && !AbstractCAbilityBuild.isBuildLocationObstructed(this.simulation,
+						unitType, buildingPathingPixelMap, true, parent.getX(), parent.getY(), null,
+						BuildOnBuildingIntersector.INSTANCE.reset(parent.getX(), parent.getY()))) {
+					nearest = new AbilityPointTarget(parent.getX(), parent.getY());
+					nearestDistance = distance;
+				}
+			}
+			return nearest;
+		}
 		for (float radius = 256f; radius <= 1536f; radius += 128f) {
 			for (int angle = 0; angle < 360; angle += 45) {
 				final double rad = Math.toRadians(angle);
@@ -1192,7 +1219,16 @@ public class JassAIEnvironment {
 
 		final CUnitType unitType = this.simulation.getUnitData().getUnitType(unitId);
 		if (unitType != null) {
-			final int currentCount = countUnitsOfType(this.aiPlayerIndex, unitIdInt, false);
+			int currentCount = countUnitsOfType(this.aiPlayerIndex, unitIdInt, false);
+			// Training has already paid for queued units, even before they enter the world.
+			for (final CUnit producer : this.simulation.getUnitsIncludingPending()) {
+				if (!producer.isDead() && producer.getPlayerIndex() == this.aiPlayerIndex) {
+					for (int i = 0; i < producer.getBuildQueue().length; i++) {
+						if (unitId.equals(producer.getBuildQueue()[i])
+								&& producer.getBuildQueueTypes()[i] == CUnit.QueueItemType.UNIT) currentCount++;
+					}
+				}
+			}
 			if (currentCount >= qty) {
 				return true;
 			}
@@ -1206,12 +1242,12 @@ public class JassAIEnvironment {
 
 			// Structure building
 			if (unitType.isBuilding()) {
-				for (final CUnit bldg : this.simulation.getUnits()) {
+				for (final CUnit bldg : this.simulation.getUnitsIncludingPending()) {
 					if ((bldg != null) && !bldg.isDead() && (bldg.getPlayerIndex() == this.aiPlayerIndex)) {
 						for (final CAbility ability : bldg.getAbilities()) {
 							if (ability instanceof CAbilityUpgrade) {
 								final CAbilityUpgrade upg = (CAbilityUpgrade) ability;
-								if (upg.getUpgradesTo().contains(unitId)) {
+								if (upg.getUpgradesTo().contains(unitId) && canProduce(bldg, upg, unitIdInt)) {
 									executor.issueImmediateOrder(bldg.getHandleId(), upg.getHandleId(), unitIdInt,
 											false);
 									return true;
@@ -1220,18 +1256,23 @@ public class JassAIEnvironment {
 						}
 					}
 				}
-				for (final CUnit worker : this.simulation.getUnits()) {
-					if ((worker != null) && !worker.isDead() && (worker.getPlayerIndex() == this.aiPlayerIndex)) {
-						for (final CAbility ability : worker.getAbilities()) {
-							if (ability instanceof AbstractCAbilityBuild) {
-								final AbstractCAbilityBuild buildAbil = (AbstractCAbilityBuild) ability;
-								if (buildAbil.getStructuresBuilt().contains(unitId)) {
-									final AbilityPointTarget target = findBuildLocation(unitType, getTownCenterX(),
-											getTownCenterY());
-									if (target != null) {
-										executor.issuePointOrder(worker.getHandleId(), buildAbil.getHandleId(),
-												unitIdInt, target.getX(), target.getY(), false);
-										return true;
+				// Prefer idle builders, then gatherers; never interrupt another construction.
+				for (int pass = 0; pass < 2; pass++) {
+					for (final CUnit worker : this.simulation.getUnitsIncludingPending()) {
+						if ((worker != null) && !worker.isDead() && (worker.getPlayerIndex() == this.aiPlayerIndex)) {
+							final boolean idle = isIdle(worker);
+							if (pass == 0 ? !idle : idle || !isGathering(worker)) continue;
+							for (final CAbility ability : worker.getAbilities()) {
+								if (ability instanceof AbstractCAbilityBuild) {
+									final AbstractCAbilityBuild buildAbil = (AbstractCAbilityBuild) ability;
+									if (buildAbil.getStructuresBuilt().contains(unitId) && canProduce(worker, buildAbil, unitIdInt)) {
+										final AbilityPointTarget target = findBuildLocation(unitType, getTownCenterX(),
+												getTownCenterY());
+										if (target != null) {
+											executor.issuePointOrder(worker.getHandleId(), buildAbil.getHandleId(),
+													unitIdInt, target.getX(), target.getY(), false);
+											return true;
+										}
 									}
 								}
 							}
@@ -1242,12 +1283,13 @@ public class JassAIEnvironment {
 			}
 
 			// Unit training
-			for (final CUnit bldg : this.simulation.getUnits()) {
+			for (final CUnit bldg : this.simulation.getUnitsIncludingPending()) {
 				if ((bldg != null) && !bldg.isDead() && (bldg.getPlayerIndex() == this.aiPlayerIndex)) {
 					for (final CAbility ability : bldg.getAbilities()) {
 						if (ability instanceof CAbilityQueue) {
 							final CAbilityQueue queue = (CAbilityQueue) ability;
-							if (queue.getUnitsTrained().contains(unitId)) {
+							if (queue.getUnitsTrained().contains(unitId) && canProduce(bldg, queue, unitIdInt)
+									&& bldg.getBuildQueue()[bldg.getBuildQueue().length - 1] == null) {
 								executor.issueImmediateOrder(bldg.getHandleId(), queue.getHandleId(), unitIdInt,
 										false);
 								return true;
@@ -1262,19 +1304,20 @@ public class JassAIEnvironment {
 		final CUpgradeType upgType = this.simulation.getUpgradeData().getType(unitId);
 		if (upgType != null) {
 			final int currentLevel = player.getTechtreeUnlocked(unitId);
-			if (currentLevel >= qty) {
+			if (currentLevel + player.getTechtreeInProgress(unitId) >= qty) {
 				return true;
 			}
 			if ((player.getGold() < upgType.getGoldCost(currentLevel))
 					|| (player.getLumber() < upgType.getLumberCost(currentLevel))) {
 				return false;
 			}
-			for (final CUnit bldg : this.simulation.getUnits()) {
+			for (final CUnit bldg : this.simulation.getUnitsIncludingPending()) {
 				if ((bldg != null) && !bldg.isDead() && (bldg.getPlayerIndex() == this.aiPlayerIndex)) {
 					for (final CAbility ability : bldg.getAbilities()) {
 						if (ability instanceof CAbilityQueue) {
 							final CAbilityQueue queue = (CAbilityQueue) ability;
-							if (queue.getResearchesAvailable().contains(unitId)) {
+							if (queue.getResearchesAvailable().contains(unitId) && canProduce(bldg, queue, unitIdInt)
+									&& bldg.getBuildQueue()[bldg.getBuildQueue().length - 1] == null) {
 								executor.issueImmediateOrder(bldg.getHandleId(), queue.getHandleId(), unitIdInt,
 										false);
 								return true;
@@ -1287,13 +1330,58 @@ public class JassAIEnvironment {
 		return false;
 	}
 
+	private boolean canProduce(final CUnit unit, final CAbility ability, final int orderId) {
+		if (unit.isPaused() || unit.isConstructingOrUpgrading()) return false;
+		final BooleanAbilityActivationReceiver receiver = new BooleanAbilityActivationReceiver();
+		ability.checkCanUse(this.simulation, unit, orderId, receiver);
+		return receiver.isOk();
+	}
+
+	private static boolean isIdle(final CUnit unit) {
+		return !unit.isPaused() && (unit.getCurrentBehavior() == null
+				|| unit.getCurrentBehavior().getBehaviorCategory() == CBehaviorCategory.IDLE);
+	}
+
+	private boolean isGathering(final CUnit unit) {
+		return gatheringResource(unit) != null;
+	}
+
+	private ResourceType gatheringResource(final CUnit unit) {
+		if (unit.isHidden() && unit.getFirstAbilityOfType(CAbilityWispHarvest.class) != null) {
+			for (final CUnit mine : this.simulation.getUnitsIncludingPending()) {
+				if (mine.getOverlayedGoldMineData() instanceof CAbilityEntangledMine && mine.getCargoData() != null) {
+					for (int i = 0; i < mine.getCargoData().getCargoCount(); i++) {
+						if (mine.getCargoData().getUnit(i) == unit) return ResourceType.GOLD;
+					}
+				}
+			}
+		}
+		if (unit.getCurrentOrder() == null) return null;
+		final CAbility ability = this.simulation.getAbility(unit.getCurrentOrder().getAbilityHandleId());
+		if (ability instanceof CAbilityMove && unit.getCurrentOrder().getOrderId() == OrderIds.smart
+				&& unit.getFirstAbilityOfType(CAbilityWispHarvest.class) != null) {
+			final var target = unit.getCurrentOrder().getTarget(this.simulation);
+			if (target instanceof CUnit && ((CUnit) target).getOverlayedGoldMineData() instanceof CAbilityEntangledMine
+					&& (unit.isHidden() || !isIdle(unit))) return ResourceType.GOLD;
+		}
+		if (isIdle(unit)) return null;
+		if (ability instanceof CAbilityAcolyteHarvest) return ResourceType.GOLD;
+		if (ability instanceof CAbilityWispHarvest) return ResourceType.LUMBER;
+		if (ability instanceof CAbilityHarvest) {
+			final CAbilityHarvest harvest = (CAbilityHarvest) ability;
+			return harvest.getLastHarvestTarget() instanceof CDestructable ? ResourceType.LUMBER
+					: harvest.getLastHarvestTarget() instanceof CUnit ? ResourceType.GOLD : harvest.getCarriedResourceType();
+		}
+		return null;
+	}
+
 	private int countUnitsOfTypeDone(final int unitTypeId) {
 		if (this.simulation == null) {
 			return 0;
 		}
 		int count = 0;
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
 				continue;
 			}
@@ -1314,7 +1402,7 @@ public class JassAIEnvironment {
 		}
 		int count = 0;
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
 				continue;
 			}
@@ -1330,74 +1418,65 @@ public class JassAIEnvironment {
 	}
 
 	private void orderHarvestGold(final int peonCount) {
-		if (this.simulation == null) {
-			return;
+		orderHarvest(peonCount, ResourceType.GOLD);
+	}
+
+	private void orderHarvestWood(final int peonCount) {
+		orderHarvest(peonCount, ResourceType.LUMBER);
+	}
+
+	private void orderHarvest(final int peonCount, final ResourceType resource) {
+		if (this.simulation == null || peonCount <= 0) return;
+		final CPlayerUnitOrderExecutor executor = this.simulation.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
+		if (executor == null) return;
+		int assigned = 0;
+		final List<CUnit> idleWorkers = new ArrayList<>();
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
+			if (unit.isDead() || unit.getPlayerIndex() != this.aiPlayerIndex) continue;
+			final ResourceType job = gatheringResource(unit);
+			if (job == resource) assigned++;
+			else if (isIdle(unit)) idleWorkers.add(unit);
 		}
-		final CPlayerUnitOrderExecutor executor = this.simulation
-				.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
-		if (executor == null) {
-			return;
-		}
-		int ordered = 0;
-		for (final CUnit unit : this.simulation.getUnits()) {
-			if (ordered >= peonCount) {
-				break;
-			}
-			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
-				continue;
-			}
-			CAbilityHarvest harvest = null;
-			for (final CAbility a : unit.getAbilities()) {
-				if (a instanceof CAbilityHarvest) {
-					harvest = (CAbilityHarvest) a;
-					break;
-				}
-			}
-			if (harvest != null) {
-				final CUnit mine = CBehaviorReturnResources.findNearestMine(unit, this.simulation);
-				if (mine != null) {
-					executor.issueTargetOrder(unit.getHandleId(), harvest.getHandleId(), OrderIds.smart,
-							mine.getHandleId(), false);
-					ordered++;
-				}
+		for (final CUnit unit : idleWorkers) {
+			if (assigned >= peonCount) break;
+			final CAbility harvest = harvestAbility(unit, resource);
+			if (harvest == null || !canProduce(unit, harvest, OrderIds.smart)) continue;
+			final CWidget target = resource == ResourceType.GOLD ? findHarvestMine(unit, harvest)
+					: harvest instanceof CAbilityWispHarvest ? CBehaviorWispHarvest.findNearestTree(unit, (CAbilityWispHarvest) harvest, this.simulation, unit)
+							: CBehaviorReturnResources.findNearestTree(unit, (CAbilityHarvest) harvest, this.simulation, unit);
+			if (target != null) {
+				executor.issueTargetOrder(unit.getHandleId(), harvest.getHandleId(), OrderIds.smart, target.getHandleId(), false);
+				assigned++;
 			}
 		}
 	}
 
-	private void orderHarvestWood(final int peonCount) {
-		if (this.simulation == null) {
-			return;
+	private static CAbility harvestAbility(final CUnit unit, final ResourceType resource) {
+		for (final CAbility ability : unit.getAbilities()) {
+			if (ability instanceof CAbilityHarvest && (resource == ResourceType.GOLD
+					? ((CAbilityHarvest) ability).getGoldCapacity() > 0 : ((CAbilityHarvest) ability).getLumberCapacity() > 0)) return ability;
+			if (resource == ResourceType.GOLD && ability instanceof CAbilityAcolyteHarvest) return ability;
+			if (resource == ResourceType.LUMBER && ability instanceof CAbilityWispHarvest) return ability;
 		}
-		final CPlayerUnitOrderExecutor executor = this.simulation
-				.getDefaultPlayerUnitOrderExecutor(this.aiPlayerIndex);
-		if (executor == null) {
-			return;
+		return resource == ResourceType.GOLD && unit.getFirstAbilityOfType(CAbilityWispHarvest.class) != null
+				? unit.getFirstAbilityOfType(CAbilityMove.class) : null;
+	}
+
+	private CUnit findHarvestMine(final CUnit worker, final CAbility harvest) {
+		CUnit nearest = null;
+		double nearestDistance = Double.MAX_VALUE;
+		for (final CUnit mine : this.simulation.getUnitsIncludingPending()) {
+			if (mine.isDead() || mine.isHidden() || mine.isConstructingOrUpgrading() || mine.getGold() <= 0) continue;
+			if (harvest instanceof CAbilityMove && (!(mine.getOverlayedGoldMineData() instanceof CAbilityEntangledMine)
+					|| mine.getPlayerIndex() != worker.getPlayerIndex()
+					|| mine.getCargoData().getCargoCount() >= mine.getCargoData().getCargoCapacity()
+					|| CAbilityLoad.getTransportLoad(this.simulation, worker, mine, true, false) == null)) continue;
+			final CWidgetAbilityTargetCheckReceiver receiver = new CWidgetAbilityTargetCheckReceiver();
+			harvest.checkCanTarget(this.simulation, worker, OrderIds.smart, mine, receiver);
+			final double distance = mine.distanceSquaredNoCollision(worker);
+			if (receiver.getTarget() != null && distance < nearestDistance) { nearest = mine; nearestDistance = distance; }
 		}
-		int ordered = 0;
-		for (final CUnit unit : this.simulation.getUnits()) {
-			if (ordered >= peonCount) {
-				break;
-			}
-			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
-				continue;
-			}
-			CAbilityHarvest harvest = null;
-			for (final CAbility a : unit.getAbilities()) {
-				if (a instanceof CAbilityHarvest) {
-					harvest = (CAbilityHarvest) a;
-					break;
-				}
-			}
-			if (harvest != null) {
-				final CDestructable tree = CBehaviorReturnResources.findNearestTree(unit, harvest, this.simulation,
-						unit);
-				if (tree != null) {
-					executor.issueTargetOrder(unit.getHandleId(), harvest.getHandleId(), OrderIds.smart,
-							tree.getHandleId(), false);
-					ordered++;
-				}
-			}
-		}
+		return nearest;
 	}
 
 	private void suicideUnit(final int count, final int unitTypeId, final int targetPlayerIndex) {
@@ -1408,7 +1487,7 @@ public class JassAIEnvironment {
 		float ty = 0f;
 		int enemyCount = 0;
 		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead()) {
 				continue;
 			}
@@ -1435,7 +1514,7 @@ public class JassAIEnvironment {
 
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
 		int ordered = 0;
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((count > 0) && (ordered >= count)) {
 				break;
 			}
@@ -1457,7 +1536,7 @@ public class JassAIEnvironment {
 		if ((p == null) || (this.simulation == null)) {
 			return null;
 		}
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == p.getId()) && unit.isBuilding()) {
 				return unit;
 			}
@@ -1471,7 +1550,7 @@ public class JassAIEnvironment {
 		}
 		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
 		CUnit fallbackEnemyBldg = null;
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() != this.aiPlayerIndex)) {
 				if ((self != null) && !self.hasAlliance(unit.getPlayerIndex(), CAllianceType.PASSIVE)) {
 					if (unit.isBuilding()) {
@@ -1492,7 +1571,7 @@ public class JassAIEnvironment {
 		if (this.simulation == null) {
 			return null;
 		}
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
 				for (final CAbility a : unit.getAbilities()) {
 					if (a instanceof AbstractCAbilityBuild) {
@@ -1508,7 +1587,7 @@ public class JassAIEnvironment {
 		if (this.simulation == null) {
 			return false;
 		}
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == this.aiPlayerIndex)) {
 				if (unit.getClassifications().contains(CUnitClassification.TOWNHALL)) {
 					return true;
@@ -1524,7 +1603,7 @@ public class JassAIEnvironment {
 		}
 		final float cx = getTownCenterX();
 		final float cy = getTownCenterY();
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit != null) && !unit.isDead()) {
 				for (final CAbility a : unit.getAbilities()) {
 					if ((a instanceof CAbilityGoldMine) || (a instanceof CAbilityGoldMinable)) {
@@ -1547,7 +1626,7 @@ public class JassAIEnvironment {
 		final float cx = getTownCenterX();
 		final float cy = getTownCenterY();
 		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() != this.aiPlayerIndex)) {
 				if ((self == null) || !self.hasAlliance(unit.getPlayerIndex(), CAllianceType.PASSIVE)) {
 					final float dx = unit.getX() - cx;
@@ -1570,7 +1649,7 @@ public class JassAIEnvironment {
 		CUnit closestMine = null;
 		float closestDistSq = Float.MAX_VALUE;
 
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead()) {
 				continue;
 			}
@@ -1598,7 +1677,7 @@ public class JassAIEnvironment {
 				continue;
 			}
 			boolean claimed = false;
-			for (final CUnit other : this.simulation.getUnits()) {
+			for (final CUnit other : this.simulation.getUnitsIncludingPending()) {
 				if ((other != null) && !other.isDead()
 						&& other.getClassifications().contains(CUnitClassification.TOWNHALL)) {
 					final float ox = other.getX() - unit.getX();
@@ -1684,7 +1763,7 @@ public class JassAIEnvironment {
 				continue;
 			}
 			post.assignedUnit = null;
-			for (final CUnit unit : this.simulation.getUnits()) {
+			for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 				if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
 					continue;
 				}
@@ -1730,7 +1809,7 @@ public class JassAIEnvironment {
 		if (this.simulation == null) {
 			return false;
 		}
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead() || unit.isBuilding()) {
 				continue;
 			}
@@ -1750,7 +1829,7 @@ public class JassAIEnvironment {
 		CUnit bestCreep = null;
 		float bestDistSq = Float.MAX_VALUE;
 
-		for (final CUnit unit : this.simulation.getUnits()) {
+		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if ((unit == null) || unit.isDead() || unit.isBuilding() || (unit.getPlayerIndex() < 12)) {
 				continue;
 			}
@@ -1767,7 +1846,7 @@ public class JassAIEnvironment {
 			}
 		}
 		if (bestCreep == null) {
-			for (final CUnit unit : this.simulation.getUnits()) {
+			for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 				if ((unit == null) || unit.isDead() || unit.isBuilding() || (unit.getPlayerIndex() < 12)) {
 					continue;
 				}
@@ -1910,6 +1989,12 @@ public class JassAIEnvironment {
 		final JassAIEnvironment environment = new JassAIEnvironment(jassProgramVisitor, dataSource, uiViewport, uiScene,
 				gameUI, mapConfig, simulation, aiPlayerIndex);
 
+		if (simulation != null && simulation.getMissionCheckpoint() != null) {
+			try {
+				for (final String name : new String[] { "common.j", "common.ai" }) simulation.getMissionCheckpoint().verifyAsset(dataSource, dataSource.has("Scripts\\" + name) ? "Scripts\\" + name : name);
+			}
+			catch (final java.io.IOException error) { throw new IllegalStateException(error); }
+		}
 		preloadCommonAi(dataSource);
 		if (cachedCommonAiBlocks != null) {
 			jassProgramVisitor.addAll(cachedCommonAiBlocks);
@@ -1935,9 +2020,10 @@ public class JassAIEnvironment {
 				}
 			}
 		}
-		boolean loadedScript = false;
+		boolean loadedScript = com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.installAI(jassProgramVisitor, scriptPath);
 		final String[] scriptCandidates = new String[] { scriptPath, "Scripts\\" + scriptPath };
 		for (final String file : scriptCandidates) {
+			if (loadedScript) break;
 			String path = file;
 			if (!dataSource.has(path)) {
 				final int slash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
@@ -1947,6 +2033,7 @@ public class JassAIEnvironment {
 			}
 			if (dataSource.has(path)) {
 				try {
+					if (simulation != null && simulation.getMissionCheckpoint() != null) simulation.getMissionCheckpoint().verifyAsset(dataSource, path);
 					Jass2.readJassFile(dataSource, jassProgramVisitor, path);
 					loadedScript = true;
 					break;

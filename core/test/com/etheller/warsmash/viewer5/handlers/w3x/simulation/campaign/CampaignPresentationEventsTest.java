@@ -6,6 +6,21 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CampaignPresentationEventsTest {
+    @Test void retryAndQuitAreMutuallyExclusiveAndOldChoicesCannotAffectNewMenu() {
+        final CampaignPresentationEvents events = new CampaignPresentationEvents();
+        final List<String> transitions = new ArrayList<>();
+        final Runnable[] defeat = events.replaceContinuations(() -> transitions.add("retry"), () -> transitions.add("quit"));
+        defeat[0].run();
+        defeat[1].run();
+        defeat[0].run();
+        assertEquals(List.of("retry"), transitions);
+        final Runnable[] victory = events.replaceContinuations(() -> transitions.add("next"), () -> transitions.add("menu"));
+        defeat[1].run();
+        victory[1].run();
+        victory[0].run();
+        assertEquals(List.of("retry", "menu"), transitions);
+    }
+
     @Test void otherPlayersAndNullPlayerDoNotShowLocalOutcome() {
         final List<String> screens = new ArrayList<>();
         CampaignPresentationEvents.presentForPlayer(1, 0, () -> screens.add("enemy defeat"));

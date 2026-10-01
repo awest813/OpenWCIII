@@ -146,15 +146,19 @@ See the [audio audit and limitations](docs/MENU_GRAPHICS_AUDIO_AUDIT.md#initial-
 
 ## Verification
 
-Latest local verification: **September 28, 2026**, on Windows with Java 17,
+Latest local verification: **September 30, 2026**, on Windows with Java 17,
 Gradle 8.6, and a combined classic RoC/TFT asset set.
 
 | Check | Recorded result | Scope |
 | --- | --- | --- |
-| Core suite | **320 passed**, no failures, errors, or skips | Includes graphics settings, unit orders, audio playback, and prior campaign regressions |
+| Core suite | **361 passed**, no failures, errors, or skips | Includes graphics settings, unit orders, audio playback, nested trigger execution, campaign and cinematic-camera regressions |
 | Graphics GPU audit | Passed | Texture-quality switching, model LOD identity, foliage fading/cutouts, border tiles, and glow sampling |
 | Main-menu render audit | Passed at 800×600, 1280×720, and 600×800 | Real rendering, backdrop coverage, captures, and same-frame glow comparisons |
 | Retail backing-screen audit | 47/47 passed | Selected assets, cameras, sequences, and skins |
+| Retail campaign flow | Human01 main/optional and save/resume; Human02 main/interlude/carryover; Human03 main/optional objectives and Human04 hero restoration verified through ordinary orders | Separate fixtures cover defeat/retry, difficulty and menu return; Human02 optional quest/save-resume, Human04–09 objectives and full campaigns remain unverified |
+| Campaign profile persistence | Passed across five client launches | Two distinct heroes/unlocks, profile switching, deletion/recreation, and preserved legacy cache migration; [scope](docs/CAMPAIGN_FLOW_AUDIT.md#process-relaunch-and-profile-isolation--september-29-2026) |
+| Victory/defeat menus | Passed at three window sizes | Chapter and end-state summaries, outcome routing, retry, Quit, restart cancellation, modal camera/input, overlay suppression, and Load/Back recovery; [scope](docs/OUTCOME_MENUS_AUDIT.md) |
+| Mission checkpoint replay | Human01 → save → relaunch → defeat/load → victory → Human02 | VM locals, aliases, timers, arrays, queued orders, inventory and carryover; [scope](docs/MISSION_SAVE_RESUME_AUDIT.md) |
 | Earlier campaign idle audit | 85/85 discovered maps, 300 ticks each | Loading, checked AI initialization, and short headless simulation |
 
 The campaign inventory includes interludes, credits, and bonus maps. It is not
@@ -177,6 +181,29 @@ regressions, hero carryover evidence, and their exclusions are recorded in the
 
 # Render Human01 and switch graphics settings during the run.
 ./gradlew :desktop:graphicsSettingsMapAudit
+
+# Execute retail defeat/retry and completion actions through to Human02.
+./gradlew :desktop:campaignFlowRenderAudit
+
+# Exercise the mission's registered death/region events and victory condition.
+./gradlew :desktop:campaignFlowRenderAudit -PcampaignObjectiveEvents=true
+
+# Verify profile-specific heroes/unlocks after quitting and relaunching the client.
+./gradlew :desktop:campaignPersistenceRenderAudit
+
+# Verify victory/defeat choices and capture dialogs at three window sizes.
+./gradlew :desktop:outcomeMenuRenderAudit
+
+# Play Human02's main objectives, story interlude and earned carryover into Human03.
+./gradlew :desktop:human02PlaythroughAudit
+# Include Human01's main and optional objectives before Human02.
+./gradlew :desktop:human02PlaythroughAudit -PcampaignHuman02Chain=true
+# Capture the unskipped Human02 interlude and its transition on their own.
+./gradlew :desktop:human02InterludeRenderAudit
+
+# Save a running mission, relaunch, compare continuation, and exercise chapter carryover.
+./gradlew :desktop:missionResumeRenderAudit
+./gradlew :desktop:missionResumeRenderAudit -PmissionResumeScenario=broader
 ```
 
 The menu/map render tasks use `core/assets/warsmash.ini`; configure that file
@@ -187,11 +214,24 @@ asset files are not included in the repository.
 
 ## Known gaps
 
-- **Save/resume:** partial restoration covers primitive script values, resources,
-  clock, and camera, but not a complete battlefield, handles, triggers, timers,
-  or AI execution state.
-- **Campaign progression:** victory, unlocks, carryover, defeat/retry, and the
-  next chapter have not been verified together across complete playthroughs.
+- **Save/resume:** v7 checkpoints reconstruct the mission and interpreter by
+  replaying recorded inputs, then validate state before resuming. The retail
+  Human01 fixture passes across process relaunch and chapter transition, including
+  active projectiles, AI captain/guard/worker state, timed camera/filter/subtitle
+  continuation, and mixed economies for all four races with construction, training and research.
+  A 96-unit ranged battle also passes in a cleared arena. Larger or combined-arms
+  battles, full campaign playthroughs, long missions, model/video
+  cinematics, audio timing and custom maps remain unverified; see the [checkpoint audit](docs/MISSION_SAVE_RESUME_AUDIT.md).
+- **Campaign progression:** the Human01 → Human02 chain now has a live
+  [regression](docs/CAMPAIGN_FLOW_AUDIT.md) covering defeat/retry, objective
+  events, victory, unlocks, and carryover together using simulation fixtures.
+  An ordinary-order playthrough also completes Human01's main and optional
+  objectives, resumes a real quest-item checkpoint, and verifies earned carryover
+  into Human02. A two-chapter route also completes Human02's main objectives,
+  its story interlude and earned carryover into Human03. A direct Human03 run
+  completed its main/optional objectives and verified both heroes in Human04.
+  Human02's optional quest/save-resume, Human04–09 completion, full campaigns
+  and other branches remain unverified.
 - **Gameplay:** unsupported upgrade effects and legacy destructable changes
   remain; some unimplemented abilities use behaviorless placeholders.
 - **Presentation:** some panels and cinematics remain partial. Passing asset or

@@ -19,6 +19,8 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 
 	CScriptDialog createScriptDialog(GlobalScope globalScope);
 
+	default CScriptDialog createMissionDialog(GlobalScope globalScope) { return createScriptDialog(globalScope); }
+
 	void clearDialog(CScriptDialog dialog);
 
 	void destroyDialog(CScriptDialog dialog);
@@ -134,6 +136,13 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 	 */
 	void customDefeat(boolean enableScoreScreen);
 
+	/** End the local game using its recorded outcome. */
+	void endGame(boolean enableScoreScreen);
+
+	void displayLoadDialog();
+
+	default void displayLoadDialog(CScriptDialog returnDialog) { displayLoadDialog(); }
+
 	/**
 	 * Script-driven selection: add ({@code flag=true}) or remove ({@code flag=false})
 	 * a unit from the local player's selection.
@@ -154,6 +163,11 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 	 * When {@code doScoreScreen} is true, show the score Continue dialog first.
 	 */
 	void requestChangeLevel(String newLevel, boolean doScoreScreen);
+
+	/** Reload a mission with restart presentation, preserving its current difficulty. */
+	default void requestRestartLevel(String mapPath, boolean doScoreScreen) {
+		requestChangeLevel(mapPath, doScoreScreen);
+	}
 
 	/**
 	 * Play a campaign movie. When the movie file decodes, real video frames are

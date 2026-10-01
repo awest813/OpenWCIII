@@ -2,6 +2,7 @@ package com.etheller.warsmash.viewer5.handlers.w3x.simulation.players;
 
 import com.etheller.warsmash.parsers.jass.scope.CommonTriggerExecutionScope;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionReplayLog;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop.CAbilityNeutralBuilding;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
@@ -23,6 +24,10 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 		this.playerIndex = playerIndex;
 	}
 
+	private void record(final int kind, final int b, final int c, final int d, final int e, final float x, final float y, final boolean queue, final String text) {
+		this.game.recordMissionInput(kind, this.playerIndex, b, c, d, e, x, y, queue, text);
+	}
+
 	private boolean sharedControl(final CUnit unit) {
 		boolean controlShared = this.game.getPlayer(unit.getPlayerIndex()).hasAlliance(this.playerIndex,
 				CAllianceType.SHARED_CONTROL);
@@ -41,6 +46,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 	@Override
 	public void issueTargetOrder(final int unitHandleId, final int abilityHandleId, final int orderId,
 			final int targetHandleId, final boolean queue) {
+		record(MissionReplayLog.TARGET, unitHandleId, abilityHandleId, orderId, targetHandleId, 0, 0, queue, "");
 		final CUnit unit = this.game.getUnit(unitHandleId);
 		if (unit == null) {
 			return;
@@ -53,6 +59,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 	@Override
 	public void issueDropItemAtPointOrder(final int unitHandleId, final int abilityHandleId, final int orderId,
 			final int targetHandleId, final float x, final float y, final boolean queue) {
+		record(MissionReplayLog.DROP_POINT, unitHandleId, abilityHandleId, orderId, targetHandleId, x, y, queue, "");
 		final CUnit unit = this.game.getUnit(unitHandleId);
 		if (unit == null) {
 			return;
@@ -66,6 +73,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 	@Override
 	public void issueDropItemAtTargetOrder(final int unitHandleId, final int abilityHandleId, final int orderId,
 			final int targetItemHandleId, final int targetHeroHandleId, final boolean queue) {
+		record(MissionReplayLog.DROP_TARGET, unitHandleId, abilityHandleId, orderId, targetItemHandleId, 0, 0, queue, Integer.toString(targetHeroHandleId));
 		final CUnit unit = this.game.getUnit(unitHandleId);
 		if (unit == null) {
 			return;
@@ -79,6 +87,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 	@Override
 	public void issuePointOrder(final int unitHandleId, final int abilityHandleId, final int orderId, final float x,
 			final float y, final boolean queue) {
+		record(MissionReplayLog.POINT, unitHandleId, abilityHandleId, orderId, 0, x, y, queue, "");
 		final CUnit unit = this.game.getUnit(unitHandleId);
 		if (unit == null) {
 			return;
@@ -92,6 +101,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 	@Override
 	public void issueImmediateOrder(final int unitHandleId, final int abilityHandleId, final int orderId,
 			final boolean queue) {
+		record(MissionReplayLog.IMMEDIATE, unitHandleId, abilityHandleId, orderId, 0, 0, 0, queue, "");
 		final CUnit unit = this.game.getUnit(unitHandleId);
 		if (unit == null) {
 			return;
@@ -117,6 +127,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 
 	@Override
 	public void unitCancelTrainingItem(final int unitHandleId, final int cancelIndex) {
+		record(MissionReplayLog.CANCEL_TRAINING, unitHandleId, cancelIndex, 0, 0, 0, 0, false, "");
 		final CUnit unit = this.game.getUnit(unitHandleId);
 		if (unit == null) {
 			return;
@@ -128,6 +139,7 @@ public class CPlayerUnitOrderExecutor implements CPlayerUnitOrderListener {
 
 	@Override
 	public void issueGuiPlayerEvent(final int eventId) {
+		record(MissionReplayLog.GUI_EVENT, eventId, 0, 0, 0, 0, 0, false, "");
 		final CPlayer player = this.game.getPlayer(playerIndex);
 		final JassGameEventsWar3 eventType = JassGameEventsWar3.getByEventId(eventId);
 		if (eventType != null) {

@@ -35,6 +35,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.generic.CLevelingAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.hero.CAbilityHero;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionReplayLog;
 
 /**
  * Manages on-disk save-game state for a running campaign mission.
@@ -43,13 +44,14 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory
  * string), per-player resource totals, and (since v2) the time-of-day clock
  * plus the local camera target. Version 5 adds sparse primitive script arrays
  * and preserves null strings. Version 4 introduced an entity snapshot scaffold;
- * gameplay does not yet restore entity identity, trigger/timer state, or queued
- * script execution, so this is not a complete mid-mission checkpoint.</p>
+ * version 6 adds a validated replay checkpoint. Loading reconstructs entity identity,
+ * orders, triggers, timers and interpreter continuations from the mission's inputs.
+ * Earlier versions remain readable for metadata but cannot resume a mission.</p>
  *
  * <h3>File layout</h3>
  * <pre>
  *   magic    (int)   0x57335331  "W3S1"
- *   version  (int)   1 through 5
+ *   version  (int)   1 through 6
  *   mapPath  (UTF)   path passed to SaveGame
  *   nGlobals (int)
  *   for each global:
@@ -82,11 +84,12 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory
  *   for each primitive array:
  *     name (UTF), elementType (byte), nonDefaultCount (int)
  *     for each non-default entry: index (int), typed value
+ *   [v6+] checkpointPresent (boolean), MissionReplayLog payload
  * </pre>
  */
 public final class CGameSave {
 	private static final int FILE_MAGIC = 0x57335331; // "W3S1"
-	private static final int FILE_VERSION = 5;
+	private static final int FILE_VERSION = 7;
 	private static final int FILE_VERSION_MIN = 1;
 
 	private static final byte TYPE_INT = 0;
@@ -97,6 +100,7 @@ public final class CGameSave {
 
 	/** Saved JASS primitive globals: name → JassValue (int/real/bool/string). */
 	public final Map<String, JassValue> globals;
+	public MissionReplayLog checkpoint;
 	private final Map<String, SavedArray> arrays = new HashMap<>();
 
 	private static final class SavedArray {
@@ -571,6 +575,8 @@ public final class CGameSave {
 					writeValue(out, item.getValue());
 				}
 			}
+			out.writeBoolean(this.checkpoint != null);
+			if (this.checkpoint != null) this.checkpoint.write(out);
 			out.flush();
 			stream.getFD().sync();
 		}
@@ -583,6 +589,7 @@ public final class CGameSave {
 	 *         uses an unrecognised format.
 	 */
 	public static CGameSave tryLoad(final File file) {
+        if (file == null || !file.isFile() || file.length() > 256L * 1024 * 1024) return null;
 		if (!file.exists()) {
 			return null;
 		}
@@ -697,6 +704,7 @@ public final class CGameSave {
 					}
 				}
 			}
+			if (version >= 6 && in.readBoolean()) save.checkpoint = MissionReplayLog.read(in, version >= 7);
 			if (in.read() != -1) {
 				throw new IOException("Unexpected trailing save data");
 			}

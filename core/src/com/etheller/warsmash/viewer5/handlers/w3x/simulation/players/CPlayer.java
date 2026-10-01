@@ -55,7 +55,7 @@ public class CPlayer extends CBasePlayer {
 	// Player state data
 	private boolean givesBounty = false;
 	private boolean alliedVictory = false;
-	private int gameResult;
+	private int gameResult = CPlayerGameResult.NEUTRAL.ordinal();
 	private int placed;
 	private boolean observerOnDeath;
 	private boolean observer;
@@ -398,6 +398,8 @@ public class CPlayer extends CBasePlayer {
 	}
 
 	public void fireUnitSelectedEvents(final CUnit unit) {
+		if (this.simulation != null && this.simulation.getMissionCheckpoint() != null && this.simulation.getMissionCheckpoint().isPresentationRestore()) return;
+		if (this.simulation != null) this.simulation.recordMissionInput(8, getId(), unit.getHandleId(), 0, 0, 0, 0, 0, false, "");
 		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_SELECTED);
 		if (eventList != null) {
 			for (final CPlayerEvent event : eventList) {
@@ -408,6 +410,8 @@ public class CPlayer extends CBasePlayer {
 	}
 
 	public void fireUnitDeselectedEvents(final CUnit unit) {
+		if (this.simulation != null && this.simulation.getMissionCheckpoint() != null && this.simulation.getMissionCheckpoint().isPresentationRestore()) return;
+		if (this.simulation != null) this.simulation.recordMissionInput(9, getId(), unit.getHandleId(), 0, 0, 0, 0, 0, false, "");
 		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_DESELECTED);
 		if (eventList != null) {
 			for (final CPlayerEvent event : eventList) {
@@ -582,6 +586,7 @@ public class CPlayer extends CBasePlayer {
 	}
 
 	public void fireChatEvent(final GlobalScope globalScope, final String message) {
+		if (this.simulation != null) this.simulation.recordMissionInput(10, getId(), 0, 0, 0, 0, 0, 0, false, message);
 		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_CHAT);
 		if (eventList == null) {
 			return;

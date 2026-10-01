@@ -24,6 +24,10 @@ public class CScriptDialog {
 	private final List<Trigger> eventTriggers = new ArrayList<>();
 	private final List<CScriptDialogButton> buttons = new ArrayList<>();
 	private boolean visible;
+	private Viewport layoutViewport;
+	private java.util.function.Consumer<CScriptDialogButton> inputRecorder;
+	public void setInputRecorder(final java.util.function.Consumer<CScriptDialogButton> recorder) { this.inputRecorder = recorder; }
+	public void recordInput(final CScriptDialogButton button) { if (this.inputRecorder != null) this.inputRecorder.accept(button); }
 
 	public CScriptDialog(final GlobalScope globalScope, final SimpleFrame scriptDialogFrame,
 			final StringFrame scriptDialogTextFrame) {
@@ -46,7 +50,8 @@ public class CScriptDialog {
 	}
 
 	public void setTitle(final GameUI rootFrame, final String text) {
-		rootFrame.setText(this.scriptDialogTextFrame, text);
+		rootFrame.setText(this.scriptDialogTextFrame, rootFrame.getTrigStr(text));
+		if (this.layoutViewport != null) layout(rootFrame, this.layoutViewport);
 	}
 
 	public void reset(final SimpleFrame scriptDialogFrame, final StringFrame scriptDialogTextFrame) {
@@ -55,6 +60,7 @@ public class CScriptDialog {
 		this.lastAddedComponent = scriptDialogTextFrame;
 		this.buttons.clear();
 		this.visible = false;
+		this.layoutViewport = null;
 	}
 
 	public void setVisible(final boolean flag) {
@@ -81,7 +87,7 @@ public class CScriptDialog {
 	}
 
 	public void onButtonClick(final CScriptDialogButton cScriptDialogButton) {
-		this.scriptDialogFrame.setVisible(false);
+		setVisible(false);
 		for (final Trigger trigger : this.eventTriggers) {
 			final CommonTriggerExecutionScope scope = CommonTriggerExecutionScope
 					.triggerDialogScope(JassGameEventsWar3.EVENT_DIALOG_CLICK, trigger, this, cScriptDialogButton);
@@ -96,11 +102,21 @@ public class CScriptDialog {
 		this.lastAddedComponent = buttonFrame;
 		this.buttons.add(scriptDialogButton);
 		buttonFrame.positionBounds(rootFrame, uiViewport);
-		this.scriptDialogFrame
-				.setHeight(((this.scriptDialogFrame.getAssignedHeight() + (buttonFrame.getFramePointY(FramePoint.TOP)))
-						- buttonFrame.getFramePointY(FramePoint.BOTTOM)) * 1.5f);
-		this.scriptDialogFrame.positionBounds(rootFrame, uiViewport);
+		layout(rootFrame, uiViewport);
 		scriptDialogButton.setupEvents(this);
+	}
+
+	private void layout(final GameUI rootFrame, final Viewport uiViewport) {
+		this.layoutViewport = uiViewport;
+		this.scriptDialogFrame.positionBounds(rootFrame, uiViewport);
+		float height = this.scriptDialogFrame.getFramePointY(FramePoint.TOP)
+				- this.scriptDialogTextFrame.getFramePointY(FramePoint.TOP)
+				+ this.scriptDialogTextFrame.getPredictedViewportHeight() + GameUI.convertY(uiViewport, 0.03f);
+		for (final CScriptDialogButton button : this.buttons) {
+			height += button.getButtonFrame().getAssignedHeight() + GameUI.convertY(uiViewport, 0.008f);
+		}
+		this.scriptDialogFrame.setHeight(height);
+		this.scriptDialogFrame.positionBounds(rootFrame, uiViewport);
 	}
 
 	public GlobalScope getGlobalScope() {

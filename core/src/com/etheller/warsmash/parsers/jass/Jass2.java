@@ -111,6 +111,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.StoredUnitData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.StoredUnitData.StoredAbilityData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.StoredUnitData.StoredItemData;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.ProfileGameCacheStore;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItemType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
@@ -379,6 +380,7 @@ public class Jass2 {
 		final JassProgram jassProgramVisitor = new JassProgram();
 		final CommonEnvironment environment = new CommonEnvironment(jassProgramVisitor, dataSource, uiViewport, uiScene,
 				war3MapViewer, meleeUI, files);
+		environment.installCheckpointObservations();
 		for (final String file : files) {
 			String jassFilePath = file;
 			if (!dataSource.has(jassFilePath)) {
@@ -413,12 +415,13 @@ public class Jass2 {
 				readJassFile(dataSource, jassProgramVisitor, jassFilePath);
 			}
 		}
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.install(jassProgramVisitor, war3MapViewer);
 		try {
 			jassProgramVisitor.initialize();
 		}
 		catch (final Exception e) {
 			JassLog.report(e);
-			new RuntimeException(e);
+			throw new IllegalStateException("Cannot initialize mission scripts", e);
 		}
 		jassProgramVisitor.getJassNativeManager().checkUnregisteredNatives();
 		return environment;
@@ -688,6 +691,11 @@ public class Jass2 {
 		public boolean isInitializationComplete() {
 			return (this.initializationThread != null) && (this.initializationThread.instructionPtr == -1);
 		}
+		public String initializationStatus() {
+			return this.initializationThread == null ? "not queued" : "ptr=" + this.initializationThread.instructionPtr
+					+ " sleeping=" + this.initializationThread.sleeping + " frame="
+					+ (this.initializationThread.stackFrame == null ? "null" : this.initializationThread.stackFrame.functionNameMetaData);
+		}
 
 		private GameUI gameUI;
 		private Element skin;
@@ -695,19 +703,36 @@ public class Jass2 {
 		private CSimulation simulation;
 		private final File gamecacheDir;
 		private final File saveGameDir;
-		private String lastSaveBasicFilename = "";
 		private final java.util.EnumMap<CGameState, Integer> integerGameStates = new java.util.EnumMap<>(CGameState.class);
 		private final Map<Integer, JassAIEnvironment> aiEnvironmentsByPlayer = new HashMap<>();
 		private final Map<String, CGameCache> openGameCaches = new HashMap<>();
 		private final StackedSoundManager stackedSoundManager = new StackedSoundManager();
 
+        private void installCheckpointObservations() {
+            if (this.simulation.getMissionCheckpoint() == null) return;
+            final java.util.Set<String> fileWrites = java.util.Set.of("CopySaveGame", "RemoveSaveDirectory", "RenameSaveDirectory");
+            for (final String name : new String[] { "GetCameraField", "GetCameraTargetPositionX", "GetCameraTargetPositionY", "GetCameraTargetPositionZ", "GetCameraTargetPositionLoc", "GetCameraEyePositionX", "GetCameraEyePositionY", "GetCameraEyePositionZ", "GetCameraEyePositionLoc", "GetSoundIsPlaying", "IsUnitSelected", "GetSaveBasicFilename", "SaveGameExists", "CopySaveGame", "RemoveSaveDirectory", "RenameSaveDirectory" }) {
+                final com.etheller.interpreter.ast.function.JassFunction original = this.jassProgramVisitor.getJassNativeManager().getNative(name);
+                if (original == null) continue;
+                this.jassProgramVisitor.getJassNativeManager().createNative(name, (args, globals, scope) ->
+                    this.simulation.getMissionCheckpoint().hostRead(name, () ->
+                        fileWrites.contains(name) && this.simulation.getMissionCheckpoint().isRestoring()
+                            ? BooleanJassValue.FALSE : original.call(args, globals, scope)));
+            }
+        }
+
 		private CGameCache getOrCreateGameCache(final String name) {
 			final String safeName = name != null ? name : "";
-			final String key = safeName.toLowerCase();
+			final String key = safeName.toLowerCase(java.util.Locale.ROOT);
 			CGameCache cache = this.openGameCaches.get(key);
 			if (cache == null) {
 				final File cacheFile = gamecacheFileFor(this.gamecacheDir, safeName);
-				cache = CGameCache.tryLoadFromFile(cacheFile, safeName);
+				try {
+                    cache = this.simulation.getMissionCheckpoint() != null
+                        ? CGameCache.tryLoadFromBytes(this.simulation.getMissionCheckpoint().readCache(cacheFile), safeName)
+                        : CGameCache.tryLoadFromFile(cacheFile, safeName);
+                }
+                catch (final IOException error) { throw new java.io.UncheckedIOException(error); }
 				if (cache == null) {
 					cache = new CGameCache(safeName);
 				}
@@ -723,10 +748,14 @@ public class Jass2 {
 			this.gameUI = war3MapViewer.getGameUI();
 			final Rectangle tempRect = new Rectangle();
 			this.simulation = war3MapViewer.simulation;
-			this.gamecacheDir = new File(
-					System.getProperty("user.home") + File.separator + ".warsmash" + File.separator + "gamecache");
-			this.saveGameDir = new File(
-					System.getProperty("user.home") + File.separator + ".warsmash" + File.separator + "saves");
+			try {
+				this.gamecacheDir = ProfileGameCacheStore.prepareProfile(ProfileGameCacheStore.defaultRoot(),
+						CampaignProgressStore.get().getProfileName());
+			}
+			catch (final IOException error) {
+				throw new java.io.UncheckedIOException("Cannot prepare profile gamecaches", error);
+			}
+            this.saveGameDir = com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionSaveStore.currentDirectory();
 			final GlobalScope globals = jassProgramVisitor.getGlobalScope();
 			final HandleJassType handleType = globals.registerHandleType("handle");
 			final HandleJassType agentType = globals.registerHandleType("agent");
@@ -1259,6 +1288,7 @@ public class Jass2 {
 						}
 						final String orderString = arguments.get(1).visit(StringJassValueVisitor.getInstance());
 						CWidget whichTarget = arguments.get(2).visit(ObjectJassValueVisitor.getInstance());
+						if (whichTarget == null) return BooleanJassValue.FALSE;
 						final CPlayerUnitOrderExecutor defaultPlayerUnitOrderExecutor = CommonEnvironment.this.simulation
 								.getDefaultPlayerUnitOrderExecutor(whichUnit.getPlayerIndex());
 						final BooleanAbilityActivationReceiver activationReceiver = BooleanAbilityActivationReceiver.INSTANCE;
@@ -1291,6 +1321,7 @@ public class Jass2 {
 						}
 						final int orderId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
 						CWidget whichTarget = arguments.get(2).visit(ObjectJassValueVisitor.getInstance());
+						if (whichTarget == null) return BooleanJassValue.FALSE;
 						final CPlayerUnitOrderExecutor defaultPlayerUnitOrderExecutor = CommonEnvironment.this.simulation
 								.getDefaultPlayerUnitOrderExecutor(whichUnit.getPlayerIndex());
 						final BooleanAbilityActivationReceiver activationReceiver = BooleanAbilityActivationReceiver.INSTANCE;
@@ -2273,7 +2304,7 @@ public class Jass2 {
 			}
 			jassProgramVisitor.getJassNativeManager().createNative("DialogCreate",
 					(arguments, globalScope, triggerScope) -> {
-						return new HandleJassValue(dialogType, meleeUI.createScriptDialog(globalScope));
+						return new HandleJassValue(dialogType, meleeUI.createMissionDialog(globalScope));
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("DialogDestroy",
 					(arguments, globalScope, triggerScope) -> {
@@ -2476,12 +2507,10 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						return IntegerJassValue.of(0);
 					});
-			jassProgramVisitor.getJassNativeManager().createNative("GetSaveBasicFilename",
-					(arguments, globalScope, triggerScope) -> {
-						return StringJassValue.of(CommonEnvironment.this.lastSaveBasicFilename != null
-								? CommonEnvironment.this.lastSaveBasicFilename
-								: "");
-					});
+            jassProgramVisitor.getJassNativeManager().createNative("GetSaveBasicFilename", (arguments, globalScope, triggerScope) -> {
+                final File last = this.simulation.getMissionCheckpoint() == null ? null : this.simulation.getMissionCheckpoint().getLastSaveFile();
+                return StringJassValue.of(last == null ? "" : last.getName().replaceFirst("(?i)\\.w3s$", ""));
+            });
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerRegisterPlayerEvent",
 					(arguments, globalScope, triggerScope) -> {
 						final Trigger whichTrigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
@@ -4320,6 +4349,8 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("RemovePlayer",
 					(arguments, globalScope, triggerScope) -> {
 						final CPlayer player = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+						final CPlayerGameResult result = arguments.get(1).visit(ObjectJassValueVisitor.getInstance());
+						player.setPlayerState(CommonEnvironment.this.simulation, CPlayerState.GAME_RESULT, result.ordinal());
 						if ((player.getSlotState() == CPlayerSlotState.PLAYING)
 								&& (player.getId() != war3MapViewer.getLocalPlayerIndex())) {
 							player.setSlotState(CPlayerSlotState.LEFT);
@@ -4895,7 +4926,7 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerExecute",
 					(arguments, globalScope, triggerScope) -> {
 						final Trigger whichTrigger = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-						whichTrigger.execute(globalScope, new CommonTriggerExecutionScope(whichTrigger, triggerScope));
+						if (whichTrigger != null) whichTrigger.executeImmediately(globalScope, new CommonTriggerExecutionScope(whichTrigger, triggerScope));
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("TriggerExecuteWait",
@@ -5198,7 +5229,11 @@ public class Jass2 {
 			jassProgramVisitor.getJassNativeManager().createNative("SetUnitCreepGuard",
 					(arguments, globalScope, triggerScope) -> null);
 			jassProgramVisitor.getJassNativeManager().createNative("DisplayLoadDialog",
-					(arguments, globalScope, triggerScope) -> null);
+					(arguments, globalScope, triggerScope) -> {
+						meleeUI.displayLoadDialog(triggerScope instanceof CommonTriggerExecutionScope
+								? ((CommonTriggerExecutionScope) triggerScope).getClickedDialog() : null);
+						return null;
+					});
 			jassProgramVisitor.getJassNativeManager().createNative("RestartGame",
 					(arguments, globalScope, triggerScope) -> {
 						// Retail reloads the current mission from scratch; route
@@ -5211,7 +5246,7 @@ public class Jass2 {
 							System.err.println("RestartGame: current map path unknown — ignored");
 							return null;
 						}
-						meleeUI.requestChangeLevel(currentMapPath, doScoreScreen);
+						meleeUI.requestRestartLevel(currentMapPath, doScoreScreen);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("UnitRemoveBuffs",
@@ -7022,7 +7057,7 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final float x = arguments.get(0).visit(RealJassValueVisitor.getInstance()).floatValue();
 						final float y = arguments.get(1).visit(RealJassValueVisitor.getInstance()).floatValue();
-						meleeUI.getCameraManager().setTarget(x, y);
+						meleeUI.getCameraManager().setQuickPosition(x, y);
 						return null;
 					});
 
@@ -7345,7 +7380,7 @@ public class Jass2 {
 						CommonEnvironment.this.simulation, playerIndex, script);
 				if (aiEnv != null) {
 					CommonEnvironment.this.aiEnvironmentsByPlayer.put(playerIndex, aiEnv);
-					CommonEnvironment.this.simulation.addAiGlobalScope(aiEnv.getGlobalScope());
+					CommonEnvironment.this.simulation.addAiEnvironment(aiEnv);
 					try {
 						aiEnv.main();
 					}
@@ -7371,90 +7406,34 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> null);
 			jassProgramVisitor.getJassNativeManager().createNative("RemoveAllGuardPositions",
 					(arguments, globalScope, triggerScope) -> null);
-			jassProgramVisitor.getJassNativeManager().createNative("SaveGame",
-					(arguments, globalScope, triggerScope) -> {
-						final String filename = nullable(arguments, 0, StringJassValueVisitor.getInstance());
-						if (filename == null) {
-							System.err.println("SaveGame: null filename — skipping");
-							return null;
-						}
-						try {
-							CommonEnvironment.this.saveGameDir.mkdirs();
-							final File saveFile = saveGameFileFor(CommonEnvironment.this.saveGameDir, filename);
-							final int numPlayers = WarsmashConstants.MAX_PLAYERS;
-							final CGameSave save = new CGameSave(filename, numPlayers);
-							save.collectGlobals(globalScope);
-							for (int i = 0; i < numPlayers; i++) {
-								final com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer p =
-										CommonEnvironment.this.simulation.getPlayer(i);
-								if (p != null) {
-									save.gold[i] = p.getGold();
-									save.lumber[i] = p.getLumber();
-								}
-							}
-							save.timeOfDay = CommonEnvironment.this.simulation.getGameTimeOfDay();
-							save.timeOfDayScale = CommonEnvironment.this.simulation.getTimeOfDayScale();
-							if ((meleeUI != null) && (meleeUI.getCameraManager() != null)) {
-								save.cameraX = meleeUI.getCameraManager().target.x;
-								save.cameraY = meleeUI.getCameraManager().target.y;
-							}
-							final String currentMap = war3MapViewer.getCurrentMapPath();
-							save.savedMapPath = (currentMap != null) ? currentMap : "";
-							save.save(saveFile);
-							CommonEnvironment.this.lastSaveBasicFilename = new File(filename).getName();
-							System.out.println("SaveGame: saved " + save.globals.size()
-									+ " globals to " + saveFile);
-						}
-						catch (final Exception e) {
-							System.err.println("SaveGame: failed to save '" + filename + "': " + e.getMessage());
-						}
-						return null;
-					});
-			jassProgramVisitor.getJassNativeManager().createNative("LoadGame",
-					(arguments, globalScope, triggerScope) -> {
-						final String filename = nullable(arguments, 0, StringJassValueVisitor.getInstance());
-						if (filename == null) {
-							System.err.println("LoadGame: null filename — skipping");
-							return null;
-						}
-						final File saveFile = saveGameFileFor(CommonEnvironment.this.saveGameDir, filename);
-						final CGameSave save = CGameSave.tryLoad(saveFile);
-						if (save == null) {
-							System.err.println("LoadGame: no valid save found for '" + filename + "'");
-							return null;
-						}
-						if (!save.belongsToMap(war3MapViewer.getCurrentMapPath())) {
-							System.err.println("LoadGame: save belongs to another map; use main-menu Load Saved");
-							return null;
-						}
-						CommonEnvironment.this.lastSaveBasicFilename = new File(filename).getName();
-						// Restore globals, resources, and (for v2+ saves) the clock + camera.
-						restoreSaveGameState(save, globalScope, CommonEnvironment.this.simulation, meleeUI);
-						System.out.println("LoadGame: restored " + save.globals.size()
-								+ " globals from " + saveFile);
-						return null;
-					});
-			jassProgramVisitor.getJassNativeManager().createNative("ReloadGame",
-					(arguments, globalScope, triggerScope) -> {
-						final String filename = CommonEnvironment.this.lastSaveBasicFilename;
-						if ((filename == null) || filename.isEmpty()) {
-							System.err.println("ReloadGame: no previous save filename recorded");
-							return null;
-						}
-						final File saveFile = saveGameFileFor(CommonEnvironment.this.saveGameDir, filename);
-						final CGameSave save = CGameSave.tryLoad(saveFile);
-						if (save == null) {
-							System.err.println("ReloadGame: no valid save found for '" + filename + "'");
-							return null;
-						}
-						if (!save.belongsToMap(war3MapViewer.getCurrentMapPath())) {
-							System.err.println("ReloadGame: save does not identify the current map");
-							return null;
-						}
-						restoreSaveGameState(save, globalScope, CommonEnvironment.this.simulation, meleeUI);
-						System.out.println("ReloadGame: restored globals from " + saveFile);
-						return null;
-					});
+            jassProgramVisitor.getJassNativeManager().createNative("SaveGame", (arguments, globalScope, triggerScope) -> {
+                final String filename = nullable(arguments, 0, StringJassValueVisitor.getInstance());
+                if (filename != null && this.simulation.getMissionCheckpoint() != null) {
+                    if (this.simulation.getMissionCheckpoint().isRestoring()) {
+                        this.simulation.getMissionCheckpoint().fireSaveEvent(); return null;
+                    }
+                    try {
+                        this.simulation.getMissionCheckpoint().save(saveGameFileFor(this.saveGameDir, filename));
+                    }
+                    catch (final Exception error) { System.err.println("SaveGame: " + error.getMessage()); }
+                }
+                return null;
+            });
+            jassProgramVisitor.getJassNativeManager().createNative("LoadGame", (arguments, globalScope, triggerScope) -> {
+                final String filename = nullable(arguments, 0, StringJassValueVisitor.getInstance());
+                if (filename != null && this.simulation.getMissionCheckpoint() != null) {
+                    try { this.simulation.getMissionCheckpoint().load(saveGameFileFor(this.saveGameDir, filename)); }
+                    catch (final IOException error) { System.err.println("LoadGame: " + error.getMessage()); }
+                }
+                return null;
+            });
+            jassProgramVisitor.getJassNativeManager().createNative("ReloadGame", (arguments, globalScope, triggerScope) -> {
+                if (this.simulation.getMissionCheckpoint() != null && this.simulation.getMissionCheckpoint().getLastSaveFile() != null) {
+                    try { this.simulation.getMissionCheckpoint().load(this.simulation.getMissionCheckpoint().getLastSaveFile()); }
+                    catch (final IOException error) { System.err.println("ReloadGame: " + error.getMessage()); }
+                }
+                return null;
+            });
 			jassProgramVisitor.getJassNativeManager().createNative("SaveGameExists",
 					(arguments, globalScope, triggerScope) -> {
 						final String filename = nullable(arguments, 0, StringJassValueVisitor.getInstance());
@@ -7532,7 +7511,7 @@ public class Jass2 {
 						}
 						cache.storeInteger(missionKey, "HeroCount", heroIndex);
 						try {
-							cache.save(cacheFile);
+							if (this.simulation.getMissionCheckpoint() == null || !this.simulation.getMissionCheckpoint().isRestoring()) cache.save(cacheFile);
 						}
 						catch (final IOException e) {
 							System.err.println("CachePlayerHeroData: failed to save: " + e.getMessage());
@@ -7589,8 +7568,7 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final boolean doScoreScreen = arguments.size() > 0
 								&& arguments.get(0).visit(BooleanJassValueVisitor.getInstance());
-						// Score screen not yet implemented; reuse victory exit path.
-						meleeUI.customVictory(doScoreScreen);
+						meleeUI.endGame(doScoreScreen);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("PlayThematic",
@@ -7874,6 +7852,10 @@ public class Jass2 {
 						final boolean enableScoreScreen = arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
 						// Track the winning player so GetWinningPlayer() works
 						CommonEnvironment.this.simulation.setWinningPlayer(whichPlayer);
+						if (whichPlayer != null) {
+							whichPlayer.setPlayerState(CommonEnvironment.this.simulation, CPlayerState.GAME_RESULT,
+									CPlayerGameResult.VICTORY.ordinal());
+						}
 						// Fire EVENT_PLAYER_VICTORY for the player
 						if (whichPlayer != null) {
 							whichPlayer.firePlayerEvents(
@@ -7890,6 +7872,10 @@ public class Jass2 {
 					(arguments, globalScope, triggerScope) -> {
 						final CPlayer whichPlayer = nullable(arguments, 0, ObjectJassValueVisitor.getInstance());
 						final boolean enableScoreScreen = arguments.get(1).visit(BooleanJassValueVisitor.getInstance());
+						if (whichPlayer != null) {
+							whichPlayer.setPlayerState(CommonEnvironment.this.simulation, CPlayerState.GAME_RESULT,
+									CPlayerGameResult.DEFEAT.ordinal());
+						}
 						// Fire EVENT_PLAYER_DEFEAT for the player
 						if (whichPlayer != null) {
 							whichPlayer.firePlayerEvents(
@@ -8528,7 +8514,7 @@ public class Jass2 {
 							final File cacheFile = gamecacheFileFor(CommonEnvironment.this.gamecacheDir,
 									cache.getName());
 							try {
-								cache.save(cacheFile);
+								if (this.simulation.getMissionCheckpoint() == null || !this.simulation.getMissionCheckpoint().isRestoring()) cache.save(cacheFile);
 							}
 							catch (final IOException e) {
 								System.err.println("SaveGameCache: failed to persist '" + cache.getName()
@@ -13480,7 +13466,7 @@ public class Jass2 {
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetDefaultDifficulty",
 				(arguments, globalScope, triggerScope) -> {
-					final CMapDifficulty gameDifficulty = mapConfig.getGameDifficulty();
+					final CMapDifficulty gameDifficulty = mapConfig.getDefaultGameDifficulty();
 					return new HandleJassValue(gamedifficultyType,
 							gameDifficulty == null ? CMapDifficulty.NORMAL : gameDifficulty);
 				});

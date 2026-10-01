@@ -137,7 +137,8 @@ class CGameSaveTest {
 		save.save(file);
 		final byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
 		java.nio.ByteBuffer.wrap(bytes).putInt(4, 4);
-		java.nio.file.Files.write(file.toPath(), java.util.Arrays.copyOf(bytes, bytes.length - 4));
+		// Remove the v5 empty array count and the v6 checkpoint-presence flag.
+		java.nio.file.Files.write(file.toPath(), java.util.Arrays.copyOf(bytes, bytes.length - 5));
 		final CGameSave loaded = CGameSave.tryLoad(file);
 		assertNotNull(loaded);
 		assertEquals(321, loaded.gold[0]);

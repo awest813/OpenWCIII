@@ -110,6 +110,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMenuData;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMenuUI;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.CampaignMission;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.sound.KeyedSounds;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignMapTransition;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore;
 
 import net.warsmash.map.NetMapDownloader;
@@ -217,7 +218,7 @@ public class MenuUI {
 	private String[] campaignList;
 	private CampaignMenuData[] campaignDatas;
 	/** When set, {@link #onReturnFromGame()} loads this map instead of restoring menu chrome. */
-	private String pendingChangeLevel;
+	private CampaignMapTransition pendingChangeLevel;
 	private CMapDifficulty campaignDifficulty = CMapDifficulty.NORMAL;
 	private boolean resolutionChanged;
 	/** When set, the next map screen applies this save file after its scripts boot. */
@@ -299,6 +300,7 @@ public class MenuUI {
 		this.heightRatioCorrection = getMinWorldHeight() / 1200f;
 
 		this.profileManager = PlayerProfileManager.loadFromGdx();
+		CampaignPersistenceProbe.afterProfileLoad(this.profileManager);
 
 		this.musicSLK = new DataTable(StringBundle.EMPTY);
 		final String musicSLKPath = "UI\\SoundInfo\\Music.SLK";
@@ -1633,6 +1635,7 @@ public class MenuUI {
 					// Seed availability from DefaultOpen so non-default campaigns stay locked
 					// until SetCampaignAvailable / progress natives unlock them.
 					CampaignProgressStore.get().seedCampaignAvailable(campaignIdx, campaign.isDefaultOpen());
+					CampaignProgressStore.get().seedCampaignEntries(campaignIdx, campaign.getMissions().size());
 					final CampaignMenuUI missionSelectMenuUI = new CampaignMenuUI(null, this.campaignMenu,
 							this.rootFrame, this.uiViewport);
 					missionSelectMenuUI.setVisible(false);
@@ -2101,7 +2104,12 @@ public class MenuUI {
 	}
 
 	public boolean startMap(final String mapFilename) {
-		if (!tryLoadAndCacheMapConfigs(mapFilename)) {
+		return startMap(mapFilename, null);
+	}
+
+	private boolean startMap(final String mapFilename,
+			final CampaignMapTransition transition) {
+		if (!tryLoadAndCacheMapConfigs(mapFilename, transition)) {
 			this.pendingSaveFile = null;
 			this.beginGameInformation = null;
 			return false;
@@ -2152,30 +2160,42 @@ public class MenuUI {
 		return true;
 	}
 
-	private void loadAndCacheMapConfigs(final String mapFilename) throws IOException {
-		final War3Map map = War3MapViewer.beginLoadingMap(MenuUI.this.dataSource, mapFilename);
-		final War3MapW3i mapInfo = map.readMapInformation();
-		final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
-		MenuUI.this.rootFrame.setMapStrings(wtsFile);
-		final War3MapConfig war3MapConfig = new War3MapConfig(WarsmashConstants.MAX_PLAYERS);
-		if (this.currentCampaign != null) {
-			war3MapConfig.setGameDifficulty(this.campaignDifficulty);
+	private void loadAndCacheMapConfigs(final String mapFilename,
+			final CampaignMapTransition transition)
+			throws IOException {
+		try (final War3Map map = War3MapViewer.beginLoadingMap(MenuUI.this.dataSource, mapFilename)) {
+			final War3MapW3i mapInfo = map.readMapInformation();
+			final WTS wtsFile = Warcraft3MapObjectData.loadWTS(map);
+			MenuUI.this.rootFrame.setMapStrings(wtsFile);
+			final War3MapConfig war3MapConfig = new War3MapConfig(WarsmashConstants.MAX_PLAYERS);
+			if (this.currentCampaign != null) {
+				war3MapConfig.setGameDifficulty(this.campaignDifficulty);
+				war3MapConfig.setDefaultGameDifficulty(this.campaignDifficulty);
+			}
+			if (transition != null) transition.applyDifficulty(war3MapConfig);
+			for (int i = 0; (i < WarsmashConstants.MAX_PLAYERS) && (i < mapInfo.getPlayers().size()); i++) {
+				final CBasePlayer player = war3MapConfig.getPlayer(i);
+				player.setName(MenuUI.this.rootFrame.getTrigStr(mapInfo.getPlayers().get(i).getName()));
+			}
+			Jass2.loadConfig(map, MenuUI.this.uiViewport, MenuUI.this.uiScene, MenuUI.this.rootFrame, war3MapConfig,
+					WarsmashConstants.JASS_FILE_LIST).config();
+			if (this.currentCampaign != null) {
+				war3MapConfig.setGameDifficulty(this.campaignDifficulty);
+				war3MapConfig.setDefaultGameDifficulty(this.campaignDifficulty);
+			}
+			if (transition != null) transition.applyDifficulty(war3MapConfig);
+			MenuUI.this.currentMapConfig = war3MapConfig;
 		}
-		for (int i = 0; (i < WarsmashConstants.MAX_PLAYERS) && (i < mapInfo.getPlayers().size()); i++) {
-			final CBasePlayer player = war3MapConfig.getPlayer(i);
-			player.setName(MenuUI.this.rootFrame.getTrigStr(mapInfo.getPlayers().get(i).getName()));
-		}
-		Jass2.loadConfig(map, MenuUI.this.uiViewport, MenuUI.this.uiScene, MenuUI.this.rootFrame, war3MapConfig,
-				WarsmashConstants.JASS_FILE_LIST).config();
-		if (this.currentCampaign != null) {
-			war3MapConfig.setGameDifficulty(this.campaignDifficulty);
-		}
-		MenuUI.this.currentMapConfig = war3MapConfig;
 	}
 
 	private boolean tryLoadAndCacheMapConfigs(final String mapFilename) {
+		return tryLoadAndCacheMapConfigs(mapFilename, null);
+	}
+
+	private boolean tryLoadAndCacheMapConfigs(final String mapFilename,
+			final CampaignMapTransition transition) {
 		try {
-			loadAndCacheMapConfigs(mapFilename);
+			loadAndCacheMapConfigs(mapFilename, transition);
 			return true;
 		}
 		catch (final IOException | RuntimeException e) {
@@ -2191,6 +2211,7 @@ public class MenuUI {
 			for (int i = 0; i < this.campaignDatas.length; i++) {
 				if (this.campaignDatas[i] != null) {
 					CampaignProgressStore.get().seedCampaignAvailable(i, this.campaignDatas[i].isDefaultOpen());
+					CampaignProgressStore.get().seedCampaignEntries(i, this.campaignDatas[i].getMissions().size());
 				}
 			}
 		}
@@ -2211,7 +2232,7 @@ public class MenuUI {
 	}
 
 	private static File saveGameDir() {
-		return new File(System.getProperty("user.home") + File.separator + ".warsmash" + File.separator + "saves");
+		return com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionSaveStore.currentDirectory();
 	}
 
 	/**
@@ -2269,20 +2290,30 @@ public class MenuUI {
 			this.dialog.showError("NETERROR_MAPFILEINCOMPLETE", null);
 			return;
 		}
-		final String mapPath = (save.savedMapPath != null) ? save.savedMapPath : "";
-		if (mapPath.isEmpty()) {
-			this.dialog.showError("This save does not record its map (pre-v3 save).", null);
-			return;
-		}
-		if (!startMap(mapPath)) {
-			return;
-		}
-		this.pendingSaveFile = saveFile;
+        if (!requestLoadSave(saveFile)) return;
 		if (this.loadSavedScreen != null) {
 			this.loadSavedScreen.setVisible(false);
 		}
 		MenuUI.this.singlePlayerMenu.setVisible(false);
 	}
+
+    public boolean requestLoadSave(final File saveFile) {
+        final CGameSave save = CGameSave.tryLoad(saveFile);
+        if (save == null || save.checkpoint == null || save.savedMapPath.isEmpty()) {
+            this.dialog.showError("This save has no complete mission checkpoint.", null);
+            return false;
+        }
+		if (!save.checkpoint.profileName.equals(CampaignProgressStore.get().getProfileName())) {
+			this.dialog.showError("This mission save belongs to another player profile.", null); return false;
+		}
+        if (!startMap(save.savedMapPath)) return false;
+        this.currentMapConfig.setGameDifficulty(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty.values()[save.checkpoint.difficulty]);
+        this.currentMapConfig.setDefaultGameDifficulty(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty.values()[save.checkpoint.defaultDifficulty]);
+        this.beginGameInformation.localPlayerIndex = save.checkpoint.localPlayer;
+        this.pendingSaveFile = saveFile;
+        return true;
+    }
+    public void reportSaveLoadError(final String error) { this.dialog.showError(error, null); }
 
 	public void setPendingSaveFile(final File saveFile) {
 		this.pendingSaveFile = saveFile;
@@ -3305,9 +3336,9 @@ public class MenuUI {
 
 	public void onReturnFromGame() {
 		if (this.pendingChangeLevel != null) {
-			final String nextMap = this.pendingChangeLevel;
+			final CampaignMapTransition nextMap = this.pendingChangeLevel;
 			this.pendingChangeLevel = null;
-			if (startMap(nextMap)) {
+			if (startMap(nextMap.getMapPath(), nextMap)) {
 				return;
 			}
 			// A missing next chapter must leave an interactive menu behind the error.
@@ -3399,8 +3430,8 @@ public class MenuUI {
 		}
 	}
 
-	public void setPendingChangeLevel(final String mapPath) {
-		this.pendingChangeLevel = mapPath;
+	public void setPendingChangeLevel(final String mapPath, final War3MapConfig config) {
+		this.pendingChangeLevel = new CampaignMapTransition(mapPath, config);
 	}
 
 	private void launchCampaignCinematic(final CampaignMission cinematic) {

@@ -537,8 +537,12 @@ public class CUnitData {
 
 			final boolean canFlee = unitType.getFieldAsBoolean(CAN_FLEE, 0);
 
-			final boolean canBeBuiltOnThem = unitType.getFieldAsBoolean(CAN_BE_BUILT_ON_THEM, 0);
-			final boolean canBuildOnMe = unitType.getFieldAsBoolean(CAN_BUILD_ON_ME, 0);
+			// Older retail tables omit these editor flags. Their standard mine abilities
+			// still identify overlays and base mines; explicit object fields take priority.
+			final boolean canBeBuiltOnThem = unitType.getField(CAN_BE_BUILT_ON_THEM).isEmpty()
+					? abilityListString.contains("Abgm") : unitType.getFieldAsBoolean(CAN_BE_BUILT_ON_THEM, 0);
+			final boolean canBuildOnMe = unitType.getField(CAN_BUILD_ON_ME).isEmpty()
+					? abilityListString.contains("Agld") : unitType.getFieldAsBoolean(CAN_BUILD_ON_ME, 0);
 
 			final float strPlus = unitType.getFieldAsFloat(STR_PLUS, 0);
 			final float agiPlus = unitType.getFieldAsFloat(AGI_PLUS, 0);

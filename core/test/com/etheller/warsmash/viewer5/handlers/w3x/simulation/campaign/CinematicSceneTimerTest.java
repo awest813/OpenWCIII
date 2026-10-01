@@ -39,4 +39,15 @@ class CinematicSceneTimerTest {
         timer.advance(1);
         assertFalse(timer.isActive());
     }
+
+    @Test void resumedTransmissionKeepsItsRemainingLifetime() {
+        final CinematicSceneTimer original = new CinematicSceneTimer();
+        original.start(6); original.advance(2.5f);
+        final CinematicSceneTimer resumed = new CinematicSceneTimer();
+        resumed.restore(original.getRemaining());
+        resumed.advance(3.49f); assertTrue(resumed.isActive());
+        resumed.advance(0.02f); assertFalse(resumed.isActive());
+        assertThrows(IllegalArgumentException.class, () -> resumed.restore(Double.NaN));
+        assertThrows(IllegalArgumentException.class, () -> resumed.restore(-1));
+    }
 }

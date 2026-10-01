@@ -24,6 +24,7 @@ public class War3MapConfig implements CPlayerAPI {
 	private CMapPlacement placement;
 	private CGameSpeed gameSpeed;
 	private CMapDifficulty gameDifficulty = CMapDifficulty.NORMAL;
+	private CMapDifficulty defaultGameDifficulty = CMapDifficulty.NORMAL;
 	private CMapDensity resourceDensity;
 	private CMapDensity creatureDensity;
 	private CGameType gameTypeSelected;
@@ -136,6 +137,15 @@ public class War3MapConfig implements CPlayerAPI {
 
 	public CMapDifficulty getGameDifficulty() {
 		return this.gameDifficulty;
+	}
+
+	/** The player's selected difficulty, retained while a failed mission is retried at a lower level. */
+	public CMapDifficulty getDefaultGameDifficulty() {
+		return this.defaultGameDifficulty;
+	}
+
+	public void setDefaultGameDifficulty(final CMapDifficulty difficulty) {
+		this.defaultGameDifficulty = difficulty;
 	}
 
 	public CMapDensity getResourceDensity() {

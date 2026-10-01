@@ -682,6 +682,17 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 		return this.currentMapPath;
 	}
 
+	/** Prefer the chapter title presented on the loading screen to internal map identifiers. */
+	public String getMapDisplayName() {
+		if (this.lastLoadedMapInformation != null) {
+			final String chapter = this.lastLoadedMapInformation.getLoadingScreenSubtitle();
+			if (chapter != null && !chapter.trim().isEmpty()) return chapter;
+			final String name = this.lastLoadedMapInformation.getName();
+			if (name != null && !name.trim().isEmpty()) return name;
+		}
+		return this.mapConfig.getMapName();
+	}
+
 	public MapLoader createMapLoader(final War3Map war3Map, final War3MapW3i w3iFile, final int localPlayerIndex)
 			throws IOException {
 		initializeMapLoadContext(war3Map, w3iFile, localPlayerIndex);
@@ -1295,12 +1306,14 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 	public void update() {
 		if (this.anyReady) {
 			this.successfulFrames++;
-			final float deltaTime = Gdx.graphics.getDeltaTime();
+			final boolean discardFrameTime = this.simulation.getMissionCheckpoint() != null && this.simulation.getMissionCheckpoint().shouldDiscardFrameTime();
+			if (discardFrameTime) this.simulation.getMissionCheckpoint().consumeDiscardFrameTime();
+			final float deltaTime = discardFrameTime ? 0 : Gdx.graphics.getDeltaTime();
 			this.terrain.update(deltaTime);
 
 			super.update();
 
-			final float rawDeltaTime = Gdx.graphics.getRawDeltaTime();
+			final float rawDeltaTime = discardFrameTime ? 0 : Gdx.graphics.getRawDeltaTime();
 			this.updateTime += rawDeltaTime;
 
 			final Iterator<TextTag> textTagIterator = this.textTags.iterator();
@@ -1335,7 +1348,11 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 				}
 			}
 
-			while (this.updateTime >= WarsmashConstants.SIMULATION_STEP_TIME) {
+			if (this.simulation.getMissionCheckpoint() != null && this.simulation.getMissionCheckpoint().isRestoring()) {
+				this.updateTime = 0;
+				this.simulation.getMissionCheckpoint().replayFrame();
+			}
+			else while (this.updateTime >= WarsmashConstants.SIMULATION_STEP_TIME) {
 				if (this.gameTurnManager.getLatestCompletedTurn() >= this.simulation.getGameTurnTick()) {
 					this.updateTime -= WarsmashConstants.SIMULATION_STEP_TIME;
 					final long simStart = this.simulationBudgetTracker.beginTick();
@@ -3065,6 +3082,9 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 							public void removeDestructable(final CDestructable dest) {
 								final RenderDestructable renderPeer = War3MapViewer.this.destructableToRenderPeer
 										.remove(dest);
+								if (renderPeer == null) return;
+								War3MapViewer.this.widgets.remove(renderPeer);
+								War3MapViewer.this.decals.remove(renderPeer);
 								War3MapViewer.this.worldScene.removeInstance(renderPeer.instance);
 								if (renderPeer.walkableBounds != null) {
 									War3MapViewer.this.walkableObjectsTree.remove(

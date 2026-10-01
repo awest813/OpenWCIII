@@ -29,7 +29,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import mpq.MPQArchive;
 
 /**
- * End-to-end progression audit across all retail Warcraft III campaign maps
+ * Static progression-reference audit across retail Warcraft III campaign maps
  * (Reign of Chaos and The Frozen Throne).
  *
  * <p>Audits:
@@ -269,6 +269,7 @@ public final class CampaignProgressionAudit {
 
 			System.out.println("\n===============================================================================");
 			if (brokenTargets == 0) {
+				System.out.println("Scope: literal target resolution and native call-site inventory; no mission transitions executed.");
 				System.out.printf("AUDIT COMPLETE: All %d ChangeLevel target maps resolved successfully (100.0%%)!%n",
 						resolvedTargets);
 				System.out.println("===============================================================================");

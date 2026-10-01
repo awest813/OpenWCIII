@@ -55,6 +55,7 @@ public class CScriptDialogButton {
 		if (this.ownerDialog == null) {
 			return;
 		}
+		this.ownerDialog.recordInput(this);
 		for (final Trigger trigger : this.eventTriggers) {
 			final CommonTriggerExecutionScope scope = CommonTriggerExecutionScope.triggerDialogScope(
 					JassGameEventsWar3.EVENT_DIALOG_BUTTON_CLICK, trigger, this.ownerDialog, this);

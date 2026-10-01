@@ -2,10 +2,13 @@ package com.etheller.warsmash.viewer5.handlers.w3x.ui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.ProfileGameCacheStore;
 
 public class PlayerProfileManager {
 	private static final String CURRENT_PROFILE = "CurrentProfile";
@@ -22,13 +25,25 @@ public class PlayerProfileManager {
 			final String name = preferences.getString("Profile" + i + "_Name");
 			profiles.add(new PlayerProfile(name));
 		}
-		final String currentProfile = preferences.getString(CURRENT_PROFILE, "WorldEdit");
+		String currentProfile = preferences.getString(CURRENT_PROFILE, "WorldEdit");
 		if (profiles.isEmpty()) {
 			final PlayerProfile worldEditDefaultProfile = new PlayerProfile("WorldEdit");
 			saveProfile(preferences, profiles.size(), worldEditDefaultProfile);
 			profiles.add(worldEditDefaultProfile);
 			preferences.putInteger(PROFILE_COUNT, profiles.size());
 			preferences.flush();
+		}
+		final String savedProfile = currentProfile;
+		if (profiles.stream().noneMatch(profile -> profile.getName().equals(savedProfile))) {
+			currentProfile = profiles.get(0).getName();
+			preferences.putString(CURRENT_PROFILE, currentProfile);
+			preferences.flush();
+		}
+		try {
+			ProfileGameCacheStore.claimLegacyOwner(ProfileGameCacheStore.defaultRoot(), currentProfile);
+		}
+		catch (final IOException error) {
+			throw new UncheckedIOException("Cannot establish gamecache profile ownership", error);
 		}
 		return new PlayerProfileManager(preferences, profiles, currentProfile);
 	}
@@ -90,6 +105,13 @@ public class PlayerProfileManager {
 	}
 
 	public void removeProfile(final PlayerProfile profileToRemove) {
+		try {
+			ProfileGameCacheStore.retireProfile(ProfileGameCacheStore.defaultRoot(), profileToRemove.getName());
+			com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionSaveStore.retireProfile(com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionSaveStore.defaultRoot(), profileToRemove.getName());
+		}
+		catch (final IOException error) {
+			throw new UncheckedIOException("Cannot retire deleted profile's saved games and gamecaches", error);
+		}
 		CampaignProgressStore.removeProfile(this.preferences, profileToRemove.getName());
 		this.profiles.remove(profileToRemove);
 		saveAll();

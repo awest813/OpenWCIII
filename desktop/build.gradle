@@ -113,7 +113,7 @@ task campaignBackingAudit(dependsOn: classes, type: JavaExec) {
 }
 
 task campaignProgressionAudit(dependsOn: classes, type: JavaExec) {
-    description = "Audits Warcraft III single-player campaign progression, ChangeLevel map chaining, and gamecache continuity against retail archives."
+    description = "Inventories retail campaign native call sites and resolves literal next-map targets; does not execute progression."
     mainClass = "com.etheller.warsmash.desktop.tools.CampaignProgressionAudit"
     classpath = sourceSets.main.runtimeClasspath
     workingDir = project.rootDir
@@ -211,4 +211,472 @@ task menuGraphicsAudit(dependsOn: classes, type: JavaExec) {
         }
         println "PASS: menu rendered at three sizes; captures: $captures"
     }
+}
+
+task campaignFlowRenderAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Executes retail defeat/retry and Human01-to-Human02 completion actions in the desktop client.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(3)
+    def auditHome = file("$buildDir/campaign-flow-home-${System.currentTimeMillis()}")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.campaignFlowAudit', 'true'
+    def objectiveEvents = project.findProperty('campaignObjectiveEvents') == 'true'
+    systemProperty 'warsmash.campaignObjectiveEvents', objectiveEvents.toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog',
+         '-loadfile', 'Maps\\Campaign\\Human01.w3m'
+    def auditOutput = new ByteArrayOutputStream()
+    standardOutput = auditOutput
+    errorOutput = auditOutput
+    ignoreExitValue = true
+    doFirst {
+        def optionsFile = new File(auditHome, '.warsmash/options.properties')
+        optionsFile.parentFile.mkdirs()
+        optionsFile.text = 'musicEnabled=false\nsoundEnabled=false\n'
+    }
+    doLast {
+        def output = auditOutput.toString('UTF-8')
+        def report = file("$buildDir/${objectiveEvents ? 'campaign-objective-events' : 'campaign-flow'}.log")
+        report.text = output
+        if (!output.contains('[CampaignFlowProbe] complete') || output.contains('GL ERROR:') ||
+                output.contains('JassException') ||
+                (objectiveEvents && !output.contains('[CampaignFlowProbe] objective events complete'))) {
+            throw new GradleException("Campaign flow audit failed; see $report")
+        }
+        println "PASS: ${objectiveEvents ? 'retail objective events' : 'retail completion actions'}, defeat/retry, difficulty, victory, carryover, unlock persistence, next chapter, and menu return; report: $report"
+    }
+}
+
+task campaignPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays Human01 main objectives using ordinary player orders, then checks earned carryover into Human02.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(11)
+    def auditHome = file("$buildDir/campaign-playthrough-home-${System.currentTimeMillis()}")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.campaignPlaythroughAudit', 'true'
+    systemProperty 'warsmash.campaignPlaythroughFull', (project.findProperty('campaignPlaythroughFull') ?: 'false').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Human01.w3m'
+    def report = file("$buildDir/campaign-playthrough.log")
+    ignoreExitValue = true
+    doFirst {
+        def optionsFile = new File(auditHome, '.warsmash/options.properties')
+        optionsFile.parentFile.mkdirs()
+        optionsFile.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[CampaignPlaythroughProbe] complete:') || output.contains('GL ERROR:') || output.contains('JassException')) {
+            throw new GradleException("Campaign playthrough failed; see $report")
+        }
+        println "PASS: ordinary-order Human01 main objectives, victory, earned carryover and Human02; report: $report; profile: $auditHome"
+    }
+}
+
+def verifyHuman02PlaythroughReport = { File report, File auditHome, boolean chain ->
+    def output = report.getText('UTF-8')
+    if (!output.contains('[Human02PlaythroughProbe] complete:') || output.contains('GL ERROR:') || output.contains('JassException')
+            || !['base-objectives', 'interlude', 'human03'].every { capture ->
+                output.contains("[Human02PlaythroughProbe] captured $capture")
+                        && new File(auditHome, "human02/${capture}.png").length() > 0
+            }
+            || (chain && !output.contains('[CampaignPlaythroughProbe] complete:'))) {
+        throw new GradleException("Human02 playthrough failed; see $report")
+    }
+    def victory = new Properties()
+    def restored = new Properties()
+    new File(auditHome, 'human02/human02-victory.properties').withInputStream { victory.load(it) }
+    new File(auditHome, 'human02/human03.properties').withInputStream { restored.load(it) }
+    if (victory != restored) throw new GradleException("Human03 hero evidence differs; see $auditHome")
+}
+
+task human02PlaythroughReportAudit {
+    description = 'Revalidates a retained Human02 desktop audit log, captures and carried-hero evidence.'
+    doLast {
+        def report = file(project.property('human02AuditReport'))
+        def auditHome = file(project.property('human02AuditHome'))
+        verifyHuman02PlaythroughReport(report, auditHome, (project.findProperty('campaignHuman02Chain') ?: 'false').toString() == 'true')
+        println "PASS: retained Human02 playthrough evidence; report: $report; home: $auditHome"
+    }
+}
+
+task human02PlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays retail Human02 objectives through ordinary orders and verifies its interlude and Human03 carryover.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(36)
+    def chain = (project.findProperty('campaignHuman02Chain') ?: 'false').toString()
+    def auditHome = file("$buildDir/human02-playthrough-home-${System.currentTimeMillis()}")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.human02PlaythroughAudit', 'true'
+    systemProperty 'warsmash.campaignPlaythroughAudit', chain
+    systemProperty 'warsmash.campaignPlaythroughFull', chain
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile',
+         chain == 'true' ? 'Maps\\Campaign\\Human01.w3m' : 'Maps\\Campaign\\Human02.w3m'
+    def report = file("$buildDir/${chain == 'true' ? 'human01-human03' : 'human02'}-playthrough.log")
+    ignoreExitValue = true
+    doFirst {
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        verifyHuman02PlaythroughReport(report, auditHome, chain == 'true')
+        println "PASS: ordinary Human02 objectives, victory, interlude and Human03; chain=$chain; report: $report; home: $auditHome"
+    }
+}
+
+// Long audits retain their exact binaries while another audit is being repaired and recompiled.
+def freezeAuditRuntime = { JavaExec audit, File home, boolean reuse ->
+    def runtime = new File(home, 'runtime')
+    if (!reuse) {
+        if (!runtime.isDirectory() && !runtime.mkdirs()) {
+            throw new GradleException("Cannot create audit runtime directory: $runtime")
+        }
+        audit.classpath.files.eachWithIndex { source, index ->
+            def destination = new File(runtime, String.format('%03d-', index) + source.name)
+            if (source.isDirectory()) copy { from source; into destination }
+            else copy { from source; into runtime; rename { destination.name } }
+        }
+    }
+    def binaries = runtime.listFiles()
+    if (binaries == null || binaries.length == 0) {
+        throw new GradleException("Audit runtime is missing or empty: $runtime; run the write phase first")
+    }
+    audit.classpath = files(binaries.sort { a, b -> a.name <=> b.name })
+}
+def human02ResumeHome = file("$buildDir/human02-resume-home-${System.currentTimeMillis()}")
+def human02ResumeProfile = 'p-' + java.security.MessageDigest.getInstance('SHA-256').digest('WorldEdit'.getBytes('UTF-8')).encodeHex().toString()
+['write', 'read'].each { phase ->
+    tasks.register(phase == 'write' ? 'human02OptionalWrite' : 'human02OptionalResumeAudit', JavaExec) {
+        description = 'Plays Human02 main/optional objectives, with an ordinary heart-item save and fresh-process continuation.'
+        dependsOn phase == 'write' ? classes : 'human02OptionalWrite'
+        mainClass = project.mainClassName
+        classpath = sourceSets.main.runtimeClasspath
+        workingDir = project.assetsDir
+        timeout = java.time.Duration.ofMinutes(25)
+        systemProperty 'user.home', human02ResumeHome.absolutePath
+        systemProperty 'warsmash.human02PlaythroughAudit', 'true'
+        systemProperty 'warsmash.human02OptionalAudit', 'true'
+        systemProperty 'warsmash.human02PlaythroughPhase', phase
+        args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile',
+            phase == 'write' ? 'Maps\\Campaign\\Human02.w3m' : new File(human02ResumeHome,".warsmash/saves/profiles/$human02ResumeProfile/QuickSave.w3s").absolutePath
+        def report = file("$buildDir/human02-optional-${phase}.log")
+        ignoreExitValue = true
+        doFirst {
+            freezeAuditRuntime(delegate, human02ResumeHome, phase == 'read')
+            def options = new File(human02ResumeHome,'.warsmash/options.properties'); options.parentFile.mkdirs()
+            options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+            standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+        }
+        doLast {
+            standardOutput.close()
+            verifyHuman02PlaythroughReport(report,human02ResumeHome,false)
+            def output = report.getText('UTF-8')
+            if (!output.contains('[Human02PlaythroughProbe] Searinox heart returned; Orb of Fire earned')
+                    || !output.contains(phase == 'write' ? '[Human02PlaythroughProbe] actual Searinox Quick Save' : '[Human02PlaythroughProbe] Searinox checkpoint restored'))
+                throw new GradleException("Human02 optional/save continuation failed; see $report")
+            println "PASS: Human02 main/optional objectives and quest checkpoint $phase; report: $report; home: $human02ResumeHome"
+        }
+    }
+}
+
+task humanCampaignPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays retail Human campaign objectives and checks earned chapter carryover; later chapter drivers remain experimental.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofHours(4)
+    def start = (project.findProperty('humanCampaignStart') ?: 'Human03').toString()
+    def stop = (project.findProperty('humanCampaignStop') ?: 'Human04').toString()
+    def auditHome = file("$buildDir/human-campaign-home-${System.currentTimeMillis()}")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.humanCampaignAudit', 'true'
+    systemProperty 'warsmash.humanCampaignStop', stop
+    systemProperty 'warsmash.human02PlaythroughAudit', (start == 'Human01' || start == 'Human02').toString()
+    systemProperty 'warsmash.campaignPlaythroughAudit', (start == 'Human01').toString()
+    systemProperty 'warsmash.campaignPlaythroughFull', 'true'
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', "Maps\\Campaign\\${start}.w3m"
+    def report = file("$buildDir/human-campaign-${start.toLowerCase()}-${stop.toLowerCase()}.log")
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def options = new File(auditHome, '.warsmash/options.properties'); options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        def completedChapter = stop.equalsIgnoreCase('Complete') ? 'human09' : stop.toLowerCase()
+        if (!output.contains("[HumanCampaignProbe] complete: reached $completedChapter")
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Human campaign audit:'))
+            throw new GradleException("Human campaign playthrough failed; see $report")
+        if (stop.equalsIgnoreCase('Complete') && !output.contains('[HumanCampaignProbe] final native Human campaign victory; Undead campaign unlocked'))
+            throw new GradleException("Missing final Human campaign victory/unlock; see $report")
+        println "PASS: retail Human campaign $start to $stop; report: $report; home: $auditHome"
+    }
+}
+
+task human02InterludeRenderAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Runs the retail Human02 story interlude without skipping, captures its camera descent and checks the Human03 transition.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(4)
+    def auditHome = file("$buildDir/human02-interlude-home-${System.currentTimeMillis()}")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.human02InterludeAudit', 'true'
+    ignoreExitValue = true
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Human02Interlude.w3m'
+    def report = file("$buildDir/human02-interlude.log")
+    doFirst {
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[Human02PlaythroughProbe] complete: standalone story interlude and Human03')
+                || output.contains('GL ERROR:') || output.contains('JassException')
+                || !['interlude', 'human03'].every { capture ->
+                    output.contains("[Human02PlaythroughProbe] captured $capture")
+                            && new File(auditHome, "human02/${capture}.png").length() > 0
+                }) throw new GradleException("Interlude render audit failed; see $report")
+        println "PASS: unskipped interlude, camera captures and Human03; report: $report; home: $auditHome"
+    }
+}
+
+def playthroughResumeHome = file("$buildDir/campaign-playthrough-resume-home-${System.currentTimeMillis()}")
+def playthroughResumeProfile = 'p-' + java.security.MessageDigest.getInstance('SHA-256').digest('WorldEdit'.getBytes('UTF-8')).encodeHex().toString()
+['write', 'read'].each { phase ->
+    tasks.register(phase == 'write' ? 'campaignPlaythroughWrite' : 'campaignPlaythroughResumeAudit', JavaExec) {
+        description = 'Verifies Human01 main and optional objectives with a real quest-item checkpoint and fresh-process continuation into Human02.'
+        dependsOn phase == 'write' ? classes : 'campaignPlaythroughWrite'
+        mainClass = project.mainClassName
+        classpath = sourceSets.main.runtimeClasspath
+        workingDir = project.assetsDir
+        timeout = java.time.Duration.ofMinutes(18)
+        systemProperty 'user.home', playthroughResumeHome.absolutePath
+        systemProperty 'warsmash.campaignPlaythroughAudit', 'true'
+        systemProperty 'warsmash.campaignPlaythroughFull', 'true'
+        systemProperty 'warsmash.campaignPlaythroughPhase', phase
+        args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile',
+             phase == 'write' ? 'Maps\\Campaign\\Human01.w3m' : new File(playthroughResumeHome, ".warsmash/saves/profiles/$playthroughResumeProfile/QuickSave.w3s").absolutePath
+        def report = file("$buildDir/campaign-playthrough-${phase}.log")
+        ignoreExitValue = true
+        doFirst {
+            def options = new File(playthroughResumeHome, '.warsmash/options.properties')
+            options.parentFile.mkdirs()
+            options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+            standardOutput = new FileOutputStream(report)
+            errorOutput = standardOutput
+        }
+        doLast {
+            standardOutput.close()
+            def output = report.getText('UTF-8')
+            if (!output.contains('[CampaignPlaythroughProbe] complete: Human01 main and optional objectives')
+                    || output.contains('GL ERROR:') || output.contains('JassException')
+                    || !output.contains(phase == 'write' ? 'actual mid-mission Quick Save tick=' : 'optional-quest checkpoint restored tick=')) {
+                throw new GradleException("Campaign playthrough $phase failed; see $report")
+            }
+            println "PASS: $phase ordinary-order objectives and earned carryover; report: $report; home: $playthroughResumeHome"
+        }
+    }
+}
+
+task outcomeMenuRenderAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Verifies retail victory/defeat Quit, retry, restart cancellation, modal input, and dialog layout at three sizes.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(3)
+    def auditHome = file("$buildDir/outcome-menu-home-${System.currentTimeMillis()}")
+    def captures = file("$buildDir/outcome-menu-captures")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.outcomeMenuAudit', 'true'
+    systemProperty 'warsmash.outcomeMenuCaptureDirectory', captures.absolutePath
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog',
+         '-loadfile', 'Maps\\Campaign\\Human01.w3m'
+    def auditOutput = new ByteArrayOutputStream()
+    standardOutput = auditOutput
+    errorOutput = auditOutput
+    ignoreExitValue = true
+    doFirst {
+        def optionsFile = new File(auditHome, '.warsmash/options.properties')
+        optionsFile.parentFile.mkdirs()
+        optionsFile.text = 'musicEnabled=false\nsoundEnabled=false\n'
+    }
+    doLast {
+        def output = auditOutput.toString('UTF-8')
+        def report = file("$buildDir/outcome-menu.log")
+        report.text = output
+        if (!output.contains('[OutcomeMenuProbe] complete') || output.contains('GL ERROR:') || output.contains('JassException')) {
+            throw new GradleException("Outcome menu audit failed; see $report")
+        }
+        println "PASS: victory/defeat menus, retry, Quit, restart cancellation, modal input, and three-size layout; captures: $captures"
+    }
+}
+
+// Separate JVMs share one fresh home; this checks persistence beyond an in-process reload.
+def persistenceAuditHome = file("$buildDir/campaign-persistence-home-${System.currentTimeMillis()}")
+def persistencePhases = [
+    [label: 'WriteOriginal', phase: 'write-original', map: 'Human01.w3m', flow: true, objectives: true, hero: 'Carryover audit'],
+    [label: 'WriteOther', phase: 'write-other', map: 'Human01.w3m', flow: true, objectives: false, hero: 'Other profile hero'],
+    [label: 'ReadOriginal', phase: 'read-original', map: 'Human02.w3m', flow: false],
+    [label: 'ReadOther', phase: 'read-other', map: 'Human02.w3m', flow: false],
+    [label: 'RecreateOther', phase: 'recreate-other', map: 'Human02.w3m', flow: false]
+]
+def persistencePreviousTask = null
+persistencePhases.each { scenario ->
+    def taskName = "campaignPersistence${scenario.label}"
+    def predecessor = persistencePreviousTask
+    tasks.register(taskName, JavaExec) {
+        dependsOn classes
+        if (predecessor != null) dependsOn predecessor
+        mainClass = project.mainClassName
+        classpath = sourceSets.main.runtimeClasspath
+        workingDir = project.assetsDir
+        timeout = java.time.Duration.ofMinutes(3)
+        systemProperty 'user.home', persistenceAuditHome.absolutePath
+        systemProperty 'warsmash.campaignPersistenceAudit', scenario.phase
+        systemProperty 'warsmash.campaignFlowAudit', scenario.flow.toString()
+        systemProperty 'warsmash.campaignObjectiveEvents', (scenario.objectives ?: false).toString()
+        if (scenario.hero != null) systemProperty 'warsmash.campaignFlowHeroName', scenario.hero
+        args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog',
+             '-loadfile', "Maps\\Campaign\\${scenario.map}"
+        def auditOutput = new ByteArrayOutputStream()
+        standardOutput = auditOutput
+        errorOutput = auditOutput
+        ignoreExitValue = true
+        doFirst {
+            def optionsFile = new File(persistenceAuditHome, '.warsmash/options.properties')
+            optionsFile.parentFile.mkdirs()
+            optionsFile.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        }
+        doLast {
+            def output = auditOutput.toString('UTF-8')
+            def report = file("$buildDir/campaign-persistence-${scenario.phase}.log")
+            report.text = output
+            def marker = scenario.flow ? '[CampaignFlowProbe] complete' : "[CampaignPersistenceProbe] ${scenario.phase} complete"
+            if (!output.contains(marker) || output.contains('GL ERROR:') || output.contains('JassException') ||
+                    !output.contains("[CampaignPersistenceProbe] ${scenario.phase} selected")) {
+                throw new GradleException("Campaign persistence phase failed; see $report")
+            }
+            println "PASS: ${scenario.phase}; report: $report"
+        }
+    }
+    persistencePreviousTask = taskName
+}
+tasks.register('campaignPersistenceRenderAudit') {
+    description = 'Verifies retail hero restoration and unlocks across five desktop processes, profile switching, and deletion/recreation.'
+    dependsOn persistencePreviousTask
+    doLast {
+        println "PASS: campaign persistence across five separate client launches; isolated home: $persistenceAuditHome"
+    }
+}
+
+def missionResumeProfile = 'p-' + java.security.MessageDigest.getInstance('SHA-256').digest('WorldEdit'.getBytes('UTF-8')).encodeHex().toString()
+def missionResumeReadFps = (project.findProperty("missionResumeReadFps") ?: "30").toString()
+def missionResumeScenario = project.findProperty("missionResumeScenario") ?: "basic"
+def missionResumeTimeout = java.time.Duration.ofMinutes((missionResumeScenario.toString().startsWith('economy') || missionResumeScenario == 'battle') ? 5 : 3)
+def missionResumeHome = file("$buildDir/mission-resume-home-${System.currentTimeMillis()}")
+tasks.register('missionResumeWrite', JavaExec) {
+    dependsOn classes
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = missionResumeTimeout
+    systemProperty 'user.home', missionResumeHome.absolutePath
+    systemProperty 'warsmash.missionResumeScenario', missionResumeScenario
+    systemProperty 'warsmash.missionResumeAudit', 'write'
+    systemProperty 'warsmash.missionResumeSaveOffset', project.findProperty('missionResumeSaveOffset') ?: '65'
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Human01.w3m'
+    def report = file("$buildDir/mission-resume-${missionResumeScenario}-write.log")
+    def output = new FileOutputStream(report)
+    standardOutput = output
+    errorOutput = output
+    ignoreExitValue = true
+    doFirst {
+        def options = new File(missionResumeHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+    }
+    doLast {
+        output.close()
+        if (!report.getText('UTF-8').contains('[MissionResumeProbe] write complete')) throw new GradleException("Mission checkpoint write failed; see $report")
+        println 'PASS: Quick Save, native SaveGame, and uninterrupted continuation'
+    }
+}
+tasks.register('missionResumeRenderAudit', JavaExec) {
+    dependsOn missionResumeWrite
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = missionResumeTimeout
+    systemProperty 'user.home', missionResumeHome.absolutePath
+    systemProperty 'warsmash.missionResumeScenario', missionResumeScenario
+    systemProperty 'warsmash.missionResumeAudit', 'read'
+    args '-profile', 'safe', '-window', '960', '540', '-fps', missionResumeReadFps, '-nolog', '-loadfile', new File(missionResumeHome, ".warsmash/saves/profiles/$missionResumeProfile/QuickSave.w3s").absolutePath
+    def report = file("$buildDir/mission-resume-${missionResumeScenario}-read.log")
+    def output = new FileOutputStream(report)
+    standardOutput = output
+    errorOutput = output
+    ignoreExitValue = true
+    doLast {
+        output.close()
+        def text = report.getText('UTF-8')
+        if (!text.contains('[MissionResumeProbe] read complete') || text.contains('GL ERROR:') || text.contains('JassException')) throw new GradleException("Mission resume failed; see $report")
+        println "PASS: mission resumed in a fresh process and matched uninterrupted continuation; home: $missionResumeHome"
+    }
+}
+
+// Corrupt copies leave the successful save untouched and exercise the real failure/menu path.
+tasks.register('missionResumeCorruptFixtures', JavaExec) {
+    dependsOn missionResumeWrite
+    mainClass = 'com.etheller.warsmash.desktop.tools.MissionCheckpointCorruptionFixture'
+    classpath = sourceSets.main.runtimeClasspath
+    args new File(missionResumeHome, ".warsmash/saves/profiles/$missionResumeProfile/QuickSave.w3s").absolutePath
+}
+def missionRejectTasks = []
+['Engine', 'State'].each { kind ->
+    def taskName = "missionResumeReject$kind"
+    missionRejectTasks.add(taskName)
+    tasks.register(taskName, JavaExec) {
+        dependsOn missionResumeCorruptFixtures
+        mainClass = project.mainClassName
+        classpath = sourceSets.main.runtimeClasspath
+        workingDir = project.assetsDir
+        timeout = java.time.Duration.ofMinutes(3)
+        systemProperty 'user.home', missionResumeHome.absolutePath
+        def phase = 'reject-' + kind.toLowerCase()
+        systemProperty 'warsmash.missionResumeScenario', missionResumeScenario
+        systemProperty 'warsmash.missionResumeAudit', phase
+        args '-profile', 'safe', '-window', '960', '540', '-fps', missionResumeReadFps, '-nolog', '-loadfile', new File(missionResumeHome, ".warsmash/saves/profiles/$missionResumeProfile/Wrong${kind}.w3s").absolutePath
+        def report = file("$buildDir/mission-resume-${missionResumeScenario}-${phase}.log")
+        def output = new FileOutputStream(report)
+        standardOutput = output
+        errorOutput = output
+        ignoreExitValue = true
+        doLast {
+            output.close()
+            if (!report.getText('UTF-8').contains("[MissionResumeProbe] $phase complete")) throw new GradleException("Checkpoint rejection audit failed; see $report")
+            println "PASS: $phase checkpoint rejected and returned to menu"
+        }
+    }
+}
+tasks.register('missionResumeFailureAudit') {
+    dependsOn missionResumeRenderAudit, missionRejectTasks
 }

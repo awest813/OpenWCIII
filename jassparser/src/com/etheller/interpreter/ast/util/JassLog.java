@@ -27,5 +27,8 @@ public class JassLog {
 		final PrintStream writer = getWriter();
 		t.printStackTrace(writer);
 		writer.flush();
+		if (writer != System.err) {
+			t.printStackTrace(System.err);
+		}
 	}
 }

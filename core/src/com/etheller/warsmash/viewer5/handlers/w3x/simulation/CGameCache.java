@@ -33,6 +33,8 @@ public final class CGameCache implements CHandle {
 	private static final int FILE_VERSION = 2;
 
 	private static final AtomicInteger HANDLE_ID_COUNTER = new AtomicInteger(0);
+	public static int getHandleCounter() { return HANDLE_ID_COUNTER.get(); }
+	public static void restoreHandleCounter(final int value) { HANDLE_ID_COUNTER.set(value); }
 
 	private final String name;
 	private final int handleId;
@@ -365,7 +367,15 @@ public final class CGameCache implements CHandle {
 		if (!file.exists() || file.length() == 0) {
 			return null;
 		}
-		try (final DataInputStream in = new DataInputStream(new FileInputStream(file))) {
+		try {
+			return tryLoadFromBytes(java.nio.file.Files.readAllBytes(file.toPath()), cacheName);
+		}
+		catch (final IOException error) { return null; }
+	}
+
+	public static CGameCache tryLoadFromBytes(final byte[] bytes, final String cacheName) {
+		if (bytes == null || bytes.length == 0) return null;
+		try (final DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(bytes))) {
 			final int magic = in.readInt();
 			final int version = in.readInt();
 			if (magic != FILE_MAGIC || (version != 1 && version != FILE_VERSION)) {
@@ -374,7 +384,7 @@ public final class CGameCache implements CHandle {
 			final CGameCache cache = new CGameCache(cacheName);
 
 			// integers
-			final int intCount = in.readInt();
+			final int intCount = checkedCount(in, 1000000);
 			for (int i = 0; i < intCount; i++) {
 				final String mk = in.readUTF();
 				final String k = in.readUTF();
@@ -383,7 +393,7 @@ public final class CGameCache implements CHandle {
 			}
 
 			// reals
-			final int realCount = in.readInt();
+			final int realCount = checkedCount(in, 1000000);
 			for (int i = 0; i < realCount; i++) {
 				final String mk = in.readUTF();
 				final String k = in.readUTF();
@@ -392,7 +402,7 @@ public final class CGameCache implements CHandle {
 			}
 
 			// booleans
-			final int boolCount = in.readInt();
+			final int boolCount = checkedCount(in, 1000000);
 			for (int i = 0; i < boolCount; i++) {
 				final String mk = in.readUTF();
 				final String k = in.readUTF();
@@ -401,7 +411,7 @@ public final class CGameCache implements CHandle {
 			}
 
 			// strings
-			final int strCount = in.readInt();
+			final int strCount = checkedCount(in, 1000000);
 			for (int i = 0; i < strCount; i++) {
 				final String mk = in.readUTF();
 				final String k = in.readUTF();
@@ -410,7 +420,7 @@ public final class CGameCache implements CHandle {
 			}
 
 			// units
-			final int unitCount = in.readInt();
+			final int unitCount = checkedCount(in, 100000);
 			for (int i = 0; i < unitCount; i++) {
 				final String mk = in.readUTF();
 				final String k = in.readUTF();
@@ -424,7 +434,7 @@ public final class CGameCache implements CHandle {
 				final int agiBonus = in.readInt();
 				final int intBonus = in.readInt();
 				final String properName = in.readUTF();
-				final int itemCount = in.readInt();
+				final int itemCount = checkedCount(in, 6);
 				StoredItemData[] items = null;
 				if (itemCount > 0) {
 					items = new StoredItemData[6];
@@ -439,7 +449,7 @@ public final class CGameCache implements CHandle {
 				}
 				StoredAbilityData[] abilities = null;
 				if (version >= 2) {
-					final int abilityCount = in.readInt();
+					final int abilityCount = checkedCount(in, 10000);
 					if (abilityCount > 0) {
 						abilities = new StoredAbilityData[abilityCount];
 						for (int a = 0; a < abilityCount; a++) {
@@ -455,9 +465,15 @@ public final class CGameCache implements CHandle {
 			return cache;
 		}
 		catch (final IOException e) {
-			System.err.println("CGameCache.tryLoadFromFile: failed to read " + file + ": " + e.getMessage());
+			System.err.println("CGameCache: failed to read " + cacheName + ": " + e.getMessage());
 			return null;
 		}
+	}
+
+	private static int checkedCount(final DataInputStream in, final int max) throws IOException {
+		final int value = in.readInt();
+		if (value < 0 || value > max) throw new IOException("Invalid cache count");
+		return value;
 	}
 
 	// ---- helpers ----

@@ -15,6 +15,15 @@ import com.etheller.interpreter.ast.value.JassValue;
 
 public class Trigger implements CHandle {
 	private static int STUPID_STATIC_TRIGGER_COUNT_DELETE_THIS_LATER = 452354453;
+
+	public static int getNextHandleId() {
+		return STUPID_STATIC_TRIGGER_COUNT_DELETE_THIS_LATER;
+	}
+
+	public static void restoreNextHandleId(final int value) {
+		STUPID_STATIC_TRIGGER_COUNT_DELETE_THIS_LATER = value;
+	}
+
 	private final int handleId = STUPID_STATIC_TRIGGER_COUNT_DELETE_THIS_LATER++;
 	private final List<TriggerBooleanExpression> conditions = new ArrayList<>();
 	private final List<JassFunction> actions = new ArrayList<>();
@@ -81,13 +90,28 @@ public class Trigger implements CHandle {
 	}
 
 	public void execute(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
+		execute(globalScope, triggerScope, false);
+	}
+
+	/** Explicit TriggerExecute calls run their actions before the caller continues, up to a sleep. */
+	public void executeImmediately(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
+		execute(globalScope, triggerScope, true);
+	}
+
+	private void execute(final GlobalScope globalScope, final TriggerExecutionScope triggerScope,
+			final boolean immediate) {
 		if (!this.enabled) {
 			return;
 		}
 		this.execCount++;
 		for (final JassFunction action : this.actions) {
 			try {
-				action.call(Collections.emptyList(), globalScope, triggerScope);
+				if (immediate && action instanceof JassThreadActionFunc) {
+					((JassThreadActionFunc) action).callImmediately(globalScope, triggerScope);
+				}
+				else {
+					action.call(Collections.emptyList(), globalScope, triggerScope);
+				}
 			}
 			catch (final Exception e) {
 				throw new JassException(globalScope, "Exception during Trigger action execute", e);
@@ -141,6 +165,14 @@ public class Trigger implements CHandle {
 
 		public CodeJassValue getCodeJassValue() {
 			return this.codeJassValue;
+		}
+
+		public void callImmediately(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
+			final JassThread triggerThread = globalScope.createThread(this.codeJassValue, triggerScope);
+			globalScope.runThreadUntilCompletion(triggerThread);
+			if (triggerThread.instructionPtr != -1) {
+				globalScope.queueThread(triggerThread);
+			}
 		}
 
 		@Override

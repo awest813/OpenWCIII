@@ -12,6 +12,13 @@ public final class CinematicSceneTimer {
         if (Float.isFinite(seconds) && seconds > 0) this.remaining = Math.max(0, this.remaining - seconds);
     }
 
+    public double getRemaining() { return this.remaining; }
+
+    public void restore(double seconds) {
+        if (!Double.isFinite(seconds) || seconds < 0) throw new IllegalArgumentException("Invalid cinematic timer");
+        this.remaining = seconds;
+    }
+
     public boolean isActive() { return this.remaining > 0; }
 
     public void end() { this.remaining = 0; }

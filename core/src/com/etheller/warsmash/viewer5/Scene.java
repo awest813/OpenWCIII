@@ -238,6 +238,9 @@ public abstract class Scene {
 	protected abstract void innerUpdate(float dt, int frame);
 
 	public void startFrame() {
+		if (!this.show) {
+			return;
+		}
 		final GL20 gl = this.viewer.gl;
 		final Rectangle viewport = this.camera.rect;
 

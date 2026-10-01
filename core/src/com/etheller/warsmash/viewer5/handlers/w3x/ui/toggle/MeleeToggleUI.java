@@ -67,6 +67,9 @@ public class MeleeToggleUI implements WarsmashUI {
 	}
 
 	@Override
+	public CScriptDialog createMissionDialog(final GlobalScope globalScope) { return this.meleeUI.createMissionDialog(globalScope); }
+
+	@Override
 	public void clearDialog(final CScriptDialog dialog) {
 		this.meleeUI.clearDialog(dialog);
 	}
@@ -299,6 +302,19 @@ public class MeleeToggleUI implements WarsmashUI {
 	}
 
 	@Override
+	public void endGame(final boolean enableScoreScreen) {
+		this.meleeUI.endGame(enableScoreScreen);
+	}
+
+	@Override
+	public void displayLoadDialog() {
+		this.meleeUI.displayLoadDialog();
+	}
+
+	@Override
+	public void displayLoadDialog(final CScriptDialog returnDialog) { this.meleeUI.displayLoadDialog(returnDialog); }
+
+	@Override
 	public void scriptSelectUnit(final CUnit whichUnit, final boolean flag) {
 		this.meleeUI.scriptSelectUnit(whichUnit, flag);
 	}
@@ -321,6 +337,11 @@ public class MeleeToggleUI implements WarsmashUI {
 	@Override
 	public void requestChangeLevel(final String newLevel, final boolean doScoreScreen) {
 		this.meleeUI.requestChangeLevel(newLevel, doScoreScreen);
+	}
+
+	@Override
+	public void requestRestartLevel(final String mapPath, final boolean doScoreScreen) {
+		this.meleeUI.requestRestartLevel(mapPath, doScoreScreen);
 	}
 
 	@Override

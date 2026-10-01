@@ -618,7 +618,9 @@ public final class GlobalScope {
 			JassLog.report(jassException);
 			throw jassException;
 		}
-		this.currentThread = parentThread;
+		finally {
+			this.currentThread = parentThread;
+		}
 	}
 
 	public JassValue runThreadUntilCompletionAndReadReturnValue(final JassThread thread,

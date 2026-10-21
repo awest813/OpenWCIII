@@ -426,7 +426,7 @@ endfunction
 		captureFrames = 0;
 		if (BROADER) check(sceneCaptureUI.getCinematicSceneRemaining() > 0, "Loading time expired the saved transmission before its first live frames");
 		if (BROADER) check(sceneCaptureUI.getCameraManager().getPanDestination() != null, "Loading time completed the saved pan before its first live frames");
-		final com.badlogic.gdx.graphics.Pixmap pixels = com.badlogic.gdx.utils.ScreenUtils.getFrameBufferPixmap(
+		final com.badlogic.gdx.graphics.Pixmap pixels = com.badlogic.gdx.graphics.Pixmap.createFromFrameBuffer(
 				0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
 		final com.badlogic.gdx.graphics.PixmapIO.PNG writer = new com.badlogic.gdx.graphics.PixmapIO.PNG();
 		try {

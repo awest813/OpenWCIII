@@ -2630,7 +2630,7 @@ public class CUnit extends CWidget {
 	public <T extends CAbility> T getFirstAbilityOfType(final Class<T> cAbilityClass) {
 		for (final CAbility ability : this.abilities) {
 			if (cAbilityClass.isAssignableFrom(ability.getClass())) {
-				return (T) ability;
+				return cAbilityClass.cast(ability);
 			}
 		}
 		return null;

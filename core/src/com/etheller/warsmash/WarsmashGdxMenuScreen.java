@@ -564,13 +564,11 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 		Gdx.gl30.glBindVertexArray(WarsmashGdxGame.VAO);
 	}
 
-	private final int frame = 0;
 	private MdxComplexInstance mainInstance;
 	private MdxModel mainModel;
 	private com.etheller.warsmash.viewer5.handlers.mdx.Camera modelCamera;
 	private final float[] cameraPositionTemp = new float[3];
 	private final float[] cameraTargetTemp = new float[3];
-	private final boolean firstFrame = true;
 	private final com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuRenderProbe menuRenderProbe =
 			new com.etheller.warsmash.viewer5.handlers.w3x.ui.menu.MenuRenderProbe();
 	private Scene scene;
@@ -839,7 +837,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 
 	private class LibGDXContentLayerModelInstance extends ModelInstance {
 
-		public LibGDXContentLayerModelInstance(final Model model) {
+		public LibGDXContentLayerModelInstance(final Model<?> model) {
 			super(model);
 		}
 
@@ -901,7 +899,7 @@ public class WarsmashGdxMenuScreen implements InputProcessor, Screen, SingleMode
 
 	}
 
-	private class LibGDXContentLayerModel extends Model {
+	private class LibGDXContentLayerModel extends Model<ModelHandler> {
 
 		public LibGDXContentLayerModel(final ModelHandler handler, final ModelViewer viewer, final String extension,
 				final PathSolver pathSolver, final String fetchUrl) {

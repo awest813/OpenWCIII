@@ -59,6 +59,7 @@ public class AbilityBuilderConfigTree extends JTree {
 		return conditionTreeNode;
 	}
 
+	@SuppressWarnings("unchecked")
 	public void setConfig(AbilityBuilderConfiguration config) {
 		root = new DefaultMutableTreeNode(config.getId() + " \"" + config.getCastId() + "\"");
 
@@ -115,7 +116,7 @@ public class AbilityBuilderConfigTree extends JTree {
 				try {
 					DefaultMutableTreeNode nodeForField = new DefaultMutableTreeNode(field.getName());
 					nodeForAction.add(nodeForField);
-					List fieldValue = (List) field.get(action);
+					List<?> fieldValue = (List<?>) field.get(action);
 					if (fieldValue != null) {
 						for (int i = 0; i < fieldValue.size(); i++) {
 							Object listItem = fieldValue.get(i);

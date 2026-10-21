@@ -109,7 +109,7 @@ public class WarsmashTestGameAttributes extends ApplicationAdapter {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
 //		Gdx.gl30.glBindVertexArray(this.VAO);
-		this.shaderProgram.begin();
+		this.shaderProgram.bind();
 
 		Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, this.arrayBuffer);
 		this.shaderProgram.setVertexAttribute("a_position", 3, GL20.GL_FLOAT, false, 0, 0);
@@ -122,7 +122,6 @@ public class WarsmashTestGameAttributes extends ApplicationAdapter {
 		Gdx.gl.glBufferSubData(GL20.GL_ELEMENT_ARRAY_BUFFER, 0, 3 * 2, this.faceBuffer);
 		Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, 3, GL20.GL_UNSIGNED_SHORT, 0);
 //		Gdx.gl.glDrawArrays(GL20.GL_TRIANGLES, 0, 3);
-		this.shaderProgram.end();
 	}
 
 	@Override

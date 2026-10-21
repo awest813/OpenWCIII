@@ -6,6 +6,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ExternStringMsgAbilityActivationReceiver;
 
 public class COrderDropItemAtPoint implements COrder {
 	private final int abilityHandleId;
@@ -13,6 +14,7 @@ public class COrderDropItemAtPoint implements COrder {
 	private final int itemHandleId;
 	private final AbilityPointTarget target;
 	private final boolean queued;
+	private final ExternStringMsgAbilityActivationReceiver abilityActivationReceiver = new ExternStringMsgAbilityActivationReceiver();
 
 	public COrderDropItemAtPoint(final int abilityHandleId, final int orderId, final int itemHandleId,
 			final AbilityPointTarget target, final boolean queued) {

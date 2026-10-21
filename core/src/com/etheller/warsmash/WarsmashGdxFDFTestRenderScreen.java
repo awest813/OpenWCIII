@@ -791,7 +791,7 @@ public class WarsmashGdxFDFTestRenderScreen implements InputProcessor, Screen, S
 
 	private class LibGDXContentLayerModelInstance extends ModelInstance {
 
-		public LibGDXContentLayerModelInstance(final Model model) {
+		public LibGDXContentLayerModelInstance(final Model<?> model) {
 			super(model);
 		}
 
@@ -853,7 +853,7 @@ public class WarsmashGdxFDFTestRenderScreen implements InputProcessor, Screen, S
 
 	}
 
-	private class LibGDXContentLayerModel extends Model {
+	private class LibGDXContentLayerModel extends Model<ModelHandler> {
 
 		public LibGDXContentLayerModel(final ModelHandler handler, final ModelViewer viewer, final String extension,
 				final PathSolver pathSolver, final String fetchUrl) {

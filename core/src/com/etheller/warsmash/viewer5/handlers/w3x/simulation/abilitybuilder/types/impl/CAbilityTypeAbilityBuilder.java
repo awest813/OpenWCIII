@@ -28,6 +28,7 @@ public class CAbilityTypeAbilityBuilder extends CAbilityType<CAbilityTypeAbility
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	public CAbility createAbility(int handleId) {
 		Map<String, Object> localStore = new HashMap<>();
 		localStore.put(ABLocalStoreKeys.ABILITYEDITORDATA, this.abilityEditorData);

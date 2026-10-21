@@ -47,6 +47,7 @@ public abstract class CBasePlayer implements CPlayerJass {
 		this.playerStates.putAll(other.playerStates);
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public CBasePlayer(final int id) {
 		this.id = id;
 		this.color = id;

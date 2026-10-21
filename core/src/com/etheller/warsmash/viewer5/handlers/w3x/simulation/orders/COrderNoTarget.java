@@ -5,12 +5,15 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ExternStringMsgAbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ExternStringMsgTargetCheckReceiver;
 
 public class COrderNoTarget implements COrder {
 	private final int abilityHandleId;
 	private final int orderId;
 	private final boolean queued;
+	private final ExternStringMsgTargetCheckReceiver<Void> targetCheckReceiver = new ExternStringMsgTargetCheckReceiver<>();
+	private final ExternStringMsgAbilityActivationReceiver abilityActivationReceiver = new ExternStringMsgAbilityActivationReceiver();
 
 	public COrderNoTarget(final int abilityHandleId, final int orderId, final boolean queued) {
 		this.abilityHandleId = abilityHandleId;
@@ -45,14 +48,14 @@ public class COrderNoTarget implements COrder {
 		}
 		ability.checkCanUse(game, caster, this.orderId, this.abilityActivationReceiver.reset());
 		if (this.abilityActivationReceiver.isUseOk()) {
-			final ExternStringMsgTargetCheckReceiver<Void> targetReceiver = (ExternStringMsgTargetCheckReceiver<Void>) targetCheckReceiver;
-			ability.checkCanTargetNoTarget(game, caster, this.orderId, targetReceiver);
-			if (targetReceiver.getExternStringKey() == null) {
+			ability.checkCanTargetNoTarget(game, caster, this.orderId, this.targetCheckReceiver.reset());
+			if (this.targetCheckReceiver.getExternStringKey() == null) {
 				caster.fireOrderEvents(game, this);
 				return ability.beginNoTarget(game, caster, this.orderId);
 			}
 			else {
-				game.getCommandErrorListener().showInterfaceError(caster.getPlayerIndex(), targetReceiver.getExternStringKey());
+				game.getCommandErrorListener().showInterfaceError(caster.getPlayerIndex(),
+						this.targetCheckReceiver.getExternStringKey());
 				return caster.pollNextOrderBehavior(game);
 			}
 		}

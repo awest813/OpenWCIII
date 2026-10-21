@@ -151,6 +151,7 @@ public final class SdSequence<TYPE> {
 		return fixTimelineArray(timeline, inTans);
 	}
 
+	@SuppressWarnings("unchecked")
 	private TYPE[] fixTimelineArray(final MdlxTimeline<TYPE> timeline, final TYPE[] values) {
 		if (values == null) {
 			return null;

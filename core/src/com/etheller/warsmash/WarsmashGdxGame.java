@@ -396,7 +396,7 @@ public class WarsmashGdxGame extends ApplicationAdapter implements CanvasProvide
 		if (ADVANCE_ANIMS && this.mainInstance.sequenceEnded) {
 			final int sequence = (this.mainInstance.sequence + 1) % this.mainModel.getSequences().size();
 			this.mainInstance.setSequence(sequence);
-			this.mainInstance.frame += (int) (Gdx.graphics.getRawDeltaTime() * 1000);
+			this.mainInstance.frame += (int) (Gdx.graphics.getDeltaTime() * 1000);
 		}
 		if (this.firstFrame) {
 			final Music music = Gdx.audio.newMusic(new DataSourceFileHandle(this.viewer.dataSource,

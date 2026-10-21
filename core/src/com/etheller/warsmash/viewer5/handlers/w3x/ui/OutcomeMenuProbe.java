@@ -217,7 +217,7 @@ public final class OutcomeMenuProbe {
 		final String directory = System.getProperty("warsmash.outcomeMenuCaptureDirectory");
 		check(directory != null, "Capture directory missing");
 		Gdx.files.absolute(directory).mkdirs();
-		final Pixmap pixels = ScreenUtils.getFrameBufferPixmap(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+		final Pixmap pixels = Pixmap.createFromFrameBuffer(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
 		final PixmapIO.PNG writer = new PixmapIO.PNG();
 		try {
 			writer.setFlipY(true);

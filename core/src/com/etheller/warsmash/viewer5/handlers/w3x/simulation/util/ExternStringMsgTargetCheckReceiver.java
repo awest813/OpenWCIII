@@ -3,6 +3,7 @@ package com.etheller.warsmash.viewer5.handlers.w3x.simulation.util;
 public final class ExternStringMsgTargetCheckReceiver<TARGET_TYPE> implements AbilityTargetCheckReceiver<TARGET_TYPE> {
     private static final ExternStringMsgTargetCheckReceiver<?> INSTANCE = new ExternStringMsgTargetCheckReceiver<>();
 
+    @SuppressWarnings("unchecked")
     public static <T> ExternStringMsgTargetCheckReceiver<T> getInstance() {
         return (ExternStringMsgTargetCheckReceiver<T>) INSTANCE;
     }

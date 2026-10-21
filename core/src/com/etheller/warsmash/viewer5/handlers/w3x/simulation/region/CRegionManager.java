@@ -16,6 +16,7 @@ public class CRegionManager {
 	private final List<CRegion>[][] cellRegions;
 	private final PathingGrid pathingGrid;
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public CRegionManager(final Rectangle entireMapBounds, final PathingGrid pathingGrid) {
 		this.regionTree = new Quadtree<>(entireMapBounds);
 		this.cellRegions = new List[pathingGrid.getHeight()][pathingGrid.getWidth()];

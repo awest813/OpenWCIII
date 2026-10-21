@@ -4,7 +4,6 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.PixmapIO;
 import com.badlogic.gdx.math.Rectangle;
-import com.badlogic.gdx.utils.ScreenUtils;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.ModelViewer;
 import com.etheller.warsmash.viewer5.Scene;
@@ -29,7 +28,7 @@ public final class MenuRenderProbe {
                 backdrop.smoothAdditiveTextures = false;
                 viewer.startFrame();
                 viewer.render();
-                final Pixmap baseline = ScreenUtils.getFrameBufferPixmap(0, 0,
+                final Pixmap baseline = Pixmap.createFromFrameBuffer(0, 0,
                         Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
                 try { writeCapture("menu-" + this.index + "-bilinear.png", baseline); }
                 finally { baseline.dispose(); }
@@ -37,7 +36,7 @@ public final class MenuRenderProbe {
             finally { backdrop.smoothAdditiveTextures = smooth; }
             viewer.startFrame();
             viewer.render();
-            final Pixmap pixels = ScreenUtils.getFrameBufferPixmap(0, 0,
+            final Pixmap pixels = Pixmap.createFromFrameBuffer(0, 0,
                     Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
             try {
                 writeCapture("menu-" + this.index + ".png", pixels);

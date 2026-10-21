@@ -132,7 +132,7 @@ public class CPsuedoProjectile extends CProjectile implements CUnitEnumFunction,
 		final float d1x = dtsx / this.distanceToTarget;
 		final float d1y = dtsy / this.distanceToTarget;
 		if (speed != 0) {
-			this.steps = ((int)Math.round(this.distanceToTarget) / (int)speed) + 1;
+			this.steps = (Math.round(this.distanceToTarget) / (int) speed) + 1;
 		}
 		
 		float travelDistance = Math.min(speed, distanceToTarget/this.steps);

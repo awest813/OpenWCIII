@@ -16,6 +16,7 @@ public class InRAMUserManager implements UserManager {
 
 	private final transient XStream xstream = new XStream();
 
+	@SuppressWarnings("unchecked")
 	public InRAMUserManager() {
 		this.xstream
 				.allowTypesByWildcard(new String[] { "com.etheller.warsmash.networking.uberserver.users.UserImpl" });

@@ -4,15 +4,16 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetC
 
 public class RecordingAbilityTargetCheckReceiver<TARGET_TYPE> implements AbilityTargetCheckReceiver<TARGET_TYPE> {
 
-	public static final RecordingAbilityTargetCheckReceiver INSTANCE = new RecordingAbilityTargetCheckReceiver();
+	public static final RecordingAbilityTargetCheckReceiver<?> INSTANCE = new RecordingAbilityTargetCheckReceiver<>();
 	private TARGET_TYPE target;
 	private boolean targetOk;
 	private boolean notActive;
 	private boolean wrongId;
 	private String commandStringErrorKey;
 
+	@SuppressWarnings("unchecked")
 	public static <TARGET_TYPE> RecordingAbilityTargetCheckReceiver<TARGET_TYPE> getInstance() {
-		return INSTANCE;
+		return (RecordingAbilityTargetCheckReceiver<TARGET_TYPE>) INSTANCE;
 	}
 
 	public RecordingAbilityTargetCheckReceiver<TARGET_TYPE> reset() {

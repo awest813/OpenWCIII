@@ -14,8 +14,9 @@ import com.etheller.interpreter.ast.value.StringJassValue;
 import com.etheller.interpreter.ast.value.StructJassValue;
 
 public class ObjectJassValueVisitor<T> implements JassValueVisitor<T> {
-	private static final ObjectJassValueVisitor<?> INSTANCE = new ObjectJassValueVisitor();
+	private static final ObjectJassValueVisitor<?> INSTANCE = new ObjectJassValueVisitor<Object>();
 
+	@SuppressWarnings("unchecked")
 	public static <V> ObjectJassValueVisitor<V> getInstance() {
 		return (ObjectJassValueVisitor<V>) INSTANCE;
 	}
@@ -51,6 +52,7 @@ public class ObjectJassValueVisitor<T> implements JassValueVisitor<T> {
 	}
 
 	@Override
+	@SuppressWarnings("unchecked")
 	public T accept(final HandleJassValue value) {
 		return (T) value.getJavaValue();
 	}

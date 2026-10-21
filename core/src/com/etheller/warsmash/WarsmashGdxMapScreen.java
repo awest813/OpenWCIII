@@ -580,7 +580,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	private class LibGDXContentLayerModelInstance extends ModelInstance {
 
-		public LibGDXContentLayerModelInstance(final Model model) {
+		public LibGDXContentLayerModelInstance(final Model<?> model) {
 			super(model);
 		}
 
@@ -642,7 +642,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	}
 
-	private class LibGDXContentLayerModel extends Model {
+	private class LibGDXContentLayerModel extends Model<ModelHandler> {
 
 		public LibGDXContentLayerModel(final ModelHandler handler, final ModelViewer viewer, final String extension,
 				final PathSolver pathSolver, final String fetchUrl) {

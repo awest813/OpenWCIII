@@ -37,7 +37,7 @@ public abstract class ModelViewer {
 	public final int rectBuffer;
 	public ClientBuffer buffer;
 	public boolean audioEnabled;
-	private final Map<Model, List<TextureMapper>> textureMappers;
+	private final Map<Model<?>, List<TextureMapper>> textureMappers;
 	private final Set<ResourceHandler> handlers;
 
 	public ModelViewer(final DataSource dataSource, final CanvasProvider canvas) {
@@ -69,7 +69,7 @@ public abstract class ModelViewer {
 		temp.clear();
 		this.gl.glBufferData(GL20.GL_ARRAY_BUFFER, temp.capacity(), temp, GL20.GL_STATIC_DRAW);
 		this.audioEnabled = false;
-		this.textureMappers = new HashMap<Model, List<TextureMapper>>();
+		this.textureMappers = new HashMap<Model<?>, List<TextureMapper>>();
 	}
 
 	public void setDataSource(final DataSource dataSource) {
@@ -295,7 +295,7 @@ public abstract class ModelViewer {
 	}
 
 	public void update() {
-		final float dt = Gdx.graphics.getRawDeltaTime();// this.frameTime * 0.001f;
+		final float dt = Gdx.graphics.getDeltaTime();// this.frameTime * 0.001f;
 
 		this.frame += 1;
 
@@ -328,7 +328,7 @@ public abstract class ModelViewer {
 	}
 
 	public TextureMapper baseTextureMapper(final ModelInstance instance) {
-		final Model model = instance.model;
+		final Model<?> model = instance.model;
 		List<TextureMapper> mappers = this.textureMappers.get(model);
 		if (mappers == null) {
 			mappers = new ArrayList<>();
@@ -350,7 +350,7 @@ public abstract class ModelViewer {
 			map.remove(key);
 		}
 
-		final Model model = instance.model;
+		final Model<?> model = instance.model;
 		final List<TextureMapper> mappers = this.textureMappers.get(model);
 
 		for (final TextureMapper mapper : mappers) {

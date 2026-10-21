@@ -18,7 +18,7 @@ public class WarsmashGdxMultiScreenGame extends Game implements CanvasProvider {
 
 	@Override
 	public void render() {
-		framePacingTracker.tick(Gdx.graphics.getRawDeltaTime());
+		framePacingTracker.tick(Gdx.graphics.getDeltaTime());
 		super.render();
 	}
 

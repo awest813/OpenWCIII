@@ -3,6 +3,7 @@ package com.etheller.warsmash.viewer5.handlers.w3x.simulation.util;
 public final class BooleanAbilityTargetCheckReceiver<TARGET_TYPE> implements AbilityTargetCheckReceiver<TARGET_TYPE> {
 	private static final BooleanAbilityTargetCheckReceiver<?> INSTANCE = new BooleanAbilityTargetCheckReceiver<>();
 
+	@SuppressWarnings("unchecked")
 	public static <T> BooleanAbilityTargetCheckReceiver<T> getInstance() {
 		return (BooleanAbilityTargetCheckReceiver<T>) INSTANCE;
 	}

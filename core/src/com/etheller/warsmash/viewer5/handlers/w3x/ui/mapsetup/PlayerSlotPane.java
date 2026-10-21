@@ -146,6 +146,7 @@ public class PlayerSlotPane {
 					break;
 				case NORMAL:
 					name = nameMenuItems.get(3).getText();
+					break;
 				default:
 					break;
 				}

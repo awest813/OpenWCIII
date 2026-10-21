@@ -417,7 +417,7 @@ public final class HumanCampaignPlaythroughProbe {
         if (!ENABLED) return;
         if (capture != null && ++captureFrames >= 90) {
             final var dir=Gdx.files.absolute(Path.of(System.getProperty("user.home"),"human-campaign").toString()); dir.mkdirs();
-            final Pixmap pixels=ScreenUtils.getFrameBufferPixmap(0,0,Gdx.graphics.getBackBufferWidth(),Gdx.graphics.getBackBufferHeight());
+            final Pixmap pixels=Pixmap.createFromFrameBuffer(0,0,Gdx.graphics.getBackBufferWidth(),Gdx.graphics.getBackBufferHeight());
             final PixmapIO.PNG writer=new PixmapIO.PNG();
             try { writer.setFlipY(true); writer.write(dir.child(capture+".png"),pixels); }
             catch(IOException e) { throw new IllegalStateException(e); }

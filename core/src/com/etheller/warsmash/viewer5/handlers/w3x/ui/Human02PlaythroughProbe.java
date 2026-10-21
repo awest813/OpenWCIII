@@ -327,7 +327,7 @@ public final class Human02PlaythroughProbe {
         if (pendingCapture != null && ++captureFrames >= (pendingCapture.equals("interlude") || pendingCapture.equals("human03") ? 120 : 3)) {
             final var directory = Gdx.files.absolute(Path.of(System.getProperty("user.home"), "human02").toString());
             directory.mkdirs();
-            final Pixmap pixels = ScreenUtils.getFrameBufferPixmap(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
+            final Pixmap pixels = Pixmap.createFromFrameBuffer(0, 0, Gdx.graphics.getBackBufferWidth(), Gdx.graphics.getBackBufferHeight());
             final PixmapIO.PNG writer = new PixmapIO.PNG();
             try { writer.setFlipY(true); writer.write(directory.child(pendingCapture + ".png"), pixels); }
             catch (final IOException error) { throw new IllegalStateException(error); }

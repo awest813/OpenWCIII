@@ -56,7 +56,7 @@ public class AnimationControllerPanel extends JPanel implements YseraGUIListener
 		this.animationBox.getAccessibleContext().setAccessibleName("Animation Sequence Selector");
 		this.animationBox.setRenderer(new BasicComboBoxRenderer() {
 			@Override
-			public Component getListCellRendererComponent(final JList list, final Object value, final int index,
+			public Component getListCellRendererComponent(final JList<?> list, final Object value, final int index,
 					final boolean isSelected, final boolean cellHasFocus) {
 				Object display = value == null ? "(Unanimated)" : ((MdlxSequence) value).getName();
 				if ((value != null) && (AnimationControllerPanel.this.model != null)) {

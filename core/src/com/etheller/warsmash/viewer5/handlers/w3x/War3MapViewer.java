@@ -1313,7 +1313,7 @@ public class War3MapViewer extends AbstractMdxModelViewer implements MdxAssetLoa
 
 			super.update();
 
-			final float rawDeltaTime = discardFrameTime ? 0 : Gdx.graphics.getRawDeltaTime();
+			final float rawDeltaTime = discardFrameTime ? 0 : Gdx.graphics.getDeltaTime();
 			this.updateTime += rawDeltaTime;
 
 			final Iterator<TextTag> textTagIterator = this.textTags.iterator();

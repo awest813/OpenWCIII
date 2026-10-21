@@ -362,6 +362,7 @@ public abstract class Scene {
 		}
 	}
 
+	@SuppressWarnings("rawtypes")
 	public void clearEmitterObjects() {
 		for (final EmittedObject object : this.emitterObjectUpdater.objects) {
 			object.health = 0;

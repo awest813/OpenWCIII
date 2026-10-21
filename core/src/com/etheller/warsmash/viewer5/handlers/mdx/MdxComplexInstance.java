@@ -89,6 +89,7 @@ public class MdxComplexInstance extends ModelInstance {
 	}
 
 	@Override
+	@SuppressWarnings("unchecked")
 	public void load() {
 		final MdxModel model = (MdxModel) this.model;
 

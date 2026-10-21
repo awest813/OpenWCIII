@@ -69,6 +69,15 @@ public class ABTimeOfDayEvent implements TimeOfDayEvent {
 				&& Float.floatToIntBits(startTime) == Float.floatToIntBits(other.startTime);
 	}
 
+	@Override
+	public int hashCode() {
+		if (this.equalityId != null) {
+			return this.equalityId.hashCode();
+		}
+		return Objects.hash(this.actions, this.castId, this.caster, this.endTime, this.game, this.localStore,
+				this.startTime);
+	}
+
 	public String toString() {
 		return "Event Active from " + this.startTime + " to " + this.endTime + " (EqId: " + this.equalityId + ")";
 	}

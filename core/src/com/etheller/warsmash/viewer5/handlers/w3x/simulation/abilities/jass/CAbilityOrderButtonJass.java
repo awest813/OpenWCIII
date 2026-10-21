@@ -41,7 +41,7 @@ public class CAbilityOrderButtonJass extends COrderButton implements CHandle {
 	private Integer beginUnitIdxVtable;
 	private Integer beginItemIdxVtable;
 	private Integer beginDestructableIdxVtable;
-	private AbilityTargetCheckReceiver targetReceiver;
+	private AbilityTargetCheckReceiver<?> targetReceiver;
 	private AbilityActivationReceiver usableReceiver;
 
 	public CAbilityOrderButtonJass(final int handleId, final int orderId) {
@@ -284,8 +284,13 @@ public class CAbilityOrderButtonJass extends COrderButton implements CHandle {
 		return behavior;
 	}
 
-	public AbilityTargetCheckReceiver getTargetReceiver() {
+	public AbilityTargetCheckReceiver<?> getTargetReceiver() {
 		return this.targetReceiver;
+	}
+
+	@SuppressWarnings("unchecked")
+	public void passTargetCheck(final Object target) {
+		((AbilityTargetCheckReceiver<Object>) this.targetReceiver).targetOk(target);
 	}
 
 	public AbilityActivationReceiver getUsableReceiver() {

@@ -13,7 +13,7 @@ import com.etheller.warsmash.viewer5.TextureMapper;
 public class MdxSimpleInstance extends BatchedInstance {
 	public Texture[] replaceableTextures = new Texture[WarsmashConstants.REPLACEABLE_TEXTURE_LIMIT];
 
-	public MdxSimpleInstance(final Model model) {
+	public MdxSimpleInstance(final Model<?> model) {
 		super(model);
 	}
 

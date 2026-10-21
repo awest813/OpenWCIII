@@ -31,6 +31,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfi
 
 import mpq.MPQArchive;
 
+@SuppressWarnings("try")
 class JassAIEconomyTest {
     @Test
     void mixedNinetySixUnitArmiesEngageThroughCaptainOrders() throws Exception {

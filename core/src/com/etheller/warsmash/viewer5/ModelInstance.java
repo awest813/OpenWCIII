@@ -27,7 +27,7 @@ public abstract class ModelInstance extends Node {
 
 	public List<ModelInstance> childrenInstances;
 
-	public ModelInstance(final Model model) {
+	public ModelInstance(final Model<?> model) {
 		this.scene = null;
 		this.left = -1;
 		this.right = -1;

@@ -3463,8 +3463,8 @@ public class Jass2 {
 								ObjectJassValueVisitor.getInstance());
 						final float facing = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
 						final War3ID rawcodeId = new War3ID(rawcode);
-						final float x = whichLocation == null ? 0 : (float) whichLocation.x;
-						final float y = whichLocation == null ? 0 : (float) whichLocation.y;
+						final float x = whichLocation == null ? 0 : whichLocation.x;
+						final float y = whichLocation == null ? 0 : whichLocation.y;
 						final CUnit newUnit = CommonEnvironment.this.simulation.createUnitSimple(rawcodeId,
 								player.getId(), x, y, facing);
 						player.addTechtreeUnlocked(this.simulation, rawcodeId);
@@ -3479,8 +3479,8 @@ public class Jass2 {
 						final float facing = arguments.get(3).visit(RealJassValueVisitor.getInstance()).floatValue();
 						final CUnitType unitTypeByJassLegacyName = this.simulation.getUnitData()
 								.getUnitTypeByJassLegacyName(legacyName);
-						final float x = whichLocation == null ? 0 : (float) whichLocation.x;
-						final float y = whichLocation == null ? 0 : (float) whichLocation.y;
+						final float x = whichLocation == null ? 0 : whichLocation.x;
+						final float y = whichLocation == null ? 0 : whichLocation.y;
 						final CUnit newUnit = CommonEnvironment.this.simulation
 								.createUnitSimple(unitTypeByJassLegacyName.getTypeId(), player.getId(), x, y, facing);
 						player.addTechtreeUnlocked(this.simulation, unitTypeByJassLegacyName.getTypeId());
@@ -9726,7 +9726,7 @@ public class Jass2 {
 						final CAbilityOrderButtonJass orderCommandCard = arguments.get(0)
 								.visit(ObjectJassValueVisitor.getInstance());
 						final Object finalizedTarget = nullable(arguments, 1, ObjectJassValueVisitor.getInstance());
-						orderCommandCard.getTargetReceiver().targetOk(finalizedTarget);
+						orderCommandCard.passTargetCheck(finalizedTarget);
 						return null;
 					});
 			jassProgramVisitor.getJassNativeManager().createNative("PassUsableCheck",

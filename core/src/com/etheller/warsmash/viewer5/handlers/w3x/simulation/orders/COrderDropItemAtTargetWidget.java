@@ -6,6 +6,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.inventory.CAbilityInventory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ExternStringMsgAbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ExternStringMsgTargetCheckReceiver;
 
 public class COrderDropItemAtTargetWidget implements COrder {
@@ -14,6 +15,8 @@ public class COrderDropItemAtTargetWidget implements COrder {
 	private final int itemHandleId;
 	private final int targetHeroHandleId;
 	private final boolean queued;
+	private final ExternStringMsgTargetCheckReceiver<CWidget> targetCheckReceiver = new ExternStringMsgTargetCheckReceiver<>();
+	private final ExternStringMsgAbilityActivationReceiver abilityActivationReceiver = new ExternStringMsgAbilityActivationReceiver();
 
 	public COrderDropItemAtTargetWidget(final int abilityHandleId, final int orderId, final int itemHandleId,
 			final int targetHeroHandleId, final boolean queued) {
@@ -56,13 +59,13 @@ public class COrderDropItemAtTargetWidget implements COrder {
 		if (this.abilityActivationReceiver.isUseOk()) {
 			final CItem itemToDrop = (CItem) game.getWidget(this.itemHandleId);
 			final CUnit targetHero = (CUnit) game.getWidget(this.targetHeroHandleId);
-			final ExternStringMsgTargetCheckReceiver<CWidget> targetReceiver = (ExternStringMsgTargetCheckReceiver<CWidget>) targetCheckReceiver;
-			ability.checkCanTarget(game, caster, this.orderId, targetHero, targetReceiver.reset());
-			if (targetReceiver.getTarget() != null) {
+			ability.checkCanTarget(game, caster, this.orderId, targetHero, this.targetCheckReceiver.reset());
+			if (this.targetCheckReceiver.getTarget() != null) {
 				return ability.beginDropItem(game, caster, this.orderId, itemToDrop, targetHero);
 			}
 			else {
-				game.getCommandErrorListener().showInterfaceError(caster.getPlayerIndex(), targetReceiver.getExternStringKey());
+				game.getCommandErrorListener().showInterfaceError(caster.getPlayerIndex(),
+						this.targetCheckReceiver.getExternStringKey());
 				return caster.pollNextOrderBehavior(game);
 			}
 		}

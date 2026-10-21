@@ -107,7 +107,7 @@ public class WebGL {
 				oldAttribs = currentShaderProgram.getAttributes().length;
 			}
 
-			shaderProgram.begin();
+			shaderProgram.bind();
 
 			if (newAttribs > oldAttribs) {
 				this.enableVertexAttribs(oldAttribs, newAttribs);
@@ -124,7 +124,6 @@ public class WebGL {
 
 			if (currentShaderProgram != null) {
 				oldAttribs = currentShaderProgram.getAttributes().length;
-				currentShaderProgram.end();
 			}
 
 			if (newAttribs > oldAttribs) {

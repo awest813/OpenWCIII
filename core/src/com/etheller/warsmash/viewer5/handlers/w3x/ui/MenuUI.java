@@ -137,7 +137,6 @@ public class MenuUI {
 	private final Viewport uiViewport;
 	private final MdxViewer viewer;
 	private final RootFrameListener rootFrameListener;
-	private final float widthRatioCorrection;
 	private final float heightRatioCorrection;
 	private GameUI rootFrame;
 	private SpriteFrame cursorFrame;
@@ -296,7 +295,6 @@ public class MenuUI {
 		this.rootFrameListener = rootFrameListener;
 		this.gamingNetworkConnection = gamingNetworkConnection;
 
-		this.widthRatioCorrection = getMinWorldWidth() / 1600f;
 		this.heightRatioCorrection = getMinWorldHeight() / 1200f;
 
 		this.profileManager = PlayerProfileManager.loadFromGdx();
@@ -1096,6 +1094,8 @@ public class MenuUI {
 								Extensions.gamma, OptionsSettingsStore.optionsFile());
 						if (videoError != null) {
 							MenuUI.this.dialog.showError(videoError, null);
+							// The music preview was live; put the committed volume back.
+							applyStoredMusicVolume();
 							return;
 						}
 						applyStoredMusicVolume();
@@ -2604,6 +2604,7 @@ public class MenuUI {
 		return this.uiViewport.getWorldHeight();
 	}
 
+	@SuppressWarnings("fallthrough")
 	public void update(final float deltaTime) {
 		if ((this.beginGameInformation != null) && (this.menuState != MenuState.GOING_TO_MAP)) {
 			this.campaignFade.setVisible(false);
@@ -2718,16 +2719,22 @@ public class MenuUI {
 				}
 			}
 		}
-		if (this.currentMusics != null) {
-			if ((this.currentMusics[this.currentMusicIndex] != null)
-					&& !this.currentMusics[this.currentMusicIndex].isPlaying()) {
+		if (this.currentMusics != null && this.currentMusics.length > 0) {
+			if (this.currentMusicIndex < 0 || this.currentMusicIndex >= this.currentMusics.length) {
+				this.currentMusicIndex = 0;
+			}
+			final Music current = this.currentMusics[this.currentMusicIndex];
+			if ((current != null) && !current.isPlaying()) {
 				if (this.currentMusicRandomizeIndex) {
 					this.currentMusicIndex = (int) (Math.random() * this.currentMusics.length);
 				}
 				else {
 					this.currentMusicIndex = (this.currentMusicIndex + 1) % this.currentMusics.length;
 				}
-				this.currentMusics[this.currentMusicIndex].play();
+				final Music next = this.currentMusics[this.currentMusicIndex];
+				if (next != null) {
+					next.play();
+				}
 			}
 		}
 		if ((this.focusUIFrame != null) && !this.focusUIFrame.isVisibleOnScreen()) {
@@ -2848,6 +2855,7 @@ public class MenuUI {
 			case GOING_TO_BATTLE_NET_CHAT_CHANNEL_FROM_OUTSIDE:
 				this.glueSpriteLayerCenter.setVisible(true);
 				this.glueSpriteLayerCenter.setSequence("Birth");
+				// no break
 			case GOING_TO_BATTLE_NET_CHAT_CHANNEL:
 				MenuUI.this.glueSpriteLayerTopLeft.setSequence("BattleNetChatRoom Birth");
 				MenuUI.this.glueSpriteLayerTopRight.setSequence("BattleNetChatRoom Birth");
@@ -3617,6 +3625,9 @@ public class MenuUI {
 		if (WarsmashConstants.ENABLE_MUSIC) {
 			stopMusic();
 
+			if ((musicField == null) || musicField.isEmpty()) {
+				return null;
+			}
 			final String[] semicolonMusics = musicField.split(";");
 			final List<String> musicPaths = new ArrayList<>();
 			for (String musicPath : semicolonMusics) {
@@ -3653,8 +3664,16 @@ public class MenuUI {
 				}
 				this.currentMusics = fixedList;
 			}
+			if (this.currentMusics.length == 0) {
+				this.currentMusicIndex = 0;
+				this.currentMusicRandomizeIndex = random;
+				return null;
+			}
 			if (random) {
 				index = (int) (Math.random() * this.currentMusics.length);
+			}
+			else if ((index < 0) || (index >= this.currentMusics.length)) {
+				index = 0;
 			}
 			this.currentMusicIndex = index;
 			this.currentMusicRandomizeIndex = random;

@@ -42,6 +42,7 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 	private CBehaviorDropItem behaviorDropItem;
 	private CBehaviorGiveItemToHero behaviorGiveItem;
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public CAbilityInventory(final int handleId, final War3ID code, final War3ID alias, final boolean canDropItems,
 			final boolean canGetItems, final boolean canUseItems, final boolean dropItemsOnDeath,
 			final int itemCapacity) {

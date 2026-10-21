@@ -3,6 +3,7 @@ package com.etheller.warsmash.viewer5;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings({ "rawtypes", "unchecked" })
 public class EmittedObjectUpdater {
 	final List<EmittedObject> objects;
 	private int alive;

@@ -46,8 +46,14 @@ public class CGlobalGameEvent extends CGlobalEvent {
 
 	@Override
 	public void fire(final CWidget triggerWidget, final TriggerExecutionScope scope) {
+		fireGameEvent(null);
+	}
+
+	public void fireGameEvent(final String saveBasicFilename) {
 		final CommonTriggerExecutionScope execScope = CommonTriggerExecutionScope.gameEventScope(this.eventType,
-				this.trigger);
-		this.globalScope.queueTrigger(this.filter, execScope, this.trigger, execScope, execScope);
+				this.trigger, saveBasicFilename);
+		// A save may copy supporting zone archives before the main checkpoint is written.
+		this.globalScope.queueTrigger(this.filter, execScope, this.trigger, execScope, execScope,
+				this.eventType == JassGameEventsWar3.EVENT_GAME_SAVE);
 	}
 }

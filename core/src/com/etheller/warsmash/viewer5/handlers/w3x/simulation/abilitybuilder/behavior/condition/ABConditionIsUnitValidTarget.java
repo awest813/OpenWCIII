@@ -26,6 +26,8 @@ public class ABConditionIsUnitValidTarget implements ABCondition {
 	@Override
 	public boolean evaluate(CSimulation game, CUnit casterUnit, Map<String, Object> localStore, final int castId) {
 		CUnit theCaster = casterUnit;
+		final CUnit theUnit = this.target.callback(game, casterUnit, localStore, castId);
+		if (theUnit == null) return false;
 
 		final List<CAbilityTypeAbilityBuilderLevelData> levelData = (List<CAbilityTypeAbilityBuilderLevelData>) localStore
 				.get(ABLocalStoreKeys.LEVELDATA);
@@ -34,11 +36,11 @@ public class ABConditionIsUnitValidTarget implements ABCondition {
 		if (targetsAllowed.isEmpty()) {
 			return true;
 		}
-		final CUnit theUnit = this.target.callback(game, casterUnit, localStore, castId);
 		boolean te = false;
 		if (this.caster != null) {
 			theCaster = this.caster.callback(game, casterUnit, localStore, castId);
 		}
+		if (theCaster == null) return false;
 		if (this.targetedEffect != null) {
 			te = this.targetedEffect.callback(game, theCaster, localStore, castId);
 		}

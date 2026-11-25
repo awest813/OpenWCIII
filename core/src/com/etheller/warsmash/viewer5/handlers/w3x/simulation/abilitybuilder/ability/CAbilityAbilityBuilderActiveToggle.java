@@ -120,7 +120,7 @@ public class CAbilityAbilityBuilderActiveToggle extends CAbilityAbilityBuilderGe
 			deactivate(game, caster);
 			return false;
 		} else if (!this.active && (orderId == this.orderId)) {
-			if (caster.chargeMana(this.manaCost)) {
+			if (caster.chargeManaForSpell(game, this.manaCost)) {
 				this.runOnOrderIssuedActions(game, caster, orderId);
 				activate(game, caster);
 			}

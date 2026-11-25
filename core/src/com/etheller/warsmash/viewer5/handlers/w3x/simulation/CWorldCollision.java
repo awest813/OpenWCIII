@@ -24,7 +24,6 @@ public class CWorldCollision {
 	private final AnyUnitExceptTwoIntersector anyUnitExceptTwoIntersector;
 	private final EachUnitOnlyOnceIntersector eachUnitOnlyOnceIntersector;
 	private final DestructableEnumIntersector destructableEnumIntersector;
-	private final ItemEnumIntersector itemEnumIntersector;
 	private final ItemEnumIntersectorBoolean itemEnumIntersectorBoolean;
 	private final ObjectPool<Set<CUnit>> intersectedUnitsSetPool;
 	// PERFORMANCE: Cached Rectangle objects to eliminate GC allocations during spatial queries
@@ -46,7 +45,6 @@ public class CWorldCollision {
 		this.anyUnitExceptTwoIntersector = new AnyUnitExceptTwoIntersector();
 		this.eachUnitOnlyOnceIntersector = new EachUnitOnlyOnceIntersector();
 		this.destructableEnumIntersector = new DestructableEnumIntersector();
-		this.itemEnumIntersector = new ItemEnumIntersector();
 		this.itemEnumIntersectorBoolean = new ItemEnumIntersectorBoolean();
 		this.intersectedUnitsSetPool = new ObjectPool<>(32, HashSet::new);
 		this.rectPool = new ObjectPool<>(16, Rectangle::new);
@@ -261,7 +259,8 @@ public class CWorldCollision {
 	}
 
 	public void enumItemsInRect(final Rectangle rect, final CItemEnumFunction callback) {
-		this.itemsForEnum.intersect(rect, this.itemEnumIntersector.reset(callback));
+		this.itemsForEnum.intersect(rect, item ->
+				!item.isDead() && item.getContainedInventory() == null && callback.call(item));
 	}
 
 	public void enumDestructablesInRect(final Rectangle rect, final CDestructableEnumFunction callback) {
@@ -452,23 +451,6 @@ public class CWorldCollision {
 //			if (intersectingObject.isHidden()) { // at time of writing CDestructable did not have isHidden(), uncomment when available
 //				return false;
 //			}
-			return this.consumerDelegate.call(intersectingObject);
-		}
-	}
-
-	private static final class ItemEnumIntersector implements QuadtreeIntersector<CItem> {
-		private CItemEnumFunction consumerDelegate;
-
-		public ItemEnumIntersector reset(final CItemEnumFunction consumerDelegate) {
-			this.consumerDelegate = consumerDelegate;
-			return this;
-		}
-
-		@Override
-		public boolean onIntersect(final CItem intersectingObject) {
-			if (intersectingObject.isHidden()) {
-				return false;
-			}
 			return this.consumerDelegate.call(intersectingObject);
 		}
 	}

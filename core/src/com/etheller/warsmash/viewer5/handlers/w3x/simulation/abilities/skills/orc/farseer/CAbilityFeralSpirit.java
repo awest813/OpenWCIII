@@ -17,6 +17,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CEffectType;
 
 public class CAbilityFeralSpirit extends CAbilityNoTargetSpellBase {
+	private final int baseOrderId;
+	private final String countField;
 	private War3ID summonUnitId;
 	private int summonUnitCount;
 	private War3ID buffId;
@@ -28,21 +30,27 @@ public class CAbilityFeralSpirit extends CAbilityNoTargetSpellBase {
 	private final List<CUnit> lastSummonUnits = new ArrayList<>();
 
 	public CAbilityFeralSpirit(final int handleId, final War3ID alias) {
+		this(handleId, alias, OrderIds.spiritwolf, AbilityFields.DATA_B);
+	}
+
+	public CAbilityFeralSpirit(final int handleId, final War3ID alias, final int baseOrderId, final String countField) {
 		super(handleId, alias);
+		this.baseOrderId = baseOrderId;
+		this.countField = countField;
 	}
 
 	@Override
 	public void populateData(final GameObject worldEditorAbility, final int level) {
 		final String unitTypeOne = worldEditorAbility.getFieldAsString(AbilityFields.UNIT_ID + level, 0);
 		this.summonUnitId = unitTypeOne.length() == 4 ? War3ID.fromString(unitTypeOne) : War3ID.NONE;
-		this.summonUnitCount = worldEditorAbility.getFieldAsInteger(AbilityFields.DATA_B + level, 0);
+		this.summonUnitCount = worldEditorAbility.getFieldAsInteger(this.countField + level, 0);
 		this.buffId = AbstractCAbilityTypeDefinition.getBuffId(worldEditorAbility, level);
 		this.areaOfEffect = worldEditorAbility.getFieldAsFloat(AbilityFields.AREA_OF_EFFECT + level, 0);
 	}
 
 	@Override
 	public int getBaseOrderId() {
-		return OrderIds.spiritwolf;
+		return this.baseOrderId;
 	}
 
 	@Override
@@ -61,10 +69,14 @@ public class CAbilityFeralSpirit extends CAbilityNoTargetSpellBase {
 			final CUnit summonedUnit = simulation.createUnitSimple(this.summonUnitId, unit.getPlayerIndex(), x, y,
 					facing);
 			summonedUnit.addClassification(CUnitClassification.SUMMONED);
-			summonedUnit.add(simulation,
-					new CBuffTimedLife(simulation.getHandleIdAllocator().createId(), this.buffId, getDuration(), true));
-			simulation.createTemporarySpellEffectOnUnit(summonedUnit, getAlias(), CEffectType.SPECIAL);
+			if (getDuration() > 0) {
+				summonedUnit.add(simulation,
+						new CBuffTimedLife(simulation.getHandleIdAllocator().createId(), this.buffId, getDuration(), true));
+			}
+			simulation.createTemporarySpellEffectOnUnit(summonedUnit, getAlias(),
+					this.baseOrderId == OrderIds.wateryminion ? CEffectType.TARGET : CEffectType.SPECIAL);
 			this.lastSummonUnits.add(summonedUnit);
+			unit.fireSummonEvents(simulation, summonedUnit);
 		}
 		return false;
 	}

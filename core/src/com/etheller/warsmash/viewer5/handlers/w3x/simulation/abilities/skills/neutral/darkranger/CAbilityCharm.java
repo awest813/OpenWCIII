@@ -56,12 +56,17 @@ public class CAbilityCharm extends CAbilityTargetSpellBase {
 	public boolean doEffect(final CSimulation simulation, final CUnit unit, final AbilityTarget target) {
 		final CUnit targetUnit = target.visit(AbilityTargetVisitor.UNIT);
 		simulation.createTemporarySpellEffectOnUnit(targetUnit, getAlias(), CEffectType.TARGET);
+		transferUnit(simulation, unit, targetUnit);
+		return false;
+	}
+
+	public static void transferUnit(final CSimulation simulation, final CUnit unit, final CUnit targetUnit) {
 		final List<War3ID> targetUpgradesUsed = targetUnit.getUnitType().getUpgradesUsed();
 		final CPlayer targetPlayer = simulation.getPlayer(targetUnit.getPlayerIndex());
 		final CPlayer castingUnitPlayer = simulation.getPlayer(unit.getPlayerIndex());
 		for (final War3ID targetUpgradeUsed : targetUpgradesUsed) {
 			final CUpgradeType upgradeType = simulation.getUpgradeData().getType(targetUpgradeUsed);
-			if (upgradeType.isTransferWithUnitOwnership()) {
+			if (upgradeType != null && upgradeType.isTransferWithUnitOwnership()) {
 				final int targetPlayerTechUnlocked = targetPlayer.getTechtreeUnlocked(targetUpgradeUsed);
 				final int castingUnitPlayerTechUnlocked = castingUnitPlayer.getTechtreeUnlocked(targetUpgradeUsed);
 				if (targetPlayerTechUnlocked > castingUnitPlayerTechUnlocked) {
@@ -78,7 +83,6 @@ public class CAbilityCharm extends CAbilityTargetSpellBase {
 				targetUnit.getUnitType(), targetUnit);
 		castingUnitPlayer.setUnitFoodUsed(targetUnit, oldFoodUsed);
 		targetUnit.order(simulation, OrderIds.stop, null);
-		return false;
 	}
 
 	public int getMaximumCreepLevel() {

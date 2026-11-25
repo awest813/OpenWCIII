@@ -9,6 +9,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.build.CAbilityHumanRepair;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.orc.CAbilityLiquidFire;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetStillAliveAndTargetableVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CAbstractRangedBehavior;
@@ -96,17 +97,19 @@ public class CBehaviorHumanRepair extends CAbstractRangedBehavior {
 
 	@Override
 	protected CBehavior update(final CSimulation simulation, final boolean withinFacingWindow) {
+		final CUnit targetUnit = this.target.visit(AbilityTargetVisitor.UNIT);
+		final boolean constructing = targetUnit != null && targetUnit.isConstructing() && targetUnit.isConstructingPaused();
+		if (constructing && targetUnit.isFrozenBuilding()) return this;
 		if (this.target instanceof CWidget) {
 			final CWidget targetWidget = (CWidget) this.target;
-			if (targetWidget.getLife() >= targetWidget.getMaxLife()) {
+			if (!constructing && targetWidget.getLife() >= targetWidget.getMaxLife()) {
 				return this.unit.pollNextOrderBehavior(simulation);
 			}
 		}
-		final CUnit targetUnit = this.target.visit(AbilityTargetVisitor.UNIT);
-		if (targetUnit == null || !targetUnit.isConstructing() || !targetUnit.isConstructingPaused()
-				|| targetUnit.getWorker() != this.unit) {
-			final float ng = this.totalGoldCharged + this.goldPerUpdate + this.goldPerUpdate*this.ability.getPowerBuildTimeRatio()*targetUnit.getPowerWorkers();
-			final float nl = this.totalLumberCharged + this.lumberPerUpdate + this.lumberPerUpdate*this.ability.getPowerBuildTimeRatio()*targetUnit.getPowerWorkers();
+		if (!constructing || targetUnit.getWorker() != this.unit) {
+			final float costMultiplier = constructing ? 1 + this.ability.getPowerBuildTimeRatio() * targetUnit.getPowerWorkers() : 1;
+			final float ng = this.totalGoldCharged + this.goldPerUpdate * costMultiplier;
+			final float nl = this.totalLumberCharged + this.lumberPerUpdate * costMultiplier;
 			final int gdx = (int) (ng) - (int) this.totalGoldCharged;
 			final int ldx = (int) (nl) - (int) this.totalLumberCharged;
 			this.totalGoldCharged = ng;
@@ -127,11 +130,11 @@ public class CBehaviorHumanRepair extends CAbstractRangedBehavior {
 		}
 		if (this.target instanceof CWidget) {
 			final CWidget targetWidget = (CWidget) this.target;
-			if ((targetUnit != null) && targetUnit.isConstructing() && targetUnit.isConstructingPaused()) {
+			if (constructing) {
 				if (targetUnit.getWorker() == this.unit) {
 					targetUnit.setConstructionProgress(
 							targetUnit.getConstructionProgress() + WarsmashConstants.SIMULATION_STEP_TIME);
-					final int buildTime = targetUnit.getUnitType().getBuildTime();
+					final float buildTime = targetUnit.getConstructionDuration();
 					final float healthGain = (WarsmashConstants.SIMULATION_STEP_TIME / buildTime)
 							* (targetUnit.getMaximumLife() * (1.0f - WarsmashConstants.BUILDING_CONSTRUCT_START_LIFE));
 					targetUnit.setLife(simulation,
@@ -142,7 +145,7 @@ public class CBehaviorHumanRepair extends CAbstractRangedBehavior {
 				} else {
 					targetUnit.setConstructionProgress(targetUnit.getConstructionProgress()
 							+ WarsmashConstants.SIMULATION_STEP_TIME * this.ability.getPowerBuildTimeRatio());
-					final int buildTime = targetUnit.getUnitType().getBuildTime();
+					final float buildTime = targetUnit.getConstructionDuration();
 					targetUnit.setLife(simulation,
 							Math.min(targetUnit.getLife() + this.hpPerUpdate, targetUnit.getMaximumLife()));
 					if (targetUnit.getConstructionProgress() >= buildTime) {
@@ -172,7 +175,9 @@ public class CBehaviorHumanRepair extends CAbstractRangedBehavior {
 
 	@Override
 	protected boolean checkTargetStillValid(final CSimulation simulation) {
-		return this.target.visit(this.stillAliveVisitor.reset(simulation, this.unit, this.ability.getTargetsAllowed()));
+		return !CAbilityLiquidFire.blocksRepair(this.target)
+				&& !(this.target instanceof CUnit building && building.isUnsummoning())
+				&& this.target.visit(this.stillAliveVisitor.reset(simulation, this.unit, this.ability.getTargetsAllowed()));
 	}
 
 	@Override

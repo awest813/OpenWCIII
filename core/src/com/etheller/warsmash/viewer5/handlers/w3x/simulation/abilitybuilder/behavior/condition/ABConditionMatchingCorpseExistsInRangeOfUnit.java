@@ -87,7 +87,7 @@ public class ABConditionMatchingCorpseExistsInRangeOfUnit implements ABCondition
 
 		CorpseEnumFunction enumFunction = pool.obtain().reset(originUnitTarget, rangeVal, ur, conditions, localStore, castId, game, caster);
 		try {
-			game.getWorldCollision().enumCorpsesInRect(recycleRect, enumFunction);
+			game.enumUsableCorpsesInRect(caster, recycleRect, enumFunction);
 		} finally {
 			enumFunction.reset(null, 0, null, null, null, 0, null, null);
 			pool.free(enumFunction);

@@ -12,6 +12,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbilityFields;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerScore;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetCheckReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ResourceType;
@@ -57,6 +58,7 @@ public class CAbilityEntangledMine extends CAbilityOverlayedMine implements CAbi
 					final int goldTax = Math.round(goldMined * (player.getGoldUpkeepRate() / 100.0f));
 					final int goldGained = goldMined - goldTax;
 					player.addGold(goldGained);
+					player.recordMissionScore(CPlayerScore.GOLD_MINED_TOTAL, goldMined);
 					parentGoldMineAbility.setGold(totalGoldAvailable - goldMined);
 					game.unitGainResourceEvent(unit, player.getId(), ResourceType.GOLD, goldGained);
 				}

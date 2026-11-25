@@ -9,6 +9,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -190,6 +191,7 @@ public class CUnitData {
 	private static final String GOLD_REPAIR_COST = "goldRep";
 	private static final String LUMBER_REPAIR_COST = "lumberRep";
 	private static final String REPAIR_TIME = "reptm";
+	private static final String TRANSPORTED_SIZE = "cargoSize";
 
 	private static final String REQUIRE_PLACE = "requirePlace"; // replaced from 'upar'
 	private static final String PREVENT_PLACE = "preventPlace"; // replaced from 'upap'
@@ -793,6 +795,9 @@ public class CUnitData {
 			final List<String> heroProperNames = Arrays.asList(properNames.split(","));
 
 			final boolean neutralBuildingShowMinimapIcon = unitType.getFieldAsBoolean(NEUTRAL_BUILDING_SHOW_ICON, 0);
+			final String cargoSize = unitType.getFieldAsString(TRANSPORTED_SIZE, 0);
+			final int transportedSize = cargoSize.isBlank() || "_".equals(cargoSize) ? 1
+					: Math.max(0, unitType.getFieldAsInteger(TRANSPORTED_SIZE, 0));
 
 			unitTypeInstance = new CUnitType(unitName, legacyName, typeId, life, lifeRegen, manaRegen, lifeRegenType,
 					manaInitial, manaMaximum, speed, defense, defaultAutocastAbilityId, abilityList, isBldg,
@@ -807,9 +812,11 @@ public class CUnitData {
 					castPoint, canBeBuiltOnThem, canBuildOnMe, defenseUpgradeBonus, sightRadiusDay, sightRadiusNight,
 					extendedLineOfSight, goldBountyAwardedBase, goldBountyAwardedDice, goldBountyAwardedSides,
 					lumberBountyAwardedBase, lumberBountyAwardedDice, lumberBountyAwardedSides,
-					neutralBuildingShowMinimapIcon);
+					neutralBuildingShowMinimapIcon, transportedSize);
 			this.unitIdToUnitType.put(typeId, unitTypeInstance);
-			this.jassLegacyNameToUnitId.put(legacyName, typeId);
+			if (legacyName != null && !legacyName.isEmpty()) {
+				this.jassLegacyNameToUnitId.put(legacyName.toLowerCase(Locale.ROOT), typeId);
+			}
 		}
 		return unitTypeInstance;
 	}
@@ -950,7 +957,9 @@ public class CUnitData {
 			attack = new CUnitAttackMissileLine(animationBackswingPoint, animationDamagePoint, attackType, cooldownTime,
 					damageBase, damageDice, damageSidesPerDie, damageUpgradeAmount, range, rangeMotionBuffer, showUI,
 					targetsAllowed, weaponSound, weaponType, projectileArc, projectileArt, projectileHomingEnabled,
-					projectileSpeed, damageSpillDistance, damageSpillRadius);
+					projectileSpeed, damageSpillDistance, damageSpillRadius, areaOfEffectFullDamage,
+					areaOfEffectMediumDamage, areaOfEffectSmallDamage, areaOfEffectTargets, damageFactorMedium,
+					damageFactorSmall);
 			break;
 		case INSTANT:
 			attack = new CUnitAttackInstant(animationBackswingPoint, animationDamagePoint, attackType, cooldownTime,
@@ -1067,21 +1076,30 @@ public class CUnitData {
 		return getUnitTypeInstance(rawcode, buildingPathingPixelMap, unitType);
 	}
 
+	public UnitStockInfo getUnitStockInfo(final War3ID rawcode) {
+		final GameObject object = this.unitData.get(rawcode.asStringValue());
+		return object == null ? new UnitStockInfo(0, 0, 0) : new UnitStockInfo(
+				object.getFieldAsInteger("stockMax", 0), object.getFieldAsInteger("stockStart", 0),
+				object.getFieldAsInteger("stockRegen", 0));
+	}
+
+	public record UnitStockInfo(int maximum, int availabilityDelaySeconds, int replenishSeconds) {
+	}
+
 	public CUnitType getUnitTypeByJassLegacyName(final String jassLegacyName) {
-		final War3ID typeId = this.jassLegacyNameToUnitId.get(jassLegacyName);
-		if (typeId == null) {
-			// VERY inefficient, but this is a crazy system anyway, they should not be using
-			// this!
-			System.err.println(
-					"We are doing a highly inefficient lookup for a non-cached unit type based on its legacy string ID that I am pretty sure is not used by modding community: "
-							+ jassLegacyName);
-			for (final String key : this.unitData.keySet()) {
-				final GameObject gameObject = this.unitData.get(key);
-				if (jassLegacyName.equals(getLegacyName(gameObject).toLowerCase())) {
-					return getUnitType(War3ID.fromString(gameObject.getId()));
-				}
+		if (jassLegacyName == null || jassLegacyName.isEmpty()) {
+			return null;
+		}
+		final War3ID typeId = this.jassLegacyNameToUnitId.get(jassLegacyName.toLowerCase(Locale.ROOT));
+		if (typeId != null) {
+			return getUnitType(typeId);
+		}
+		for (final String key : this.unitData.keySet()) {
+			final GameObject gameObject = this.unitData.get(key);
+			if (gameObject != null && jassLegacyName.equalsIgnoreCase(getLegacyName(gameObject))) {
+				return getUnitType(War3ID.fromString(gameObject.getId()));
 			}
 		}
-		return getUnitType(typeId);
+		return null;
 	}
 }

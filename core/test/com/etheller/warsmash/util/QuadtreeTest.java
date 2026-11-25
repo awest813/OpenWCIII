@@ -1,5 +1,8 @@
 package com.etheller.warsmash.util;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
 
 import com.badlogic.gdx.math.Rectangle;
@@ -56,6 +59,48 @@ class QuadtreeTest {
 				myQuadtree.translate(things[i], things[i].bounds, (float) x, (float) y);
 			}
 		}
+	}
+
+	@Test
+	void tracksObjectsOutsideTheRootThroughSplitsAndTranslation() {
+		final Quadtree<Thing> tree = new Quadtree<>(new Rectangle(0, 0, 1024, 1024));
+		final Thing item = new Thing("Scripted item", new Rectangle(96, 1120, 32, 32));
+		tree.add(item, item.bounds);
+		for (int index = 0; index < 7; index++) {
+			final Thing other = new Thing("Object " + index, new Rectangle(100 * index, 320, 32, 32));
+			tree.add(other, other.bounds);
+		}
+		assertTrue(tree.intersect(112, 1136, hit -> hit == item));
+		tree.translate(item, item.bounds, 0, -112);
+		assertTrue(tree.intersect(new Rectangle(100, 1032, 8, 4), hit -> hit == item));
+		tree.translate(item, item.bounds, 0, -128);
+		assertTrue(tree.intersect(112, 896, hit -> hit == item));
+		assertFalse(tree.intersect(112, 1032, hit -> hit == item));
+		tree.translate(item, item.bounds, 0, 240);
+		assertTrue(tree.intersect(112, 1136, hit -> hit == item));
+		tree.remove(item, item.bounds);
+		assertFalse(tree.intersect(112, 1136, hit -> hit == item));
+	}
+
+	@Test
+	void keepsOneRegistrationWhenTheCallerMovesAndReaddsAnObject() {
+		final Quadtree<Thing> tree = new Quadtree<>(new Rectangle(0, 0, 1024, 1024));
+		final Thing wagon = new Thing("Caravan wagon", new Rectangle(72, 72, 64, 64));
+		tree.add(wagon, wagon.bounds);
+		wagon.bounds.setPosition(840, 840);
+		for (int index = 0; index < 7; index++) {
+			final Thing other = new Thing("Object " + index, new Rectangle(16 + 16 * index, 160, 16, 16));
+			tree.add(other, other.bounds);
+		}
+		assertTrue(tree.intersect(104, 104, hit -> hit == wagon));
+		assertFalse(tree.intersect(872, 872, hit -> hit == wagon));
+		tree.add(wagon, wagon.bounds);
+		tree.translate(wagon, wagon.bounds, -720, -30);
+		assertFalse(tree.intersect(104, 104, hit -> hit == wagon));
+		assertFalse(tree.intersect(872, 872, hit -> hit == wagon));
+		assertTrue(tree.intersect(152, 842, hit -> hit == wagon));
+		tree.remove(wagon, new Rectangle());
+		assertFalse(tree.intersect(152, 842, hit -> hit == wagon));
 	}
 
 	@Test

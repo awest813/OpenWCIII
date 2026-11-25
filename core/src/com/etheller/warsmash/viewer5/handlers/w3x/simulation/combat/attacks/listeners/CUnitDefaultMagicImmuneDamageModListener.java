@@ -11,7 +11,7 @@ public class CUnitDefaultMagicImmuneDamageModListener implements CUnitAttackFina
 	@Override
 	public float onDamage(CSimulation game, CUnit attacker, CUnit target, boolean isAttack, boolean isRanged,
 			CAttackType attackType, CDamageType damageType, float previousDamage) {
-		if ((damageType != CDamageType.NORMAL && (damageType != CDamageType.UNIVERSAL && game.getGameplayConstants().isMagicImmuneResistsUltimates())
+		if ((damageType != CDamageType.NORMAL && (damageType != CDamageType.UNIVERSAL || game.getGameplayConstants().isMagicImmuneResistsUltimates())
 				&& attackType == CAttackType.SPELLS)
 				|| (attackType == CAttackType.MAGIC && game.getGameplayConstants().isMagicImmuneResistsDamage())) {
 			return 0;

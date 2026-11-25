@@ -5,11 +5,14 @@ import com.etheller.warsmash.viewer5.handlers.w3x.AnimationTokens.PrimaryTag;
 import com.etheller.warsmash.viewer5.handlers.w3x.SequenceUtils;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.combat.CAbilityAttackArrow;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.human.CAbilityBarrage;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetStillAliveAndTargetableVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CWeaponType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttack;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttackMissile;
 
 public class CBehaviorAttack extends CAbstractRangedBehavior {
 
@@ -18,7 +21,7 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 
 	public CBehaviorAttack(final CUnit unit) {
 		super(unit);
-		this.abilityTargetStillAliveVisitor = new AbilityTargetStillAliveAndTargetableVisitor();
+		this.abilityTargetStillAliveVisitor = new AbilityTargetStillAliveAndTargetableVisitor(true);
 	}
 
 	private CUnitAttack unitAttack;
@@ -26,11 +29,32 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 	private int backSwingTime;
 	private int thisOrderCooldownEndTime;
 	private CBehaviorAttackListener attackListener;
+	private boolean singleAttack;
+	private CAbilityAttackArrow manualArrow;
 
 	public CBehavior reset(final CSimulation game, final int highlightOrderId, final CUnitAttack unitAttack,
 			final AbilityTarget target, final boolean disableMove, final CBehaviorAttackListener attackListener) {
+		return reset(game, highlightOrderId, unitAttack, target, disableMove, attackListener, false);
+	}
+
+	public CBehavior reset(final CSimulation game, final int highlightOrderId, final CUnitAttack unitAttack,
+			final AbilityTarget target, final boolean disableMove, final CBehaviorAttackListener attackListener,
+			final boolean singleAttack) {
+		return reset(game, highlightOrderId, unitAttack, target, disableMove, attackListener, singleAttack, null);
+	}
+
+	public CBehavior resetForArrow(final CSimulation game, final CAbilityAttackArrow arrow, final CUnitAttack unitAttack,
+			final AbilityTarget target) {
+		return reset(game, arrow.getBaseOrderId(), unitAttack, target, false, CBehaviorAttackListener.DO_NOTHING, true, arrow);
+	}
+
+	private CBehavior reset(final CSimulation game, final int highlightOrderId, final CUnitAttack unitAttack,
+			final AbilityTarget target, final boolean disableMove, final CBehaviorAttackListener attackListener,
+			final boolean singleAttack, final CAbilityAttackArrow manualArrow) {
 		this.highlightOrderId = highlightOrderId;
 		this.attackListener = attackListener;
+		this.singleAttack = singleAttack;
+		this.manualArrow = manualArrow;
 
 		this.unitAttack = unitAttack;
 		this.damagePointLaunchTime = 0;
@@ -47,7 +71,10 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 
 	@Override
 	public boolean isWithinRange(final CSimulation simulation) {
-		float range = this.unitAttack.getRange();
+		float range = this.unitAttack.getRangeAgainst(this.target);
+		if (this.manualArrow != null && !this.manualArrow.isDisabled()) {
+			range = Math.max(range, this.manualArrow.getCastRange());
+		}
 		if (simulation.getGameTurnTick() < this.unit.getCooldownEndTime()) {
 			range += this.unitAttack.getRangeMotionBuffer();
 		}
@@ -57,7 +84,9 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 
 	@Override
 	protected boolean checkTargetStillValid(final CSimulation simulation) {
-		return !this.unit.isDisableAttacks() && this.target.visit(
+		return !this.unit.isDisableAttacks()
+				&& (this.unit.getAttackBehavior() != this || this.unit.getCurrentAttacks().contains(this.unitAttack))
+				&& this.target.visit(
 				this.abilityTargetStillAliveVisitor.reset(simulation, this.unit, this.unitAttack.getTargetsAllowed()));
 	}
 
@@ -90,7 +119,11 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 						// better performance (maybe in a refactor in the future).
 						target = new AbilityPointTarget(target.getX(), target.getY());
 					}
-					this.unitAttack.launch(simulation, this.unit, target, damage, this.attackListener);
+					if (!tryLaunchArrow(simulation, target, damage) && this.manualArrow == null) {
+						final CAbilityBarrage barrage = this.unit.getFirstAbilityOfType(CAbilityBarrage.class);
+						if (barrage != null) barrage.launchExtraRockets(simulation, this.unit, target, this.unitAttack.getAttackType());
+						this.unitAttack.launch(simulation, this.unit, target, damage, this.attackListener);
+					}
 					this.damagePointLaunchTime = 0;
 				}
 			}
@@ -120,6 +153,7 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 		}
 		if ((this.backSwingTime != 0) && (currentTurnTick >= this.backSwingTime)) {
 			this.backSwingTime = 0;
+			if (this.singleAttack) return this.attackListener.onFinish(simulation, this.unit);
 			return this.attackListener.onFirstUpdateAfterBackswing(this);
 		}
 		return this;
@@ -147,6 +181,21 @@ public class CBehaviorAttack extends CAbstractRangedBehavior {
 	@Override
 	public boolean interruptable() {
 		return true;
+	}
+
+	private boolean tryLaunchArrow(final CSimulation game, final AbilityTarget target, final float damage) {
+		if (!(this.unitAttack instanceof CUnitAttackMissile missile)) {
+			return false;
+		}
+		if (this.manualArrow != null) {
+			return this.unit.getAbilities().contains(this.manualArrow)
+					&& this.manualArrow.tryLaunch(game, this.unit, this.highlightOrderId, missile, target, damage, this.attackListener);
+		}
+		for (final var ability : this.unit.getAbilities()) {
+			if (ability instanceof CAbilityAttackArrow arrow && arrow.isAutoCastOn()
+					&& arrow.tryLaunch(game, this.unit, this.highlightOrderId, missile, target, damage, this.attackListener)) return true;
+		}
+		return false;
 	}
 
 	@Override

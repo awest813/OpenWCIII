@@ -452,8 +452,10 @@
 				}]
 		}]
 	},{
-		"ids": [{"id":"Abur", "castId": "burrow", "uncastId": "unburrow"}],
+		"ids": [{"id":"Abur", "castId": "burrow", "uncastId": "unburrow"},
+			{"id":"ANsu", "castId": "submerge", "uncastId": "unsubmerge"}],
 		"type": "NORMAL_NOTARGET",
+		"extraCastConditions": [{"type": "canSubmerge"}],
 		"displayFields": {
 			"toggleable": {
 				"type": "rawBoolean",

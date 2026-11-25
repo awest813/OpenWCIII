@@ -230,6 +230,13 @@ public abstract class CUnitAttack {
 		return this.range;
 	}
 
+	public float getRangeAgainst(final AbilityTarget target) {
+		if (getWeaponType() == CWeaponType.NORMAL && target instanceof CUnit unit) {
+			return Math.max(getRange(), unit.getWebbedMeleeRange());
+		}
+		return getRange();
+	}
+
 	public float getRangeMotionBuffer() {
 		return this.rangeMotionBuffer;
 	}

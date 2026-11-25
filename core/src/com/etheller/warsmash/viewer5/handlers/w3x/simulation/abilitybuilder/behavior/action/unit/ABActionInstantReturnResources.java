@@ -9,6 +9,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.harvest.C
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.behavior.callback.unitcallbacks.ABUnitCallback;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.core.ABSingleAction;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerScore;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ResourceType;
 
 public class ABActionInstantReturnResources implements ABSingleAction {
@@ -38,6 +39,7 @@ public class ABActionInstantReturnResources implements ABSingleAction {
 				final int goldTax = Math.round(goldMined * (pl.getGoldUpkeepRate() / 100.0f));
 				final int goldGained = goldMined - goldTax;
 				pl.addGold(goldGained);
+				pl.recordMissionScore(CPlayerScore.GOLD_MINED_TOTAL, goldMined);
 				game.unitGainResourceEvent(targetUnit, pl.getId(), harv.getCarriedResourceType(),
 						goldGained);
 				harv.setCarriedResources(ResourceType.GOLD, 0);
@@ -48,6 +50,7 @@ public class ABActionInstantReturnResources implements ABSingleAction {
 				final int lumberTax = Math.round(lumberHarvested * (pl.getLumberUpkeepRate() / 100.0f));
 				final int lumberGained = lumberHarvested - lumberTax;
 				pl.addLumber(lumberGained);
+				pl.recordMissionScore(CPlayerScore.LUMBER_TOTAL, lumberHarvested);
 				game.unitGainResourceEvent(targetUnit, pl.getId(), harv.getCarriedResourceType(),
 						lumberGained);
 				harv.setCarriedResources(ResourceType.LUMBER, 0);

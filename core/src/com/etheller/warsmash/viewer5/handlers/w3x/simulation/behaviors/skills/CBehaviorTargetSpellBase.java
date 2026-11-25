@@ -55,7 +55,8 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
 		if (this.castStartTick == 0) {
 			this.castStartTick = simulation.getGameTurnTick();
 		}
-		final int ticksSinceCast = simulation.getGameTurnTick() - this.castStartTick;
+		final int castDelayTicks = (int) (this.ability.getCastDelay() / WarsmashConstants.SIMULATION_STEP_TIME);
+		final int ticksSinceCast = simulation.getGameTurnTick() - this.castStartTick - castDelayTicks;
 		final int castPointTicks =
 				(int) (this.unit.getUnitType().getCastPoint() / WarsmashConstants.SIMULATION_STEP_TIME);
 		final int backswingTicks =
@@ -65,7 +66,7 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
 			boolean wasChanneling = this.channeling;
 			if (!wasEffectDone) {
 				this.doneEffect = true;
-				if (!this.unit.chargeMana(this.ability.getManaCost())) {
+				if (!this.unit.chargeManaForSpell(simulation, this.ability.getManaCost(this.target))) {
 					simulation.getCommandErrorListener().showInterfaceError(this.unit.getPlayerIndex(),
 							CommandStringErrorKeys.NOT_ENOUGH_MANA);
 					return this.unit.pollNextOrderBehavior(simulation);
@@ -148,6 +149,11 @@ public class CBehaviorTargetSpellBase extends CAbstractRangedBehavior {
 	@Override
 	public boolean interruptable() {
 		return true;
+	}
+
+	@Override
+	public boolean acceptsOrders() {
+		return !this.channeling || !this.ability.blocksOrdersWhileChanneling();
 	}
 
 	@Override

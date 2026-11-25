@@ -4,7 +4,9 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.etheller.warsmash.viewer5.handlers.w3x.rendersim.RenderUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore;
 
 public final class GameCameraManager extends CameraManager {
 	private static final float TWO_PI = (float) Math.PI * 2;
@@ -20,6 +22,10 @@ public final class GameCameraManager extends CameraManager {
 	private Rectangle cameraBounds;
 	private int currentPreset = 0;
 	private float fov;
+	private float roll;
+	private float rollTarget;
+	private float rollTimeRemaining;
+	private final Vector3 rolledUp = new Vector3();
 	private float targetZOffset = 0.0f;
 	private RenderUnit targetControllerUnit;
 	private float targetControllerXOffset;
@@ -73,6 +79,12 @@ public final class GameCameraManager extends CameraManager {
 	public void updateCamera() { updateCamera(Gdx.graphics.getDeltaTime()); }
 
 	public void updateCamera(final float deltaTime) {
+		if (this.rollTimeRemaining > 0) {
+			final float step = Math.min(this.rollTimeRemaining, Math.max(0, deltaTime));
+			this.roll += rollDelta(this.rollTarget) * step / this.rollTimeRemaining;
+			this.rollTimeRemaining -= step;
+			if (this.rollTimeRemaining == 0) this.roll = this.rollTarget;
+		}
 		if (this.setupHeightDestination != null) {
 			final float previousHeight = this.setupHeight;
 			this.setupHeight = applyAtRate(this.setupHeight, this.setupHeightDestination, this.setupHeightRate, deltaTime);
@@ -145,6 +157,8 @@ public final class GameCameraManager extends CameraManager {
 		this.setupHeightDestination = null;
 		this.zOffsetDestination = null;
 		this.customCameraRates = null;
+		this.rollTimeRemaining = 0;
+		this.rollTarget = this.roll;
 		setTargetNoise(0f, 0f);
 		setSourceNoise(0f, 0f);
 		setTargetController(null, 0f, 0f, false);
@@ -204,8 +218,28 @@ public final class GameCameraManager extends CameraManager {
 				(float) Math.toRadians(cameraRate.fov), deltaTime);
 		if (this.camera != null) {
 			this.camera.perspective(this.fov, this.camera.getAspect(), cameraPreset.getNearZ(), cameraPreset.getFarZ());
-			this.camera.moveToAndFace(this.position, this.target, this.worldUp);
+			this.rolledUp.set(this.worldUp);
+			if (this.roll != 0) {
+				this.vecHeap.set(this.target).sub(this.position).nor();
+				this.rolledUp.rotateRad(this.vecHeap, this.roll);
+			}
+			this.camera.moveToAndFace(this.position, this.target, this.rolledUp);
 		}
+	}
+
+	public void setRoll(final float degrees, final float duration) {
+		if (!Float.isFinite(degrees) || !Float.isFinite(duration)) return;
+		this.rollTarget = (float) StrictMath.IEEEremainder(Math.toRadians(degrees), TWO_PI);
+		this.rollTimeRemaining = Math.max(0, duration);
+		if (this.rollTimeRemaining == 0) this.roll = this.rollTarget;
+	}
+
+	public float getRoll() {
+		return this.roll;
+	}
+
+	private float rollDelta(final float radians) {
+		return (float) StrictMath.IEEEremainder(radians - this.roll, TWO_PI);
 	}
 
 	public static float applyAtRate(final float oldValue, final float newValue, final float rate) { return applyAtRate(oldValue, newValue, rate, Gdx.graphics.getDeltaTime()); }
@@ -253,6 +287,13 @@ public final class GameCameraManager extends CameraManager {
 		else {
 			final float velocityX;
 			final float velocityY;
+			final var options = OptionsSettingsStore.get();
+			final float keyScale = 0.5f + options.getKeyScrollSpeed() / 100f;
+			final float mouseScale = 0.5f + options.getMouseScrollSpeed() / 100f;
+			final float horizontalRate = this.cameraRates.strafe
+					* (this.cameraPanControls.left || this.cameraPanControls.right ? keyScale : mouseScale);
+			final float verticalRate = this.cameraRates.forward
+					* (this.cameraPanControls.up || this.cameraPanControls.down ? keyScale : mouseScale);
 			up |= this.cameraPanControls.up;
 			down |= this.cameraPanControls.down;
 			left |= this.cameraPanControls.left;
@@ -262,12 +303,12 @@ public final class GameCameraManager extends CameraManager {
 					velocityY = 0;
 				}
 				else {
-					velocityY = this.cameraRates.forward;
+					velocityY = verticalRate;
 					clearPan();
 				}
 			}
 			else if (down) {
-				velocityY = -this.cameraRates.forward;
+				velocityY = -verticalRate;
 				clearPan();
 			}
 			else {
@@ -278,12 +319,12 @@ public final class GameCameraManager extends CameraManager {
 					velocityX = 0;
 				}
 				else {
-					velocityX = this.cameraRates.strafe;
+					velocityX = horizontalRate;
 					clearPan();
 				}
 			}
 			else if (left) {
-				velocityX = -this.cameraRates.strafe;
+				velocityX = -horizontalRate;
 				clearPan();
 			}
 			else {
@@ -411,6 +452,7 @@ public final class GameCameraManager extends CameraManager {
 		this.customCameraRates = null;
 		clearPan();
 		setSetupHeight(getCurrentSetup().getHeight(), heightDuration);
+		setRoll(getCurrentSetup().getRoll(), heightDuration);
 	}
 
 	private void setSetupHeight(final float height, final float duration) {
@@ -462,6 +504,7 @@ public final class GameCameraManager extends CameraManager {
 		final CameraSetup previousSetup = getCurrentSetup();
 		this.customSetup = cameraSetup;
 		setSetupHeight(cameraSetup.getHeight(), forceDuration);
+		setRoll(cameraSetup.getRoll(), forceDuration);
 		if (forceDuration > 0) {
 			final float aoaRate = (cameraSetup.getAoa() - previousSetup.getAoa()) / forceDuration;
 			final float fovRate = (cameraSetup.getFov() - previousSetup.getFov()) / forceDuration;
@@ -484,6 +527,8 @@ public final class GameCameraManager extends CameraManager {
 	public void applyCameraSetup(CustomCameraSetup cameraSetup, boolean doPan, boolean panTimed) {
 		this.customSetup = cameraSetup;
 		setSetupHeight(cameraSetup.getHeight(), 0);
+		final float rollDistance = (float) Math.toDegrees(Math.abs(rollDelta((float) Math.toRadians(cameraSetup.getRoll()))));
+		setRoll(cameraSetup.getRoll(), panTimed && this.cameraRates.rotation > 0 ? rollDistance / this.cameraRates.rotation : 0);
 		if (doPan) {
 			if (panTimed) {
 				panTo(cameraSetup.getDestPositionX(), cameraSetup.getDestPositionY());
@@ -585,6 +630,19 @@ public final class GameCameraManager extends CameraManager {
 		this.quickPosition = in.readBoolean() ? new Vector2(readFinite(in), readFinite(in)) : null;
 		this.setupHeight = readFinite(in); this.setupHeightRate = readRate(in);
 		this.setupHeightDestination = in.readBoolean() ? readFinite(in) : null;
+	}
+
+	public void writeRollCheckpoint(final java.io.DataOutputStream out) throws java.io.IOException {
+		out.writeFloat(this.roll);
+		out.writeFloat(this.rollTarget);
+		out.writeFloat(this.rollTimeRemaining);
+	}
+
+	public void readRollCheckpoint(final java.io.DataInputStream in) throws java.io.IOException {
+		this.roll = readFinite(in);
+		this.rollTarget = readFinite(in);
+		this.rollTimeRemaining = readFinite(in);
+		if (this.rollTimeRemaining < 0) throw new java.io.IOException("Invalid saved camera roll duration");
 	}
 
 	private static float readFinite(final java.io.DataInputStream in) throws java.io.IOException {

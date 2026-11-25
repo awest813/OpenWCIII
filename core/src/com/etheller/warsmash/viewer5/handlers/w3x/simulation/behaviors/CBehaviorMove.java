@@ -21,8 +21,6 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.pathing.CPathfindingProcessor;
 
 public class CBehaviorMove implements CBehavior {
-	private static boolean ALWAYS_INTERRUPT_MOVE = false;
-
 	private static final Rectangle tempRect = new Rectangle();
 	private final CUnit unit;
 	private int highlightOrderId;
@@ -43,6 +41,7 @@ public class CBehaviorMove implements CBehavior {
 	private boolean firstUpdate = true;
 	private boolean disableCollision = false;
 	private boolean pathfindingActive = false;
+	private int pathfindingPlayerIndex;
 	private boolean firstPathfindJob = false;
 	private boolean pathfindingFailedGiveUp;
 	private int giveUpUntilTurnTick;
@@ -98,12 +97,17 @@ public class CBehaviorMove implements CBehavior {
 		return this.highlightOrderId;
 	}
 
+	public boolean isMovingFor(final CRangedBehavior behavior) {
+		return this.rangedBehavior == behavior;
+	}
+
 	@Override
 	public CBehavior update(final CSimulation simulation) {
 		if ((this.rangedBehavior != null) && this.rangedBehavior.isWithinRange(simulation)) {
 			return this.unit.finishMoveBehavior(simulation, this.rangedBehavior);
 		}
 		if (this.firstUpdate) {
+			cancelPathfinding(simulation);
 			// when units start moving, if they're on top of other units, maybe push them to
 			// the side
 			this.unit.setPointAndCheckUnstuck(this.unit.getX(), this.unit.getY(), simulation);
@@ -126,17 +130,13 @@ public class CBehaviorMove implements CBehavior {
 		final PathingGrid pathingGrid = simulation.getPathingGrid();
 		final CWorldCollision worldCollision = simulation.getWorldCollision();
 		final float collisionSize = this.unit.getUnitType().getCollisionSize();
-		final float startFloatingX = prevX;
-		final float startFloatingY = prevY;
 		if (this.path == null) {
 			if (!this.pathfindingActive) {
 				if (this.followUnit != null) {
 					this.target.x = this.followUnit.getX();
 					this.target.y = this.followUnit.getY();
 				}
-				simulation.findNaiveSlowPath(this.unit, this.followUnit, startFloatingX, startFloatingY, this.target,
-						movementType, collisionSize, true, this);
-				this.pathfindingActive = true;
+				requestPath(simulation, movementType, collisionSize, true);
 				this.firstPathfindJob = true;
 			}
 		}
@@ -144,12 +144,8 @@ public class CBehaviorMove implements CBehavior {
 				this.followUnit.getY()) > (0.1 * this.target.distance(this.unit.getX(), this.unit.getY())))) {
 			this.target.x = this.followUnit.getX();
 			this.target.y = this.followUnit.getY();
-			if (this.pathfindingActive) {
-				simulation.removeFromPathfindingQueue(this);
-			}
-			simulation.findNaiveSlowPath(this.unit, this.followUnit, startFloatingX, startFloatingY, this.target,
-					movementType, collisionSize, this.searchCycles < 4, this);
-			this.pathfindingActive = true;
+			cancelPathfinding(simulation);
+			requestPath(simulation, movementType, collisionSize, this.searchCycles < 4);
 		}
 		float currentTargetX;
 		float currentTargetY;
@@ -186,7 +182,7 @@ public class CBehaviorMove implements CBehavior {
 		float delta = goalAngle - facing;
 		final float propulsionWindow = this.unit.getPropWindow();
 		final float turnRate = this.unit.getTurnRate();
-		final int speed = this.unit.getSpeed();
+		final int speed = this.unit.getMovementSpeed(simulation);
 
 		if (delta < -180) {
 			delta = 360 + delta;
@@ -224,8 +220,8 @@ public class CBehaviorMove implements CBehavior {
 				}
 				else {
 					final double radianFacing = Math.toRadians(facing);
-					nextX = (prevX + (float) (Math.cos(radianFacing) * continueDistance));
-					nextY = (prevY + (float) (Math.sin(radianFacing) * continueDistance));
+					nextX = this.unit.getX() + (float) (Math.cos(radianFacing) * continueDistance);
+					nextY = this.unit.getY() + (float) (Math.sin(radianFacing) * continueDistance);
 					continueDistance = 0;
 //					done = (this.gridMapping.getX(pathingGrid, nextX) == this.gridMapping.getX(pathingGrid,
 //							currentTargetX))
@@ -318,14 +314,12 @@ public class CBehaviorMove implements CBehavior {
 						this.target.y = this.followUnit.getY();
 					}
 					if (!this.pathfindingActive) {
-						simulation.findNaiveSlowPath(this.unit, this.followUnit, startFloatingX, startFloatingY,
-								this.target, movementType, collisionSize, this.searchCycles < 4, this);
-						this.pathfindingActive = true;
+						requestPath(simulation, movementType, collisionSize, this.searchCycles < 4);
 						this.searchCycles++;
 						return this;
 					}
 				}
-				this.unit.getUnitAnimationListener().playWalkAnimation(false, this.unit.getSpeed(), true);
+				this.unit.getUnitAnimationListener().playWalkAnimation(false, speed, true);
 				this.wasWithinPropWindow = true;
 			}
 			while (continueDistance > 0);
@@ -394,10 +388,7 @@ public class CBehaviorMove implements CBehavior {
 		if (this.disableCollision) {
 			this.unit.setNoCollisionMovementType(false);
 		}
-		if (ALWAYS_INTERRUPT_MOVE) {
-			game.removeFromPathfindingQueue(this);
-			this.pathfindingActive = false;
-		}
+		cancelPathfinding(game);
 		if (this.rangedBehavior != null) {
 			this.rangedBehavior.endMove(game, interrupted);
 		}
@@ -408,7 +399,9 @@ public class CBehaviorMove implements CBehavior {
 	}
 
 	public void pathFound(final List<Point2D.Float> waypoints, final CSimulation simulation) {
+		final boolean superseded = this.pathfindingActive && this.firstUpdate;
 		this.pathfindingActive = false;
+		if (superseded) return;
 
 		final float prevX = this.unit.getX();
 		final float prevY = this.unit.getY();
@@ -421,7 +414,6 @@ public class CBehaviorMove implements CBehavior {
 			movementType = MovementType.FOOT_NO_COLLISION;
 		}
 		final PathingGrid pathingGrid = simulation.getPathingGrid();
-		final CWorldCollision worldCollision = simulation.getWorldCollision();
 		final float collisionSize = this.unit.getUnitType().getCollisionSize();
 		final float startFloatingX = prevX;
 		final float startFloatingY = prevY;
@@ -446,8 +438,8 @@ public class CBehaviorMove implements CBehavior {
 					totalPathDistance += nextPossiblePathElement.distance(lastX, lastY);
 					if ((totalPathDistance < (1.15
 							* nextPossiblePathElement.distance(smoothingGroupStartX, smoothingGroupStartY)))
-							&& pathingGrid.isPathable((smoothingGroupStartX + nextPossiblePathElement.x) / 2,
-									(smoothingGroupStartY + nextPossiblePathElement.y) / 2, movementType)) {
+							&& isStraightPathClear(pathingGrid, movementType, collisionSize, smoothingGroupStartX,
+									smoothingGroupStartY, nextPossiblePathElement)) {
 						if (smoothingStartIndex == -1) {
 							smoothingStartIndex = i;
 						}
@@ -469,9 +461,7 @@ public class CBehaviorMove implements CBehavior {
 					lastY = nextPossiblePathElement.y;
 				}
 				if (smoothingStartIndex != -1) {
-					for (int j = smoothingStartIndex; j < (this.path.size() - 1); j++) {
-						final Point2D.Float removed = this.path.remove(j);
-					}
+					this.path.subList(smoothingStartIndex, this.path.size() - 1).clear();
 				}
 			}
 		}
@@ -484,6 +474,33 @@ public class CBehaviorMove implements CBehavior {
 						+ (int) (5 / WarsmashConstants.SIMULATION_STEP_TIME);
 			}
 		}
+	}
+
+	private static boolean isStraightPathClear(final PathingGrid grid, final MovementType movement, final float collision,
+			final float startX, final float startY, final Point2D.Float end) {
+		final float dx = end.x - startX;
+		final float dy = end.y - startY;
+		final int samples = Math.max(1, (int) Math.ceil(Math.hypot(dx, dy) / 8));
+		for (int sample = 1; sample <= samples; sample++) {
+			final float fraction = (float) sample / samples;
+			if (!grid.isPathable(startX + dx * fraction, startY + dy * fraction, movement, collision)) return false;
+		}
+		return true;
+	}
+
+	private void cancelPathfinding(final CSimulation simulation) {
+		if (this.pathfindingActive) {
+			simulation.removeFromPathfindingQueue(this, this.pathfindingPlayerIndex);
+			this.pathfindingActive = false;
+		}
+	}
+
+	private void requestPath(final CSimulation simulation, final MovementType movementType, final float collisionSize,
+			final boolean allowSmoothing) {
+		this.pathfindingPlayerIndex = this.unit.getPlayerIndex();
+		simulation.findNaiveSlowPath(this.unit, this.followUnit, this.unit.getX(), this.unit.getY(), this.target,
+				movementType, collisionSize, allowSmoothing, this);
+		this.pathfindingActive = true;
 	}
 
 	@Override

@@ -13,7 +13,8 @@ public enum AutocastType implements CHandle {
 	NEARESTENEMY,
 	NOTARGET,
 
-	ATTACKREPLACEMENT;
+	ATTACKREPLACEMENT,
+	FARTHESTENEMY;
 
 	@Override
 	public int getHandleId() {

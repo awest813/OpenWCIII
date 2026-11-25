@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.etheller.interpreter.ast.scope.trigger.Trigger;
@@ -16,6 +17,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CGameCache;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CGameSave;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CMapFlag;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderExecutor;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.MeleeUI;
@@ -28,7 +30,8 @@ public final class MissionCheckpoint {
 	private boolean restoring;
 	private int cursor;
 	private Consumer<MissionReplayLog.Entry> uiInput;
-	private Consumer<File> loadHandler;
+	private BiConsumer<File, Boolean> loadHandler;
+	private boolean scriptedReload;
 	private final List<Runnable> pendingSaves = new ArrayList<>();
 	private String failure;
 	private java.util.Map<String, String> currentProgress;
@@ -77,7 +80,8 @@ public final class MissionCheckpoint {
 	public boolean isLoading() { return this.loading; }
 	public String getFailure() { return this.failure; }
 	public void setUIInput(final Consumer<MissionReplayLog.Entry> handler) { this.uiInput = handler; }
-	public void setLoadHandler(final Consumer<File> handler) { this.loadHandler = handler; }
+	public void setLoadHandler(final BiConsumer<File, Boolean> handler) { this.loadHandler = handler; }
+	public void setScriptedReload(final boolean scriptedReload) { this.scriptedReload = scriptedReload; }
 
 
 	public byte[] readCache(final File file) throws IOException {
@@ -172,9 +176,20 @@ public final class MissionCheckpoint {
 		if (!this.restoring && this.failure == null) this.log.entries.add(new MissionReplayLog.Entry(
 				this.simulation.getGameTurnTick(), kind, a, b, c, d, e, x, y, queue, text));
 	}
-	public void fireSaveEvent() { fireEvent(JassGameEventsWar3.EVENT_GAME_SAVE); }
-	private void fireEvent(final JassGameEventsWar3 event) {
-		this.simulation.recordMissionInput(MissionReplayLog.GAME_EVENT, event.ordinal(), 0, 0, 0, 0, 0, 0, false, "");
+	public void fireSaveEvent(final File file) {
+		fireEvent(JassGameEventsWar3.EVENT_GAME_SAVE, file.getName().replaceFirst("(?i)\\.w3s$", ""));
+	}
+	private void fireEvent(final JassGameEventsWar3 event, final String saveBasicFilename) {
+		this.simulation.recordMissionInput(MissionReplayLog.GAME_EVENT, event.ordinal(), 0, 0, 0, 0, 0, 0, false,
+				saveBasicFilename == null ? "" : saveBasicFilename);
+		this.simulation.fireGameEvent(event, saveBasicFilename);
+	}
+
+	private void fireLoadEvent(final boolean scripted) {
+		if (this.viewer != null) this.viewer.getMapConfig().setMapFlag(CMapFlag.MAP_RELOADED, scripted);
+		final JassGameEventsWar3 event = JassGameEventsWar3.EVENT_GAME_LOADED;
+		this.simulation.recordMissionInput(MissionReplayLog.GAME_EVENT, event.ordinal(), scripted ? 1 : 0,
+				0, 0, 0, 0, 0, false, "");
 		this.simulation.fireGameEvent(event);
 	}
 	public void runScript(final String function) {
@@ -242,7 +257,11 @@ public final class MissionCheckpoint {
 		case MissionReplayLog.CHAT: this.simulation.getPlayer(entry.a).fireChatEvent(this.simulation.getGlobalScope(), entry.text); break;
 		case MissionReplayLog.PAUSE: this.simulation.setGamePaused(entry.queue); break;
 		case MissionReplayLog.SCRIPT: runScript(entry.text); break;
-		case MissionReplayLog.GAME_EVENT: fireEvent(JassGameEventsWar3.values()[entry.a]); break;
+		case MissionReplayLog.GAME_EVENT:
+			final JassGameEventsWar3 event = JassGameEventsWar3.values()[entry.a];
+			if (event == JassGameEventsWar3.EVENT_GAME_LOADED) fireLoadEvent(entry.b != 0);
+			else fireEvent(event, entry.text.isEmpty() ? null : entry.text);
+			break;
 		default: this.uiInput.accept(entry); break;
 		}
 	}
@@ -269,7 +288,7 @@ public final class MissionCheckpoint {
 					try { if (this.ui != null) this.ui.restoreMissionSelection(this.log.selectedUnits);
 						if (this.ui != null) this.ui.restoreMissionPresentation(this.log.presentation); }
 					finally { this.presentationRestore = false; }
-					fireEvent(JassGameEventsWar3.EVENT_GAME_LOADED);
+					fireLoadEvent(this.scriptedReload);
 					System.out.println("[MissionCheckpoint] resumed tick=" + this.log.targetTick + " state=" + actual);
 					return;
 				}
@@ -296,11 +315,14 @@ public final class MissionCheckpoint {
 		if (!this.singlePlayer) throw new IOException("Mission checkpoints are available in single-player games");
 		if (this.simulation.getPlayer(this.log.localPlayer).getPlayerState(com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerState.GAME_RESULT)
 				!= com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerGameResult.NEUTRAL.ordinal()) throw new IOException("The mission has ended");
-		fireSaveEvent();
+		fireSaveEvent(file);
 		if (this.simulation.isUpdating()) {
 			this.pendingSaves.add(() -> {
 				try { capture(file, viewer, ui); }
-				catch (final Exception error) { ui.showGameMessage("Save failed: " + error.getMessage(), 5f); }
+				catch (final Exception error) {
+					System.err.println("SaveGame: " + error.getMessage());
+					ui.showGameMessage("Save failed: " + error.getMessage(), 5f);
+				}
 			});
 			return;
 		}
@@ -328,6 +350,10 @@ public final class MissionCheckpoint {
 	}
 
 	public void load(final File file) throws IOException {
+		load(file, false);
+	}
+
+	public void load(final File file, final boolean scripted) throws IOException {
 		if (this.restoring) return; // Never perform historical disk loads while replaying.
 		final CGameSave save = CGameSave.tryLoad(file);
 		if (save == null) throw new IOException("No valid save found");
@@ -335,6 +361,6 @@ public final class MissionCheckpoint {
 		if (!save.checkpoint.profileName.equals(com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore.get().getProfileName())) throw new IOException("This mission save belongs to another player profile");
 		if (!this.singlePlayer) throw new IOException("Mission checkpoints are available in single-player games");
 		if (this.loadHandler == null) throw new IOException("Mission loading is unavailable in this session");
-		this.loadHandler.accept(file);
+		this.loadHandler.accept(file, scripted);
 	}
 }

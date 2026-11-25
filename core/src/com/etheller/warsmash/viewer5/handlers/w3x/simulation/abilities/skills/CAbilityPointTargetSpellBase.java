@@ -19,7 +19,11 @@ public abstract class CAbilityPointTargetSpellBase extends CAbilitySpellBase {
 
 	@Override
 	public void onAdd(final CSimulation game, final CUnit unit) {
-		this.behavior = new CBehaviorTargetSpellBase(unit, this);
+		this.behavior = createBehavior(unit);
+	}
+
+	protected CBehaviorTargetSpellBase createBehavior(final CUnit unit) {
+		return new CBehaviorTargetSpellBase(unit, this);
 	}
 
 	@Override

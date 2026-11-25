@@ -73,4 +73,11 @@ public abstract class ABGenericTimedBuff extends ABBuff {
 		final int durationTicks = (int) (this.duration / WarsmashConstants.SIMULATION_STEP_TIME);
 		expireTick = game.getGameTurnTick() + durationTicks;
 	}
+
+	public final void transferTo(final CSimulation game, final CUnit source, final CUnit recipient) {
+		final int expiry = this.expireTick;
+		source.remove(game, this);
+		recipient.add(game, this);
+		this.expireTick = expiry;
+	}
 }

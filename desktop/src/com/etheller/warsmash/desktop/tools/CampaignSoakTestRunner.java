@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Rectangle;
@@ -47,6 +49,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItem;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbilityGenericDoNothing;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttackInstant;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttackListener;
@@ -83,6 +86,8 @@ import mpq.MPQArchive;
  * start-to-finish campaign playthrough or a parity certification.
  */
 public final class CampaignSoakTestRunner {
+	private static final Pattern LITERAL_ITEM_CREATION = Pattern.compile(
+			"\\b(?:CreateItem|CreateItemLoc|UnitAddItemByIdSwapped|RandomDistAddItem)\\s*\\(\\s*'([^'\\r\\n]{4})'");
 
 	private CampaignSoakTestRunner() {
 	}
@@ -92,6 +97,8 @@ public final class CampaignSoakTestRunner {
 		int maxTicks = 300;
 		int mapLimit = Integer.MAX_VALUE;
 		String mapFilter = null;
+		boolean reportAbilityGaps = false;
+		boolean reportItemAbilityGaps = false;
 
 		for (int i = 0; i < args.length; i++) {
 			switch (args[i]) {
@@ -106,6 +113,12 @@ public final class CampaignSoakTestRunner {
 				break;
 			case "--filter":
 				mapFilter = args[++i];
+				break;
+			case "--ability-gaps":
+				reportAbilityGaps = true;
+				break;
+			case "--item-ability-gaps":
+				reportItemAbilityGaps = true;
 				break;
 			default:
 				throw new IllegalArgumentException("Unknown option: " + args[i]);
@@ -215,12 +228,17 @@ public final class CampaignSoakTestRunner {
 
 					// Check AI script validity
 					int aiScriptsVerified = 0;
+					final Set<String> itemTypes = new TreeSet<>();
 					if (map.has("war3map.j")) {
 						final CompoundDataSource mapCompound = new CompoundDataSource(Arrays.asList(compound, map));
 						try (InputStream in = map.getResourceAsStream("war3map.j");
 								BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
 							String line;
 							while ((line = reader.readLine()) != null) {
+								if (reportItemAbilityGaps && !line.stripLeading().startsWith("//")) {
+									final var matcher = LITERAL_ITEM_CREATION.matcher(line);
+									while (matcher.find()) itemTypes.add(matcher.group(1));
+								}
 								if (line.contains("StartCampaignAI") || line.contains("StartMeleeAI")) {
 									final int firstQuote = line.indexOf('"');
 									final int secondQuote = line.indexOf('"', firstQuote + 1);
@@ -336,6 +354,8 @@ public final class CampaignSoakTestRunner {
 						simulation.update();
 					}
 					totalSimTicks += maxTicks;
+					if (reportAbilityGaps) reportAbilityGaps(mapPath, w3i, simulation);
+					if (reportItemAbilityGaps) reportItemAbilityGaps(mapPath, simulation, itemTypes);
 
 					final long elapsed = System.currentTimeMillis() - mapStart;
 					System.out.printf("[%02d/%02d] PASS: %-36s | Units: %3d | Doodads: %4d | AI: %d | %d ticks in %d ms%n",
@@ -377,6 +397,44 @@ public final class CampaignSoakTestRunner {
 					source.close();
 				}
 				catch (final Exception ignored) {
+				}
+			}
+		}
+	}
+
+	private static void reportAbilityGaps(final String mapPath, final War3MapW3i info, final CSimulation simulation) {
+		final Set<Integer> humanSlots = info.getPlayers().stream().filter(player -> player.getType() == 1)
+				.map(Player::getId).collect(Collectors.toSet());
+		final Set<String> gaps = new TreeSet<>();
+		for (final CUnit unit : simulation.getUnits()) {
+			final String role = humanSlots.contains(unit.getPlayerIndex()) ? "player" : "opponent";
+			if (!humanSlots.contains(unit.getPlayerIndex()) && unit.getHeroData() == null) continue;
+			for (final var ability : unit.getAbilities()) {
+				if (ability instanceof CAbilityGenericDoNothing) {
+					gaps.add(role + " " + unit.getTypeId() + " " + ability.getAlias() + " (attached)");
+				}
+			}
+			if (unit.getHeroData() != null) {
+				for (final War3ID skill : unit.getHeroData().getSkillsAvailable()) {
+					if (simulation.getAbilityData().getAbilityType(skill) == null) {
+						gaps.add(role + " " + unit.getTypeId() + " " + skill + " (hero skill)");
+					}
+				}
+			}
+		}
+		for (final String gap : gaps) {
+			System.out.println("[Ability gap] " + mapPath + " " + gap);
+		}
+	}
+
+	private static void reportItemAbilityGaps(final String mapPath, final CSimulation simulation, final Set<String> itemTypes) {
+		for (final CItem item : simulation.getItems()) itemTypes.add(item.getTypeId().toString());
+		for (final String rawcode : itemTypes) {
+			final var item = simulation.getItemData().getItemType(War3ID.fromString(rawcode));
+			if (item == null) continue;
+			for (final War3ID ability : item.getAbilityList()) {
+				if (simulation.getAbilityData().getAbilityType(ability) == null) {
+					System.out.println("[Item ability gap] " + mapPath + " " + rawcode + " " + ability);
 				}
 			}
 		}

@@ -99,7 +99,7 @@ public class CAbilityDeathPact extends CAbilityTargetSpellBase {
 			final CWidget target, final AbilityTargetCheckReceiver<CWidget> receiver) {
 		final CUnit targetUnit = target.visit(AbilityTargetVisitor.UNIT);
 		if (targetUnit != null) {
-			if (targetUnit.getClassifications().contains(CUnitClassification.UNDEAD)) {
+			if (!requiresUndeadTarget() || targetUnit.getClassifications().contains(CUnitClassification.UNDEAD)) {
 				// funny stupid error case, this is to mimic the emulation and is nothing but
 				// spaghetti
 				// code. Best guess, maybe Wand of Mana Stealing came first?
@@ -117,6 +117,10 @@ public class CAbilityDeathPact extends CAbilityTargetSpellBase {
 		else {
 			receiver.targetCheckFailed(CommandStringErrorKeys.MUST_TARGET_A_UNIT_WITH_THIS_ACTION);
 		}
+	}
+
+	protected boolean requiresUndeadTarget() {
+		return true;
 	}
 
 	@Override

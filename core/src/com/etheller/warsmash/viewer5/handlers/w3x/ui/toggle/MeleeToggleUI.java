@@ -91,6 +91,11 @@ public class MeleeToggleUI implements WarsmashUI {
 	}
 
 	@Override
+	public void setCameraQuickPosition(final float x, final float y) {
+		this.meleeUI.setCameraQuickPosition(x, y);
+	}
+
+	@Override
 	public void main() {
 		for (final WarsmashBaseUI ui : this.allUIs) {
 			ui.main();
@@ -139,6 +144,11 @@ public class MeleeToggleUI implements WarsmashUI {
 	@Override
 	public boolean keyUp(final int keycode) {
 		return this.currentUI.keyUp(keycode);
+	}
+
+	@Override
+	public boolean keyTyped(final char character) {
+		return this.currentUI.keyTyped(character);
 	}
 
 	@Override
@@ -226,6 +236,11 @@ public class MeleeToggleUI implements WarsmashUI {
 	@Override
 	public CTimerDialog createTimerDialog(final CTimer timer) {
 		return this.meleeUI.createTimerDialog(timer);
+	}
+
+	@Override
+	public void destroyTimerDialog(final CTimerDialog timerDialog) {
+		this.meleeUI.destroyTimerDialog(timerDialog);
 	}
 
 	@Override
@@ -588,6 +603,12 @@ public class MeleeToggleUI implements WarsmashUI {
 			final com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CSoundVolumeGroup group,
 			final float scale) {
 		this.meleeUI.setVolumeGroupVolume(group, scale);
+	}
+
+	@Override
+	public float getVolumeGroupVolume(
+			final com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CSoundVolumeGroup group) {
+		return this.meleeUI.getVolumeGroupVolume(group);
 	}
 
 	@Override

@@ -16,6 +16,7 @@ public class TextAreaFrame extends ControlFrame implements ScrollBarFrame.Scroll
 	// TODO where are these colors in the UI definition files?
 	private final List<String> listItems = new ArrayList<>();
 	private final List<StringFrame> stringFrames = new ArrayList<>();
+	private StringFrame paragraph;
 	private BitmapFont frameFont;
 	private float lineHeight;
 	private float lineGap;
@@ -77,6 +78,11 @@ public class TextAreaFrame extends ControlFrame implements ScrollBarFrame.Scroll
 		for (final StringFrame frame : this.stringFrames) {
 			frame.positionBounds(gameUI, viewport);
 		}
+		if (this.paragraph != null) {
+			this.paragraph.setWidth(this.renderBounds.width - (this.inset * 2));
+			this.paragraph.setHeight(this.renderBounds.height - (this.inset * 2));
+			this.paragraph.positionBounds(gameUI, viewport);
+		}
 		if (this.scrollBarFrame != null) {
 			this.scrollBarFrame.positionBounds(gameUI, viewport);
 		}
@@ -88,6 +94,7 @@ public class TextAreaFrame extends ControlFrame implements ScrollBarFrame.Scroll
 		for (final StringFrame frame : this.stringFrames) {
 			frame.render(batch, baseFont, glyphLayout);
 		}
+		if (this.paragraph != null) this.paragraph.render(batch, baseFont, glyphLayout);
 		if (this.scrollBarFrame != null) {
 			this.scrollBarFrame.render(batch, baseFont, glyphLayout);
 		}
@@ -106,6 +113,16 @@ public class TextAreaFrame extends ControlFrame implements ScrollBarFrame.Scroll
 		this.listItems.clear();
 		this.listItems.addAll(items);
 		updateUI(gameUI, viewport);
+	}
+
+	public void setParagraph(final String text, final GameUI gameUI, final Viewport viewport) {
+		if (this.paragraph == null) {
+			this.paragraph = new StringFrame(null, this, Color.WHITE, TextJustify.LEFT, TextJustify.TOP,
+					this.frameFont, "", null, null);
+			this.paragraph.addSetPoint(new SetPoint(FramePoint.TOPLEFT, this, FramePoint.TOPLEFT, this.inset, -this.inset));
+			positionChildren(gameUI, viewport);
+		}
+		gameUI.setText(this.paragraph, text);
 	}
 
 	public void removeItem(final String item, final GameUI gameUI, final Viewport viewport) {

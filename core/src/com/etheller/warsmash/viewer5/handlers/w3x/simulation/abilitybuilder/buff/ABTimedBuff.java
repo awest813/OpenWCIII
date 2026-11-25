@@ -12,6 +12,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.unit.NonStackingFx;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.SimulationRenderComponent;
 
 public class ABTimedBuff extends ABGenericTimedBuff {
+	private static final War3ID SLOW_BUFF = War3ID.fromString("Bslo");
 
 	protected Map<String, Object> localStore;
 	private List<ABAction> onAddActions;
@@ -46,6 +47,16 @@ public class ABTimedBuff extends ABGenericTimedBuff {
 	}
 
 	@Override
+	public boolean isDispellable() {
+		return SLOW_BUFF.equals(getAlias());
+	}
+
+	@Override
+	public DispelPolarity getDispelPolarity() {
+		return SLOW_BUFF.equals(getAlias()) ? DispelPolarity.HARMFUL : DispelPolarity.UNCLASSIFIED;
+	}
+
+	@Override
 	protected void onBuffAdd(CSimulation game, CUnit unit) {
 		if(this.fx != null) {
 			unit.removeNonStackingFx(game, this.fx);
@@ -68,6 +79,7 @@ public class ABTimedBuff extends ABGenericTimedBuff {
 	protected void onBuffRemove(CSimulation game, CUnit unit) {
 		if (this.fx != null) {
 			unit.removeNonStackingFx(game, this.fx);
+			this.fx = null;
 		}
 		if (this.sfx != null) {
 			this.sfx.remove();

@@ -12,4 +12,5 @@ public interface AudioExtension {
 			final boolean is3DSound, float maxDistance, float refDistance, boolean looping);
 	default void setPosition(Sound sound, long id, float x, float y, float z, boolean spatial,
 			float maxDistance, float refDistance) { }
+	default boolean seek(Sound sound, long id, float seconds) { return false; }
 }

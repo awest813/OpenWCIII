@@ -1423,7 +1423,7 @@ public final class GameUI extends AbstractUIFrame implements UIFrame {
 				if (decorateFileNames && (edgeFileString != null)) {
 					edgeFileString = trySkinField(edgeFileString);
 				}
-				if (decorateFileNames && (edgeFileString != null)) {
+				if (decorateFileNames && (backgroundString != null)) {
 					backgroundString = trySkinField(backgroundString);
 				}
 				final Texture background = backgroundString == null ? null : loadTexture(backgroundString);

@@ -6,4 +6,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 
 public interface CUnitAttackPostDamageListener {
 	public void onHit(final CSimulation simulation, CUnit attacker, AbilityTarget target, float damage);
+
+	default void onSplashHit(final CSimulation simulation, final CUnit attacker, final CUnit target,
+			final float damage) {
+	}
 }

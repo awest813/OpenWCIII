@@ -5,6 +5,9 @@ import java.util.EnumSet;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.CAbilityItemOrb;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.combat.CAbilityLightningAttack;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.undead.CAbilitySpiderAttack;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetWidgetVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
@@ -55,6 +58,17 @@ public class CUnitAttackMissile extends CUnitAttack {
 		return this.projectileArt;
 	}
 
+	public String getProjectileArt(final CUnit source) {
+		final String equippedArt = this.attackReplacement == null ? CAbilityItemOrb.equippedProjectileArt(source) : null;
+		if (equippedArt != null) return equippedArt;
+		if (this.attackReplacement == null && CAbilityItemOrb.preferredOrb(source) == null) {
+			final var spiderAttack = source.getFirstAbilityOfType(CAbilitySpiderAttack.class);
+			final String spiderArt = spiderAttack == null ? null : spiderAttack.getMissileArt();
+			if (spiderArt != null) return spiderArt;
+		}
+		return getProjectileArt();
+	}
+
 	public boolean isProjectileHomingEnabled() {
 		if (this.attackReplacement != null) {
 			return this.attackReplacement.isProjectileHomingEnabled();
@@ -89,7 +103,10 @@ public class CUnitAttackMissile extends CUnitAttack {
 	public void launch(final CSimulation simulation, final CUnit unit, final AbilityTarget target, final float damage,
 			final CUnitAttackListener attackListener) {
 		attackListener.onLaunch();
-		simulation.createProjectile(unit, unit.getX(), unit.getY(), (float) Math.toRadians(unit.getFacing()), this,
+		final var lightning = unit.getFirstAbilityOfType(CAbilityLightningAttack.class);
+		final CUnitAttackMissile projectile = lightning == null || this.attackReplacement != null ? this
+				: lightning.prepareProjectile(simulation, this, target);
+		simulation.createProjectile(unit, unit.getX(), unit.getY(), (float) Math.toRadians(unit.getFacing()), projectile,
 				target, damage, 0, attackListener);
 	}
 
@@ -99,9 +116,27 @@ public class CUnitAttackMissile extends CUnitAttack {
 		final CWidget widget = target.visit(AbilityTargetWidgetVisitor.INSTANCE);
 		if (widget != null) {
 			CUnitAttackPreDamageListenerDamageModResult modDamage = runPreDamageListeners(cSimulation, source, target, damage);
+			if (!modDamage.isMiss()) attackListener.onBeforeDamage(target);
 			float damageDealt = widget.damage(cSimulation, source, true, true, getAttackType(), getWeaponType().getDamageType(), getWeaponSound(), modDamage.computeFinalDamage(), modDamage.getBonusDamage());
 			runPostDamageListeners(cSimulation, source, target, damageDealt);
 			attackListener.onHit(target, damage);
+		}
+	}
+
+	public void doProjectileDamage(final CSimulation game, final CUnit source, final AbilityTarget target,
+			final float damage, final float x, final float y, final float launchX, final float launchY,
+			final int bounceIndex, final CUnitAttackListener attackListener) {
+		doDamage(game, source, target, damage, x, y, bounceIndex, attackListener);
+	}
+
+	@Override
+	public void runPostDamageListeners(final CSimulation game, final CUnit source, final AbilityTarget target,
+			final float actualDamage) {
+		super.runPostDamageListeners(game, source, target, actualDamage);
+		if (actualDamage > 0 && this.attackReplacement == null && target instanceof CUnit unit
+				&& CAbilityItemOrb.preferredOrb(source) == null) {
+			final var spiderAttack = source.getFirstAbilityOfType(CAbilitySpiderAttack.class);
+			if (spiderAttack != null) spiderAttack.onImpact(game, source, unit, getProjectileSpeed());
 		}
 	}
 }

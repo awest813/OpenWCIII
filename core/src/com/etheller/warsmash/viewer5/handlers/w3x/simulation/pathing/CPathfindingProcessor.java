@@ -22,6 +22,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior
 
 public class CPathfindingProcessor {
 	private static final Rectangle tempRect = new Rectangle();
+	private static final double DIAGONAL_STEP_EXTRA = Math.sqrt(2) - 1;
+	private static final int MIN_SEARCH_ITERATION_LIMIT = 20_000;
+	private static final int MAX_SEARCH_ITERATION_LIMIT = 80_000;
 	private final PathingGrid pathingGrid;
 	private final CWorldCollision worldCollision;
 	private final LinkedList<PathfindingJob> moveQueue = new LinkedList<>();
@@ -41,6 +44,7 @@ public class CPathfindingProcessor {
 	private int totalIterations = 0;
 	private int totalJobLoops = 0;
 	private final int pathingGridCellCount;
+	private final int searchIterationLimit;
 
 	public CPathfindingProcessor(final PathingGrid pathingGrid, final CWorldCollision worldCollision) {
 		this(pathingGrid, worldCollision, createNodes(pathingGrid), createCornerNodes(pathingGrid), new AtomicInteger());
@@ -54,6 +58,9 @@ public class CPathfindingProcessor {
 		this.cornerNodes = cornerNodes;
 		this.sharedJobId = sharedJobId;
 		this.pathingGridCellCount = pathingGrid.getWidth() * pathingGrid.getHeight();
+		// Nearby destinations can require a detour across the map.
+		this.searchIterationLimit = Math.max(MIN_SEARCH_ITERATION_LIMIT,
+				Math.min(MAX_SEARCH_ITERATION_LIMIT, this.pathingGridCellCount));
 	}
 
 	public static Node[][] createNodes(final PathingGrid pathingGrid) {
@@ -139,7 +146,7 @@ public class CPathfindingProcessor {
 	}
 
 	public double f(final Node n) {
-		return n.g + h(n);
+		return n.f;
 	}
 
 	public double g(final Node n) {
@@ -156,14 +163,15 @@ public class CPathfindingProcessor {
 	}
 
 	public float h(final Node n) {
-		float bestDistance = 0;
+		double bestDistance = Double.POSITIVE_INFINITY;
 		for (int i = 0; i < this.goals; i++) {
-			final float possibleDistance = (float) n.point.distance(this.goalSet[i].point);
-			if (possibleDistance > bestDistance) {
-				bestDistance = possibleDistance; // always overestimate
-			}
+			final Point2D.Float goal = this.goalSet[i].point;
+			final float dx = Math.abs(n.point.x - goal.x);
+			final float dy = Math.abs(n.point.y - goal.y);
+			// On the eight-direction grid, take diagonal steps before straight steps.
+			bestDistance = Math.min(bestDistance, Math.max(dx, dy) + DIAGONAL_STEP_EXTRA * Math.min(dx, dy));
 		}
-		return bestDistance;
+		return (float) bestDistance;
 	}
 
 	public static final class Node {
@@ -255,6 +263,12 @@ public class CPathfindingProcessor {
 				workIterations += 5; // setup of job predicted cost
 				job.goalX = job.goal.x;
 				job.goalY = job.goal.y;
+				if (!this.pathingGrid.contains(job.startX, job.startY)
+						|| !this.pathingGrid.contains(job.goalX, job.goalY)) {
+					job.queueItem.pathFound(Collections.emptyList(), simulation);
+					this.moveQueue.poll();
+					continue JobsLoop;
+				}
 				job.weightForHittingWalls = 1E9f;
 				if (!this.pathingGrid.isPathable(job.goalX, job.goalY, job.movementType, job.collisionSize)
 						|| !isPathableDynamically(job.goalX, job.goalY, job.ignoreIntersectionsWithThisUnit,
@@ -300,12 +314,8 @@ public class CPathfindingProcessor {
 				}
 				final int startGridY = job.gridMapping.getY(this.pathingGrid, job.startY);
 				final int startGridX = job.gridMapping.getX(this.pathingGrid, job.startX);
-				job.openSet = new PriorityQueue<>(new Comparator<Node>() {
-					@Override
-					public int compare(final Node a, final Node b) {
-						return Double.compare(f(a), f(b));
-					}
-				});
+				job.openSet = new PriorityQueue<>(Comparator.comparingDouble(this::f)
+						.thenComparingDouble(node -> -node.g));
 
 				job.start = nodeForJob(job.searchGraph[startGridY][startGridX]);
 				job.start.touch(this.pathfindJobId);
@@ -470,7 +480,7 @@ public class CPathfindingProcessor {
 				}
 				workIterations++;
 				this.totalIterations++;
-				if (this.totalIterations > 20000) {
+				if (this.totalIterations >= this.searchIterationLimit) {
 					break;
 				}
 				if (workIterations >= 1500) {

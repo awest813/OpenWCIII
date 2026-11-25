@@ -1,9 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
@@ -24,7 +22,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringE
 
 public final class CAbilitySellUnits extends AbstractCAbility {
 	private final List<War3ID> unitsSold;
-	private final Map<Integer, int[]> unitStock = new HashMap<>();
+	private final CShopStock unitStock = new CShopStock();
 
 	public CAbilitySellUnits(final int handleId, final List<War3ID> unitsSold) {
 		super(handleId, War3ID.fromString("Asyu"));
@@ -39,23 +37,23 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 		if (!this.unitsSold.contains(unitId)) {
 			this.unitsSold.add(unitId);
 		}
-		this.unitStock.put(unitId.getValue(), new int[] { currentStock, stockMax });
+		this.unitStock.set(unitId, currentStock, stockMax);
 	}
 
 	public void removeUnitFromStock(final War3ID unitId) {
 		this.unitsSold.remove(unitId);
-		this.unitStock.remove(unitId.getValue());
+		this.unitStock.remove(unitId);
 	}
 
 	public int getUnitStockCurrent(final War3ID unitId) {
-		final int[] counts = this.unitStock.get(unitId.getValue());
-		return counts == null ? Integer.MAX_VALUE : counts[0];
+		return this.unitStock.count(unitId);
 	}
 
-	private void recordSale(final War3ID unitId) {
-		final int[] counts = this.unitStock.get(unitId.getValue());
-		if (counts != null) {
-			counts[0] = Math.max(0, counts[0] - 1);
+	private void loadObjectStock(final CSimulation game) {
+		for (final War3ID unitId : this.unitsSold) {
+			final var data = game.getUnitData().getUnitStockInfo(unitId);
+			this.unitStock.addAuthored(unitId, data.maximum(), data.availabilityDelaySeconds(), data.replenishSeconds(),
+					game.getGameTurnTick());
 		}
 	}
 
@@ -68,6 +66,7 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 			final War3ID unitTypeId = this.unitsSold.get(unitIndex);
 			final CUnitType unitType = game.getUnitData().getUnitType(unitTypeId);
 			if (unitType != null) {
+				if (!this.unitStock.checkAvailable(unitTypeId, game.getGameTurnTick(), receiver)) return;
 				final CPlayer player = game.getPlayer(playerIndex);
 				final boolean isHeroType = unitType.isHero();
 				final boolean hasResources = (isHeroType && (player.getHeroTokens() > 0))
@@ -84,10 +83,6 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 				}
 				if ((player.getFoodUsed() + unitType.getFoodUsed()) > player.getFoodCap()) {
 					receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_FOOD);
-					return;
-				}
-				if (getUnitStockCurrent(unitTypeId) <= 0) {
-					receiver.activationCheckFailed(CommandStringErrorKeys.OUT_OF_STOCK);
 					return;
 				}
 				receiver.useOk();
@@ -133,6 +128,7 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 
 	@Override
 	public void onAdd(final CSimulation game, final CUnit unit) {
+		loadObjectStock(game);
 	}
 
 	@Override
@@ -141,6 +137,7 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 
 	@Override
 	public void onTick(final CSimulation game, final CUnit unit) {
+		if (this.unitStock.replenish(game.getGameTurnTick())) unit.notifyOrdersChanged();
 	}
 
 	@Override
@@ -161,7 +158,7 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 		if ((unitIndex >= 0) && (unitIndex < this.unitsSold.size())) {
 			final War3ID unitTypeId = this.unitsSold.get(unitIndex);
 			final CUnitType unitType = game.getUnitData().getUnitType(unitTypeId);
-			if (unitType != null) {
+			if (unitType != null && this.unitStock.count(unitTypeId) > 0) {
 				final CPlayer player = game.getPlayer(playerIndex);
 				final boolean isHeroType = unitType.isHero();
 				final boolean chargeOk;
@@ -173,12 +170,13 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 					chargeOk = player.charge(unitType.getGoldCost(), unitType.getLumberCost());
 				}
 				if (chargeOk) {
+					this.unitStock.sold(unitTypeId, game.getGameTurnTick());
 					final CUnit hiredUnit = game.createUnit(unitTypeId, playerIndex, caster.getX(), caster.getY(),
 							game.getGameplayConstants().getBuildingAngle());
-					hiredUnit.setFoodUsed(unitType.getFoodUsed());
+					player.setUnitFoodUsed(hiredUnit, unitType.getFoodUsed());
 					player.setUnitFoodMade(hiredUnit, unitType.getFoodMade());
 					player.addTechtreeUnlocked(game, unitTypeId);
-					recordSale(unitTypeId);
+					caster.notifyOrdersChanged();
 					caster.dispatchSpawnedUnit(game, hiredUnit);
 				}
 			}
@@ -201,7 +199,9 @@ public final class CAbilitySellUnits extends AbstractCAbility {
 		this.unitsSold.clear();
 		this.unitsSold.addAll(unitType.getUnitsSold());
 		this.unitStock.clear();
+		loadObjectStock(game);
 	}
+
 
 	@Override
 	public void onDeath(final CSimulation game, final CUnit cUnit) {

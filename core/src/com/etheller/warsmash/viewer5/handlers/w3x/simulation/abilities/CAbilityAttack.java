@@ -5,6 +5,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CDestructable;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.nightelf.CAbilityWarClub;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetVisitor;
@@ -13,6 +14,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorAttackListener;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorAttackMove;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CTargetType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttack;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
@@ -62,10 +64,17 @@ public class CAbilityAttack extends AbstractCAbility {
 			}
 		}
 		if ((orderId == OrderIds.smart) || (orderId == OrderIds.attack)) {
+			if (target instanceof CDestructable tree && tree.getDestType().getTargetedAs().contains(CTargetType.TREE)) {
+				final var warClub = unit.getFirstAbilityOfType(CAbilityWarClub.class);
+				if (warClub != null && !warClub.hasClub()) {
+					receiver.orderIdNotAccepted();
+					return;
+				}
+			}
 			boolean canTarget = false;
 			CUnitAttack lastUnavailableAttack = null;
 			for (final CUnitAttack attack : unit.getCurrentAttacks()) {
-				if (target.canBeTargetedBy(game, unit, attack.getTargetsAllowed())) {
+				if (target.canBeAttackedBy(game, unit, attack.getTargetsAllowed())) {
 					CUnit tarU = target.visit(AbilityTargetVisitor.UNIT);
 					if (tarU != null) {
 						if (tarU.isUnitType(CUnitTypeJass.ETHEREAL) && attack.getAttackType() != CAttackType.MAGIC && attack.getAttackType() != CAttackType.SPELLS) {
@@ -89,7 +98,7 @@ public class CAbilityAttack extends AbstractCAbility {
 			else {
 				if(lastUnavailableAttack != null) {
 					// a check known to fail, so it will populate our receiver
-					target.canBeTargetedBy(game, unit, lastUnavailableAttack.getTargetsAllowed(), receiver);
+					target.canBeAttackedBy(game, unit, true, lastUnavailableAttack.getTargetsAllowed(), receiver);
 				} else {
 					receiver.targetCheckFailed(CommandStringErrorKeys.MUST_TARGET_A_UNIT_WITH_THIS_ACTION);
 				}
@@ -160,7 +169,7 @@ public class CAbilityAttack extends AbstractCAbility {
 	public CBehavior begin(final CSimulation game, final CUnit caster, final int orderId, final CWidget target) {
 		CBehavior behavior = null;
 		for (final CUnitAttack attack : caster.getCurrentAttacks()) {
-			if (target.canBeTargetedBy(game, caster, attack.getTargetsAllowed())) {
+			if (target.canBeAttackedBy(game, caster, attack.getTargetsAllowed())) {
 				behavior = caster.getAttackBehavior().reset(game, OrderIds.attack, attack, target, false,
 						CBehaviorAttackListener.DO_NOTHING);
 				break;

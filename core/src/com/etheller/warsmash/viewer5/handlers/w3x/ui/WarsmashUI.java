@@ -29,6 +29,10 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 
 	GameCameraManager getCameraManager();
 
+	default void setCameraQuickPosition(final float x, final float y) {
+		getCameraManager().setQuickPosition(x, y);
+	}
+
 	Music playMusic(String musicField, boolean random, int index);
 
 	Music setMapMusic(String musicField, boolean random, int index);
@@ -81,6 +85,8 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 	Scene getUiScene();
 
 	CTimerDialog createTimerDialog(CTimer timer);
+
+	void destroyTimerDialog(CTimerDialog timerDialog);
 
 	void removedUnit(CUnit whichUnit);
 
@@ -321,6 +327,9 @@ public interface WarsmashUI extends CommandErrorListener, WarsmashBaseUI {
 	void setVolumeGroupVolume(
 			com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CSoundVolumeGroup group,
 			float scale);
+
+	float getVolumeGroupVolume(
+			com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CSoundVolumeGroup group);
 
 	void resetVolumeGroups();
 

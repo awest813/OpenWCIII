@@ -11,6 +11,7 @@ import com.etheller.warsmash.util.DataSourceFileHandle;
 
 public class MusicPlayerLibGDX implements MusicPlayer {
 	private static final float GAME_MSECS_DIVISOR = 1000f;
+	private static final float STOP_FADE_SECONDS = 2f;
 	private Music[] currentMusics;
 	private int currentMusicIndex;
 	private boolean currentMusicRandomizeIndex;
@@ -23,6 +24,8 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 	private int defaultMusicIndex;
 	private float fadeDuration;
 	private float fadeElapsed;
+	private boolean fadingOut;
+	private float fadeOutStartGain;
 
 	public MusicPlayerLibGDX(DataSource dataSource, DataTable musicSLK) {
 		this.dataSource = dataSource;
@@ -39,6 +42,10 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 			if (this.fadeElapsed < this.fadeDuration) {
 				this.fadeElapsed = Math.min(this.fadeDuration, this.fadeElapsed + Math.max(0f, deltaTime));
 				applyVolume();
+			}
+			if (this.fadingOut) {
+				if (this.fadeElapsed >= this.fadeDuration) stopMusic();
+				return;
 			}
 			if (this.currentMusics == null) {
 				playDefaultMusic();
@@ -71,6 +78,7 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 
 	@Override
 	public void stopMusic() {
+		cancelFadeOut();
 		this.currentMusicActive = false;
 		if (this.currentMusics != null) {
 			for (final Music music : this.currentMusics) {
@@ -82,13 +90,38 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 	}
 
 	@Override
+	public void stopMusic(final boolean fadeOut) {
+		if (!fadeOut || !this.currentMusicActive || this.currentMusics == null) {
+			stopMusic();
+		}
+		else if (!this.fadingOut) {
+			this.fadeOutStartGain = currentGain();
+			this.fadingOut = true;
+			this.fadeDuration = STOP_FADE_SECONDS;
+			this.fadeElapsed = 0f;
+		}
+	}
+
+	private void cancelFadeOut() {
+		if (!this.fadingOut) return;
+		this.fadingOut = false;
+		this.fadeDuration = 0f;
+		this.fadeElapsed = 0f;
+	}
+
+	@Override
 	public void setVolume(int volume) {
 		this.volume = Math.max(0, Math.min(127, volume)) / 127f;
 		applyVolume();
 	}
 
+	private float currentGain() {
+		final float progress = this.fadeDuration > 0f ? this.fadeElapsed / this.fadeDuration : 1f;
+		return this.fadingOut ? this.fadeOutStartGain * (1f - progress) : progress;
+	}
+
 	private void applyVolume() {
-		final float volumeFloat = this.volume * (this.fadeDuration > 0f ? this.fadeElapsed / this.fadeDuration : 1f);
+		final float volumeFloat = this.volume * currentGain();
 		if (this.currentMusics != null) {
 			for (final Music music : this.currentMusics) {
 				if (music != null) {
@@ -100,6 +133,8 @@ public class MusicPlayerLibGDX implements MusicPlayer {
 
 	@Override
 	public void resumeMusic() {
+		cancelFadeOut();
+		applyVolume();
 		this.currentMusicActive = true;
 		if (this.currentMusics != null) {
 			this.currentMusics[this.currentMusicIndex].play();

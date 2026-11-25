@@ -14,11 +14,16 @@ public class AudioBufferSource {
 	}
 
 	public long start(final int value, final float volume, final float pitch, final boolean looping) {
+		return start(value, volume, pitch, looping, 1);
+	}
+
+	public long start(final int value, final float volume, final float pitch, final boolean looping,
+			final float volumeGroupScale) {
 		final float gain = effectiveVolume(volume);
 		if (gain <= 0 || this.panner == null || Extensions.audio == null) return -1;
 		if (this.buffer != null) {
 			if (!this.spatial || !this.panner.listener.is3DSupported() || this.panner.isWithinListenerDistance()) {
-				return Extensions.audio.play(this.buffer, gain, pitch, this.panner.x, this.panner.y, this.panner.z,
+				return Extensions.audio.play(this.buffer, gain * volumeGroupScale, pitch, this.panner.x, this.panner.y, this.panner.z,
 						this.spatial && this.panner.listener.is3DSupported() && OptionsSettingsStore.get().isPositionalAudio(), this.panner.maxDistance, this.panner.refDistance,
 						looping);
 			}

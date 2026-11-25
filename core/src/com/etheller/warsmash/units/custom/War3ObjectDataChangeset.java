@@ -142,7 +142,7 @@ public final class War3ObjectDataChangeset {
 	}
 
 	private int version;
-	private ObjectMap original = new ObjectMap();
+	private final ObjectMap original = new ObjectMap();
 	private final ObjectMap custom = new ObjectMap();
 	private char expected;
 	private War3ID lastused;
@@ -228,6 +228,10 @@ public final class War3ObjectDataChangeset {
 	}
 
 	public boolean extended() {
+		// Version 1 doodad fields encode variations in the field ID itself.
+		if ((this.expected == 'd') && (this.version == 1)) {
+			return false;
+		}
 		char cmp = this.kind;
 		if (!this.detected) {
 			cmp = this.expected;
@@ -478,12 +482,11 @@ public final class War3ObjectDataChangeset {
 
 	/**
 	 * Reports a table whose layout does not match what this parser expects and
-	 * abandons it. The caller restores its previous contents, so the map keeps
-	 * loading without the modifications in that one table. Classic doodad tables
-	 * hit this: they carry no level/data fields where the parser expects them.
+	 * abandons it. The caller keeps its previous contents, so the map can still
+	 * load with the object data from other sources.
 	 */
 	private boolean desynced(final String reason) {
-		System.err.println("Object data table for '" + this.kind + "' does not match the expected layout (" + reason
+		System.err.println("Object data table for '" + this.expected + "' does not match the expected layout (" + reason
 				+ "); skipping its modifications.");
 		return false;
 	}
@@ -492,10 +495,11 @@ public final class War3ObjectDataChangeset {
 			final WTS wts, final boolean inlineWTS) throws IOException {
 		final War3ID noid = new War3ID(0);
 		final StringBuilder stringBuilder = new StringBuilder();
-		int ptr;
 		final int count = stream.readInt();
+		if (count < 0) {
+			return desynced("negative object count");
+		}
 		for (int i = 0; i < count; i++) {
-			final long nanoTime = System.nanoTime();
 			War3ID origid;
 			War3ID newid = null;
 			origid = readWar3ID(stream);
@@ -508,6 +512,9 @@ public final class War3ObjectDataChangeset {
 				if (existingObject == null) {
 					existingObject = new ObjectDataChangeEntry(origid, noid);
 				}
+				else {
+					existingObject = existingObject.clone();
+				}
 				existingObject.setNewId(readWar3ID(stream));
 			}
 			else {
@@ -519,6 +526,9 @@ public final class War3ObjectDataChangeset {
 				if (existingObject == null) {
 					existingObject = new ObjectDataChangeEntry(origid, newid);
 				}
+				else {
+					existingObject = existingObject.clone();
+				}
 			}
 			if (this.version >= 3) {
 				final int reforged133JunkCount = stream.readInt();
@@ -527,10 +537,8 @@ public final class War3ObjectDataChangeset {
 				}
 			}
 			final int ccount = stream.readInt();// Retera: I assume this is change count?
-			if ((ccount == 0) && isOriginal) {
-				// throw new IOException("we seem to have reached the end of the stream and get
-				// zeroes");
-				System.err.println("we seem to have reached the end of the stream and get zeroes");
+			if (ccount < 0) {
+				return desynced("negative field count on object " + (isOriginal ? origid : newid));
 			}
 			if (isOriginal) {
 				debugprint("StandardUnit \"" + origid + "\" " + ccount + " {");
@@ -565,10 +573,9 @@ public final class War3ObjectDataChangeset {
 					debugprint("\t\tValue " + newlyReadChange.getLongval() + ",");
 					break;
 				case 3:
-					ptr = 0;
 					stringBuilder.setLength(0);
 					int charRead;
-					while ((charRead = stream.read()) != 0) {
+					while ((charRead = stream.readUnsignedByte()) != 0) {
 						stringBuilder.append((char) charRead);
 					}
 					newlyReadChange.setStrval(stringBuilder.toString());
@@ -595,26 +602,7 @@ public final class War3ObjectDataChangeset {
 				final War3ID crap = readWar3ID(stream);
 				debugprint("\t\tExtra \"" + crap + "\",");
 				newlyReadChange.setJunkDNA(crap);
-				List<Change> existingChanges = existingObject.getChanges().get(chid);
-				if (existingChanges == null) {
-					existingChanges = new ArrayList<>();
-				}
-				Change bestTargetChange = null;
-				for (final Change targetChange : existingChanges) {
-					if (targetChange.getLevel() == newlyReadChange.getLevel()) {
-						bestTargetChange = targetChange;
-						break;
-					}
-				}
-				if (bestTargetChange != null) {
-					bestTargetChange.copyFrom(newlyReadChange);
-				}
-				else {
-					existingChanges.add(newlyReadChange.clone());
-					if (existingChanges.size() == 1) {
-						existingObject.getChanges().add(chid, existingChanges);
-					}
-				}
+				putLoadedChange(existingObject, newlyReadChange);
 				if (!crap.equals(existingObject.getOldId()) && !crap.equals(existingObject.getNewId())
 						&& !crap.equals(noid)) {
 					for (int charIndex = 0; charIndex < 4; charIndex++) {
@@ -630,10 +618,21 @@ public final class War3ObjectDataChangeset {
 				throw new IllegalStateException("custom unit has no ID!");
 			}
 			map.put(isOriginal ? origid : newid, existingObject);
-			final long endNanoTime = System.nanoTime();
-			final long deltaNanoTime = endNanoTime - nanoTime;
 		}
 		return true;
+	}
+
+	private static void putLoadedChange(final ObjectDataChangeEntry object, final Change change) {
+		final List<Change> changes = object.getChanges().get(change.getId());
+		if (changes != null) {
+			for (int i = 0; i < changes.size(); i++) {
+				if (changes.get(i).getLevel() == change.getLevel()) {
+					changes.set(i, change);
+					return;
+				}
+			}
+		}
+		object.getChanges().add(change.getId(), change);
 	}
 
 	private War3ID readWar3ID(final LittleEndianDataInputStream stream) throws IOException {
@@ -656,26 +655,36 @@ public final class War3ObjectDataChangeset {
 
 	public boolean load(final LittleEndianDataInputStream stream, final WTS wts, final boolean inlineWTS)
 			throws IOException {
-		this.detected = false;
-		this.version = stream.readInt();
-		if ((this.version != 1) && (this.version != 2) && (this.version != 3)) {
-			return false;
-		}
+		final int previousVersion = this.version;
+		final char previousKind = this.kind;
+		final boolean previouslyDetected = this.detected;
+		boolean loaded = false;
 		try {
-			ObjectMap backup = this.original.clone();
-			if (!loadtable(stream, this.original, true, wts, inlineWTS)) {
-				this.original = backup;
+			this.detected = false;
+			this.version = stream.readInt();
+			if ((this.version != 1) && (this.version != 2) && (this.version != 3)) {
 				return false;
 			}
-			backup = this.custom.clone();
-			if (!loadtable(stream, this.custom, false, wts, inlineWTS)) {
-				this.original = backup;
+			final ObjectMap original = this.original.clone();
+			final ObjectMap custom = this.custom.clone();
+			if (!loadtable(stream, original, true, wts, inlineWTS)
+					|| !loadtable(stream, custom, false, wts, inlineWTS)) {
 				return false;
 			}
+			original.forEach(this.original::put);
+			custom.forEach(this.custom::put);
+			loaded = true;
 			return true;
 		}
 		catch (final java.io.EOFException eof) {
-			return desynced("EOF encountered while reading table: " + eof.getMessage());
+			return desynced("unexpected end of file");
+		}
+		finally {
+			if (!loaded) {
+				this.version = previousVersion;
+				this.kind = previousKind;
+				this.detected = previouslyDetected;
+			}
 		}
 	}
 

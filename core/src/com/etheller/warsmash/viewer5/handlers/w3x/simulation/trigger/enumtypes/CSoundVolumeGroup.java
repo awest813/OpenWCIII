@@ -22,6 +22,19 @@ public enum CSoundVolumeGroup implements CHandle {
 
 	public static CSoundVolumeGroup[] VALUES = values();
 
+	public static CSoundVolumeGroup forClassicSoundChannel(final int channel) {
+		return switch (channel) {
+		case 1, 2, 4 -> UNITSOUNDS;
+		case 3, 9 -> UNITMOVEMENT;
+		case 5 -> COMBAT;
+		case 6, 8 -> UI;
+		case 7 -> MUSIC;
+		case 10 -> AMBIENTSOUNDS;
+		case 14 -> FIRE;
+		default -> null;
+		};
+	}
+
 	@Override
 	public int getHandleId() {
 		return ordinal();

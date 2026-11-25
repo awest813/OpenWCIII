@@ -37,7 +37,7 @@ public class CBehaviorLoad extends CAbstractRangedBehavior {
 	protected CBehavior update(final CSimulation simulation, final boolean withinFacingWindow) {
 		final CAbilityCargoHold cargoData = this.unit.getCargoData();
 		final CUnit targetUnit = (CUnit) this.target;
-		if (cargoData.hasCapacity(targetUnit.getUnitType().getCargoCapacity())) {
+		if (targetUnit.getTransport() == null && cargoData.hasCapacity(targetUnit.getUnitType().getCargoCapacity())) {
 			simulation.unitSoundEffectEvent(this.unit, cargoData.getAlias());
 			cargoData.addUnit(this.unit, targetUnit);
 			targetUnit.setHidden(true);
@@ -56,7 +56,7 @@ public class CBehaviorLoad extends CAbstractRangedBehavior {
 
 	@Override
 	protected boolean checkTargetStillValid(final CSimulation simulation) {
-		return this.target.visit(
+		return ((CUnit) this.target).getTransport() == null && this.target.visit(
 				this.stillAliveVisitor.reset(simulation, this.unit, this.unit.getCargoData().getTargetsAllowed()));
 	}
 

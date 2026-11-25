@@ -1,6 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.data;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public enum CUnitRace {
@@ -12,7 +13,8 @@ public enum CUnitRace {
 	CREEPS,
 	DEMON,
 	CRITTERS,
-	OTHER;
+	OTHER,
+	COMMONER;
 
 	private static Map<String, CUnitRace> keyToRace = new HashMap<>();
 
@@ -23,7 +25,7 @@ public enum CUnitRace {
 	}
 
 	public static CUnitRace parseRace(final String raceString) {
-		final CUnitRace race = keyToRace.get(raceString.toUpperCase());
+		final CUnitRace race = keyToRace.get(raceString.toUpperCase(Locale.ROOT));
 		if (race == null) {
 			return OTHER;
 		}

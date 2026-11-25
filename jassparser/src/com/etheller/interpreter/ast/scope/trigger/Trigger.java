@@ -78,9 +78,10 @@ public class Trigger implements CHandle {
 	}
 
 	public boolean evaluate(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
-		if (!this.enabled) {
-			return false;
-		}
+		return this.enabled && evaluateConditions(globalScope, triggerScope);
+	}
+
+	public boolean evaluateConditions(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
 		for (final TriggerBooleanExpression condition : this.conditions) {
 			if (!condition.evaluate(globalScope, triggerScope)) {
 				return false;
@@ -90,7 +91,9 @@ public class Trigger implements CHandle {
 	}
 
 	public void execute(final GlobalScope globalScope, final TriggerExecutionScope triggerScope) {
-		execute(globalScope, triggerScope, false);
+		if (this.enabled) {
+			execute(globalScope, triggerScope, false);
+		}
 	}
 
 	/** Explicit TriggerExecute calls run their actions before the caller continues, up to a sleep. */
@@ -100,9 +103,6 @@ public class Trigger implements CHandle {
 
 	private void execute(final GlobalScope globalScope, final TriggerExecutionScope triggerScope,
 			final boolean immediate) {
-		if (!this.enabled) {
-			return;
-		}
 		this.execCount++;
 		for (final JassFunction action : this.actions) {
 			try {

@@ -89,14 +89,18 @@ public class CAbilityLoad extends AbstractGenericSingleIconActiveAbility impleme
 	@Override
 	protected void innerCheckCanTarget(final CSimulation game, final CUnit unit, final int orderId,
 			final CWidget target, final AbilityTargetCheckReceiver<CWidget> receiver) {
-		if ((target instanceof CUnit)) {
-			if (target.canBeTargetedBy(game, unit, unit.getCargoData().getTargetsAllowed(), receiver)) {
+		if (target instanceof CUnit passenger) {
+			final CAbilityCargoHold cargo = unit.getCargoData();
+			if (cargo == null || passenger.getTransport() != null) {
+				receiver.targetCheckFailed(CommandStringErrorKeys.UNABLE_TO_LOAD_TARGET);
+				return;
+			}
+			if (target.canBeTargetedBy(game, unit, cargo.getTargetsAllowed(), receiver)) {
 				if (target != unit) {
 					if (((CUnit) target).getPlayerIndex() == unit.getPlayerIndex()) {
-						if (this.allowedUnitTypes.isEmpty()
-								|| this.allowedUnitTypes.contains(((CUnit) target).getTypeId())) {
+						if (isUnitTypeAllowed(unit, passenger)) {
 							if (!unit.isMovementDisabled()
-									|| unit.canReach(target, unit.getCargoData().getCastRange())) {
+									|| unit.canReach(target, cargo.getCastRange())) {
 								receiver.targetOk(target);
 							}
 							else {
@@ -149,6 +153,12 @@ public class CAbilityLoad extends AbstractGenericSingleIconActiveAbility impleme
 
 	public void setAllowedUnitTypes(final Set<War3ID> allowedUnitTypes) {
 		this.allowedUnitTypes = allowedUnitTypes;
+	}
+
+	private boolean isUnitTypeAllowed(final CUnit carrier, final CUnit passenger) {
+		if (this.allowedUnitTypes.isEmpty() || this.allowedUnitTypes.contains(passenger.getTypeId())) return true;
+		final CAbilityChaosCargoLoad chaosLoad = carrier.getFirstAbilityOfType(CAbilityChaosCargoLoad.class);
+		return chaosLoad != null && chaosLoad.allows(passenger);
 	}
 
 	@Override

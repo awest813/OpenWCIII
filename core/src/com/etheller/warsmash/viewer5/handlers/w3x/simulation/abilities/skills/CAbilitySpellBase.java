@@ -95,6 +95,14 @@ public abstract class CAbilitySpellBase extends AbstractGenericSingleIconNoSmart
 
 	public abstract boolean doEffect(CSimulation simulation, CUnit caster, AbilityTarget target);
 
+	public boolean blocksOrdersWhileChanneling() {
+		return false;
+	}
+
+	public float getCastDelay() {
+		return 0;
+	}
+
 	public boolean doChannelTick(final CSimulation simulation, final CUnit caster, final AbilityTarget target) {
 		return false;
 	}
@@ -148,6 +156,10 @@ public abstract class CAbilitySpellBase extends AbstractGenericSingleIconNoSmart
 
 	public int getManaCost() {
 		return this.manaCost;
+	}
+
+	public int getManaCost(final AbilityTarget target) {
+		return getManaCost();
 	}
 
 	@Override

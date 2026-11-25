@@ -337,14 +337,14 @@
 			"canHitTarget": [{
 				"type": "and",
 				"condition1": {
-					"type": "isValidTarget",
-					"target": {
-						"type": "getProjectileHitWidget"
+					"type": "isUnitEnemy",
+					"unit": {
+						"type": "getProjectileHitUnit"
 					}
 				},
 				"condition2": {
-					"type": "isUnitEnemy",
-					"unit": {
+					"type": "isUnitValidTarget",
+					"target": {
 						"type": "getProjectileHitUnit"
 					}
 				}

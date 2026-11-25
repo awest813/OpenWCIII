@@ -56,6 +56,11 @@ desktop launch flags and presets, and the renderer consumers of each setting.
   completion marker. Existing missing-asset warnings remain in its saved report.
 - Retail data test verifies the video-control names and records the original
   occlusion help: trees blocking the view of units become transparent.
+- The November 23 Frozen Throne opening chapter run passed mission
+  initialization and the same live graphics switch. Its log went from eight
+  missing texture requests to zero after handling empty replaceable texture
+  paths, absent shadows, and destructibles without blight textures. The run
+  still reported audio preload warnings and unsupported MIDI ambience.
 
 All retail Video-panel controls now have renderer consumers. Model detail still
 depends on authored assets and gamma depends on driver support. Exact retail

@@ -26,6 +26,7 @@ public class ABActionCreateTimedTickingPausedBuff implements ABSingleAction {
 	private List<ABAction> onTickActions;
 	private ABBooleanCallback showIcon;
 	private CEffectType artType;
+	private boolean dispellable;
 
 	@Override
 	public void runAction(final CSimulation game, final CUnit caster, final Map<String, Object> localStore,
@@ -35,27 +36,18 @@ public class ABActionCreateTimedTickingPausedBuff implements ABSingleAction {
 			showTimedLife = this.showTimedLifeBar.callback(game, caster, localStore, castId);
 		}
 
+		final ABTimedTickingPausedBuff ability = new ABTimedTickingPausedBuff(
+				game.getHandleIdAllocator().createId(), this.buffId.callback(game, caster, localStore, castId),
+				this.duration.callback(game, caster, localStore, castId), showTimedLife, localStore,
+				this.onAddActions, this.onRemoveActions, this.onExpireActions, this.onTickActions, castId);
 		if (this.showIcon != null) {
-			final ABTimedTickingPausedBuff ability = new ABTimedTickingPausedBuff(
-					game.getHandleIdAllocator().createId(), this.buffId.callback(game, caster, localStore, castId),
-					this.duration.callback(game, caster, localStore, castId), showTimedLife, localStore,
-					this.onAddActions, this.onRemoveActions, this.onExpireActions, this.onTickActions,
-					this.showIcon.callback(game, caster, localStore, castId), castId);
-			if (this.artType != null) {
-				ability.setArtType(this.artType);
-			}
-			localStore.put(ABLocalStoreKeys.LASTCREATEDBUFF, ability);
+			ability.setIconShowing(this.showIcon.callback(game, caster, localStore, castId));
 		}
-		else {
-			final ABTimedTickingPausedBuff ability = new ABTimedTickingPausedBuff(
-					game.getHandleIdAllocator().createId(), this.buffId.callback(game, caster, localStore, castId),
-					this.duration.callback(game, caster, localStore, castId), showTimedLife, localStore,
-					this.onAddActions, this.onRemoveActions, this.onExpireActions, this.onTickActions, castId);
-			if (this.artType != null) {
-				ability.setArtType(this.artType);
-			}
-			localStore.put(ABLocalStoreKeys.LASTCREATEDBUFF, ability);
+		if (this.artType != null) {
+			ability.setArtType(this.artType);
 		}
+		ability.setDispellable(this.dispellable);
+		localStore.put(ABLocalStoreKeys.LASTCREATEDBUFF, ability);
 		if (!localStore.containsKey(ABLocalStoreKeys.BUFFCASTINGUNIT)) {
 			localStore.put(ABLocalStoreKeys.BUFFCASTINGUNIT, caster);
 		}

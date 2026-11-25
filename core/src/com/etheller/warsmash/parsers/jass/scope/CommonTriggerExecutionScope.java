@@ -18,6 +18,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.core
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerJass;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.region.CRegion;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.state.CUnitState;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.timers.CTimer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3;
 import com.etheller.warsmash.viewer5.handlers.w3x.ui.dialog.CScriptDialog;
@@ -40,6 +41,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	private CRegion triggeringRegion;
 	private CPlayerJass triggeringPlayer;
 	private CPlayerState eventPlayerState;
+	private CUnitState eventUnitState;
 	private CUnit levelingUnit;
 	private CUnit learningUnit;
 	private int learnedSkill;
@@ -66,7 +68,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	private CUnit sellingUnit;
 	private CUnit soldUnit;
 	private CUnit buyingUnit;
-	private CUnit soldItem;
+	private CItem soldItem;
 	private CUnit changingUnit;
 	private CPlayerJass changingUnitPrevOwner;
 	private CUnit manipulatingUnit;
@@ -100,6 +102,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	private int triggerCastId; // Warsmash only
 
 	private JassGameEventsWar3 triggerEventId;
+	private String saveBasicFilename;
 
 	public CommonTriggerExecutionScope(final Trigger triggeringTrigger) {
 		super(triggeringTrigger);
@@ -133,6 +136,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		this.triggeringRegion = parentScope.triggeringRegion;
 		this.triggeringPlayer = parentScope.triggeringPlayer;
 		this.eventPlayerState = parentScope.eventPlayerState;
+		this.eventUnitState = parentScope.eventUnitState;
 		this.levelingUnit = parentScope.levelingUnit;
 		this.learningUnit = parentScope.learningUnit;
 		this.learnedSkill = parentScope.learnedSkill;
@@ -182,6 +186,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		this.enumFilePath = parentScope.enumFilePath;
 		this.triggerLocalStore = parentScope.triggerLocalStore;
 		this.triggerEventId = parentScope.triggerEventId;
+		this.saveBasicFilename = parentScope.saveBasicFilename;
 	}
 
 	public CUnit getEnumUnit() {
@@ -352,7 +357,7 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		return this.buyingUnit;
 	}
 
-	public CUnit getSoldItem() {
+	public CItem getSoldItem() {
 		return this.soldItem;
 	}
 
@@ -426,6 +431,10 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 
 	public JassGameEventsWar3 getTriggerEventId() {
 		return this.triggerEventId;
+	}
+
+	public String getSaveBasicFilename() {
+		return this.saveBasicFilename;
 	}
 
 	public CUnit getSpellAbilityUnit() {
@@ -553,9 +562,10 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 	 * Used for EVENT_GAME_VICTORY, EVENT_GAME_END_LEVEL, EVENT_GAME_SAVE, etc.
 	 */
 	public static CommonTriggerExecutionScope gameEventScope(final JassGameEventsWar3 triggerEventId,
-			final Trigger trigger) {
+			final Trigger trigger, final String saveBasicFilename) {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
 		scope.triggerEventId = triggerEventId;
+		scope.saveBasicFilename = saveBasicFilename;
 		return scope;
 	}
 
@@ -632,6 +642,15 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		return scope;
 	}
 
+	public static CommonTriggerExecutionScope unitSummonScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit summoningUnit, final CUnit summonedUnit, final CPlayerJass player) {
+		final CommonTriggerExecutionScope scope = unitTriggerScope(triggerEventId, trigger, summoningUnit);
+		scope.summoningUnit = summoningUnit;
+		scope.summonedUnit = summonedUnit;
+		scope.triggeringPlayer = player;
+		return scope;
+	}
+
 	public static CommonTriggerExecutionScope widgetTriggerScope(final JassGameEventsWar3 triggerEventId,
 			final Trigger trigger, final CWidget triggerWidget) {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
@@ -646,6 +665,17 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		scope.triggerWidget = triggerUnit;
 		scope.triggeringUnit = triggerUnit;
 		scope.triggerEventId = triggerEventId;
+		return scope;
+	}
+
+	public CUnitState getEventUnitState() {
+		return this.eventUnitState;
+	}
+
+	public static CommonTriggerExecutionScope unitStateScope(final Trigger trigger, final CUnit unit,
+			final CUnitState state) {
+		final CommonTriggerExecutionScope scope = unitTriggerScope(JassGameEventsWar3.EVENT_UNIT_STATE_LIMIT, trigger, unit);
+		scope.eventUnitState = state;
 		return scope;
 	}
 
@@ -666,14 +696,24 @@ public class CommonTriggerExecutionScope extends TriggerExecutionScope {
 		return scope;
 	}
 
-	public static CommonTriggerExecutionScope unitPickupItemScope(final JassGameEventsWar3 triggerEventId,
-			final Trigger trigger, final CUnit orderedUnit, final CItem whichItem) {
+	public static CommonTriggerExecutionScope unitItemScope(final JassGameEventsWar3 triggerEventId,
+			final Trigger trigger, final CUnit unit, final CItem item) {
 		final CommonTriggerExecutionScope scope = new CommonTriggerExecutionScope(trigger, TriggerExecutionScope.EMPTY);
-		scope.triggerWidget = orderedUnit;
-		scope.triggeringUnit = orderedUnit;
+		scope.triggerWidget = unit;
+		scope.triggeringUnit = unit;
 		scope.triggerEventId = triggerEventId;
-		scope.manipulatedItem = whichItem;
-		scope.manipulatingUnit = orderedUnit;
+		scope.manipulatedItem = item;
+		scope.manipulatingUnit = unit;
+		return scope;
+	}
+
+	public static CommonTriggerExecutionScope itemSaleScope(final JassGameEventsWar3 eventId, final Trigger trigger,
+			final CUnit seller, final CUnit buyer, final CItem item, final CPlayerJass player) {
+		final CommonTriggerExecutionScope scope = unitTriggerScope(eventId, trigger, seller);
+		scope.sellingUnit = seller;
+		scope.buyingUnit = buyer;
+		scope.soldItem = item;
+		scope.triggeringPlayer = player;
 		return scope;
 	}
 

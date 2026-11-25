@@ -406,6 +406,13 @@ function GetAbilityDurationAU takes localstore x returns real
     return GetAbilityTypeLevelDataDurationNormal(d, lvl)
 endfunction
 
+function ApplySkeletalLongevityAU takes real duration, unit caster returns real
+    if duration > 0 then
+        return duration + GetUnitRaiseDeadDurationBonus(caster)
+    endif
+    return duration
+endfunction
+
 function GetAbilityCastTimeAU takes localstore x returns real
     local abilitytypeleveldata d = GetLocalStoreAbilityTypeLevelDataHandle(x, AB_LOCAL_STORE_KEY_LEVELDATA)
     local integer lvl = GetLocalStoreInteger(x, AB_LOCAL_STORE_KEY_CURRENTLEVEL) - 1 // starts at 0
@@ -745,11 +752,22 @@ endfunction
 
 function MergeUnitsAU takes localstore whichLocalStore, unit unit1, unit unit2, integer newUnitId, location loc, real facing, player whichPlayer, boolean resetHpMp returns unit
     local real newHPPcnt = ((GetUnitState(unit1, UNIT_STATE_LIFE) / GetUnitState(unit1, UNIT_STATE_MAX_LIFE)) + (GetUnitState(unit2, UNIT_STATE_LIFE) / GetUnitState(unit2, UNIT_STATE_MAX_LIFE))) / 2
-    local real newMPPcnt = ((GetUnitState(unit1, UNIT_STATE_MANA) / GetUnitState(unit1, UNIT_STATE_MAX_MANA)) + (GetUnitState(unit2, UNIT_STATE_MANA) / GetUnitState(unit2, UNIT_STATE_MAX_MANA))) / 2
+    local real firstMaxMana = GetUnitState(unit1, UNIT_STATE_MAX_MANA)
+    local real secondMaxMana = GetUnitState(unit2, UNIT_STATE_MAX_MANA)
+    local real newMPPcnt = 0
     local unit createdUnit = CreateUnit(whichPlayer, newUnitId, GetLocationX(loc), GetLocationY(loc), facing)
+    if createdUnit == null then
+        return null
+    endif
+    if firstMaxMana > 0 then
+        set newMPPcnt = GetUnitState(unit1, UNIT_STATE_MANA) / firstMaxMana
+    endif
+    if secondMaxMana > 0 then
+        set newMPPcnt = newMPPcnt + GetUnitState(unit2, UNIT_STATE_MANA) / secondMaxMana
+    endif
     if not resetHpMp then
         call SetUnitState(createdUnit, UNIT_STATE_LIFE, newHPPcnt * GetUnitState(createdUnit, UNIT_STATE_MAX_LIFE))
-        call SetUnitState(createdUnit, UNIT_STATE_MANA, newMPPcnt * GetUnitState(createdUnit, UNIT_STATE_MAX_MANA))
+        call SetUnitState(createdUnit, UNIT_STATE_MANA, newMPPcnt * GetUnitState(createdUnit, UNIT_STATE_MAX_MANA) / 2)
     endif
     call SetPreferredSelectionReplacement(unit1, createdUnit)
     call SetPreferredSelectionReplacement(unit2, createdUnit)

@@ -18,6 +18,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorCategory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerScore;
 
 public class CBehaviorReturnResources extends CAbstractRangedBehavior implements AbilityTargetVisitor<CBehavior> {
 	private final CAbilityHarvest abilityHarvest;
@@ -75,6 +76,7 @@ public class CBehaviorReturnResources extends CAbstractRangedBehavior implements
 						final int goldTax = Math.round(goldMined * (player.getGoldUpkeepRate() / 100.0f));
 						final int goldGained = goldMined - goldTax;
 						player.setGold(player.getGold() + goldGained);
+						player.recordMissionScore(CPlayerScore.GOLD_MINED_TOTAL, goldMined);
 						if (this.unit.getUnitAnimationListener().removeSecondaryTag(SecondaryTag.GOLD)) {
 							this.unit.getUnitAnimationListener().forceResetCurrentAnimation();
 						}
@@ -94,6 +96,7 @@ public class CBehaviorReturnResources extends CAbstractRangedBehavior implements
 						final int lumberTax = Math.round(lumberHarvested * (player.getLumberUpkeepRate() / 100.0f));
 						final int lumberGained = lumberHarvested - lumberTax;
 						player.setLumber(player.getLumber() + lumberGained);
+						player.recordMissionScore(CPlayerScore.LUMBER_TOTAL, lumberHarvested);
 						if (this.unit.getUnitAnimationListener().removeSecondaryTag(SecondaryTag.LUMBER)) {
 							this.unit.getUnitAnimationListener().forceResetCurrentAnimation();
 						}

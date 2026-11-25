@@ -217,6 +217,11 @@ public class OpenALSound implements Sound {
 		this.audio.setSoundPosition(soundId, x, y, z, is3DSound, maxDistance, refDistance);
 	}
 
+	public boolean seek(final long soundId, final float seconds) {
+		return !this.audio.noDevice && seconds >= 0 && seconds < duration()
+				&& this.audio.seekSound(soundId, seconds);
+	}
+
 	@Override
 	public long play(final float volume, final float pitch, final float pan) {
 		final long id = play();

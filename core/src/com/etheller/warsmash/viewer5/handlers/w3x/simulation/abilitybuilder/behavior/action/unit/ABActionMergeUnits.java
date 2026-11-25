@@ -48,10 +48,13 @@ public class ABActionMergeUnits implements ABSingleAction {
 		final CUnit u2 = this.unit2.callback(game, caster, localStore, castId);
 
 		final float newHPPcnt = ((u1.getLife() / u1.getMaximumLife()) + (u2.getLife() / u2.getMaximumLife())) / 2;
-		final float newMPPcnt = ((u1.getMana() / u1.getMaximumMana()) + (u2.getMana() / u2.getMaximumMana())) / 2;
+		final float firstManaRatio = u1.getMaximumMana() > 0 ? u1.getMana() / u1.getMaximumMana() : 0;
+		final float secondManaRatio = u2.getMaximumMana() > 0 ? u2.getMana() / u2.getMaximumMana() : 0;
+		final float newMPPcnt = (firstManaRatio + secondManaRatio) / 2;
 
-		final CUnit createdUnit = game.createUnit(this.newUnitId.callback(game, caster, localStore, castId),
+		final CUnit createdUnit = game.createUnitSimple(this.newUnitId.callback(game, caster, localStore, castId),
 				thePlayerId, loc.getX(), loc.getY(), theFacing);
+		if (createdUnit == null) return;
 		if ((this.resetHpMp == null) || !this.resetHpMp.callback(game, caster, localStore, castId)) {
 			createdUnit.setLife(game, newHPPcnt * createdUnit.getMaximumLife());
 			createdUnit.setMana(newMPPcnt * createdUnit.getMaximumMana());

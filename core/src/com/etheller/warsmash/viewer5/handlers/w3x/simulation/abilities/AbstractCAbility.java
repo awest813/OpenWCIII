@@ -5,6 +5,7 @@ import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItem;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityActivationReceiver;
 
 public abstract class AbstractCAbility extends CExtensibleHandleAbstract implements CAbility {
@@ -99,7 +100,10 @@ public abstract class AbstractCAbility extends CExtensibleHandleAbstract impleme
 	@Override
 	public final void checkCanUse(final CSimulation game, final CUnit unit, final int orderId,
 			final AbilityActivationReceiver receiver) {
-		if (isDisabled()) {
+		if (unit != null && unit.isUnsummoning() && orderId != OrderIds.setrally) {
+			receiver.disabled();
+		}
+		else if (isDisabled()) {
 			receiver.disabled();
 			checkRequirementsMet(game, unit, receiver);
 		}

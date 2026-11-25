@@ -67,6 +67,7 @@
 	},{
 		"ids": [{"id":"AEah"}],
 		"type": "TEMPLATE",
+		"overrideFields": { "defaultTargetsAllowed": "air,ground,friend,self,vuln,invu" },
 		"templateFields": {
 			"templateType": "AURA_STATS",
 			"statBuffsFromDataFields": [{
@@ -78,6 +79,7 @@
 	},{
 		"ids": [{"id":"AOac"},{"id":"Aakb"}],
 		"type": "TEMPLATE",
+		"overrideFields": { "defaultTargetsAllowed": "air,ground,friend,self" },
 		"templateFields": {
 			"templateType": "AURA_STATS",
 			"statBuffsFromDataFields": [{

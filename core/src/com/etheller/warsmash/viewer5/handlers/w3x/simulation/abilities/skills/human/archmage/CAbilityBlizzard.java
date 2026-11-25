@@ -12,6 +12,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitEnumFunction;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.CAbilityPointTargetSpellBase;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.util.CBuffTimed;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbilityFields;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbstractCAbilityTypeDefinition;
@@ -22,6 +23,10 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.C
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CWeaponSoundTypeJass;
 
 public class CAbilityBlizzard extends CAbilityPointTargetSpellBase {
+	public static final War3ID RAIN_OF_FIRE = War3ID.fromString("ANrf");
+	private static final int DEFAULT_TARGETS_AT_FULL_DAMAGE = 5;
+	private boolean rainOfFire;
+	private War3ID burnBuffId;
 	private float buildingReduction;
 	private float damage;
 	private float damagePerSecond;
@@ -48,6 +53,11 @@ public class CAbilityBlizzard extends CAbilityPointTargetSpellBase {
 		this.damage = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_B + level, 0);
 		this.damagePerSecond = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_E + level, 0);
 		this.maximumDamagePerWave = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_F + level, 0);
+		if (this.maximumDamagePerWave <= 0) {
+			this.maximumDamagePerWave = this.damage * DEFAULT_TARGETS_AT_FULL_DAMAGE;
+		}
+		this.rainOfFire = RAIN_OF_FIRE.equals(getCode());
+		this.burnBuffId = AbstractCAbilityTypeDefinition.getBuffId(worldEditorAbility, level);
 		this.shardCount = worldEditorAbility.getFieldAsInteger(AbilityFields.DATA_C + level, 0);
 		this.waveCount = worldEditorAbility.getFieldAsInteger(AbilityFields.DATA_A + level, 0);
 
@@ -59,7 +69,7 @@ public class CAbilityBlizzard extends CAbilityPointTargetSpellBase {
 
 	@Override
 	public int getBaseOrderId() {
-		return OrderIds.blizzard;
+		return this.rainOfFire ? OrderIds.rainoffire : OrderIds.blizzard;
 	}
 
 	@Override
@@ -97,8 +107,13 @@ public class CAbilityBlizzard extends CAbilityPointTargetSpellBase {
 					else {
 						thisTargetDamage = damagePerTarget;
 					}
-					damageTarget.damage(simulation, caster, false, true, CAttackType.SPELLS, CDamageType.COLD,
+					damageTarget.damage(simulation, caster, false, true, CAttackType.SPELLS,
+							this.rainOfFire ? CDamageType.FIRE : CDamageType.COLD,
 							CWeaponSoundTypeJass.WHOKNOWS.name(), thisTargetDamage);
+					final float burnDuration = getDurationForTarget(damageTarget);
+					if (this.rainOfFire && !damageTarget.isDead() && this.damagePerSecond > 0 && burnDuration > 0) {
+						ignite(simulation, caster, damageTarget, burnDuration);
+					}
 				}
 				enumFunction.clear();
 			}
@@ -121,6 +136,70 @@ public class CAbilityBlizzard extends CAbilityPointTargetSpellBase {
 					+ (int) StrictMath.ceil(waveDelay / WarsmashConstants.SIMULATION_STEP_TIME);
 		}
 		return this.currentWave < this.waveCount;
+	}
+
+	private void ignite(final CSimulation game, final CUnit caster, final CUnit target, final float duration) {
+		final float burnDamage = this.damagePerSecond * (target.isBuilding() ? this.buildingReduction : 1);
+		for (final var ability : target.getAbilities()) {
+			if (ability instanceof RainOfFireBurn burn && burn.source == this) {
+				burn.refresh(game, duration, burnDamage);
+				return;
+			}
+		}
+		target.add(game, new RainOfFireBurn(game.getHandleIdAllocator().createId(), this.burnBuffId, duration,
+				this, caster, burnDamage));
+	}
+
+	private static final class RainOfFireBurn extends CBuffTimed {
+		private static final int TICKS_PER_PULSE = Math.round(1 / WarsmashConstants.SIMULATION_STEP_TIME);
+		private final CAbilityBlizzard source;
+		private final CUnit caster;
+		private float damage;
+		private int nextPulse;
+		private int expires;
+
+		private RainOfFireBurn(final int handleId, final War3ID alias, final float duration,
+				final CAbilityBlizzard source, final CUnit caster, final float damage) {
+			super(handleId, RAIN_OF_FIRE, alias, duration);
+			this.source = source;
+			this.caster = caster;
+			this.damage = damage;
+		}
+
+		private void refresh(final CSimulation game, final float duration, final float damage) {
+			this.expires = game.getGameTurnTick() + Math.round(duration / WarsmashConstants.SIMULATION_STEP_TIME);
+			this.damage = damage;
+		}
+
+		@Override
+		protected void onBuffAdd(final CSimulation game, final CUnit unit) {
+			this.nextPulse = game.getGameTurnTick() + TICKS_PER_PULSE;
+			refresh(game, getDurationMax(), this.damage);
+		}
+
+		@Override
+		protected void onBuffRemove(final CSimulation game, final CUnit unit) {
+		}
+
+		@Override
+		public void onTick(final CSimulation game, final CUnit unit) {
+			final int tick = game.getGameTurnTick();
+			if (tick >= this.nextPulse && this.nextPulse <= this.expires) {
+				this.nextPulse += TICKS_PER_PULSE;
+				unit.damage(game, this.caster, false, true, CAttackType.SPELLS, CDamageType.FIRE, null, this.damage);
+			}
+			if (!unit.isDead() && tick >= this.expires) unit.remove(game, this);
+		}
+
+		@Override
+		public float getDurationRemaining(final CSimulation game, final CUnit unit) {
+			return Math.max(0, this.expires - game.getGameTurnTick()) * WarsmashConstants.SIMULATION_STEP_TIME;
+		}
+
+		@Override
+		public boolean isTimedLifeBar() {
+			return false;
+		}
 	}
 
 	@Override

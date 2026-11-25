@@ -111,6 +111,7 @@ public class CUnitType {
 	private final int lumberBountyAwardedDice;
 	private final int lumberBountyAwardedSides;
 	private final boolean neutralBuildingShowMinimapIcon;
+	private final int transportedSize;
 
 	public CUnitType(final String name, final String legacyName, final War3ID typeId, final int maxLife,
 			final float lifeRegen, final float manaRegen, final CRegenType lifeRegenType, final int manaInitial,
@@ -139,7 +140,7 @@ public class CUnitType {
 			final int sightRadiusDay, final int sightRadiusNight, final boolean extendedLineOfSight,
 			final int goldBountyAwardedBase, final int goldBountyAwardedDice, final int goldBountyAwardedSides,
 			final int lumberBountyAwardedBase, final int lumberBountyAwardedDice, final int lumberBountyAwardedSides,
-			boolean neutralBuildingShowMinimapIcon) {
+			final boolean neutralBuildingShowMinimapIcon, final int transportedSize) {
 		this.name = name;
 		this.legacyName = legacyName;
 		this.typeId = typeId;
@@ -225,6 +226,7 @@ public class CUnitType {
 		this.lumberBountyAwardedDice = lumberBountyAwardedDice;
 		this.lumberBountyAwardedSides = lumberBountyAwardedSides;
 		this.neutralBuildingShowMinimapIcon = neutralBuildingShowMinimapIcon;
+		this.transportedSize = transportedSize;
 	}
 
 	public String getName() {
@@ -573,7 +575,7 @@ public class CUnitType {
 	}
 
 	public int getCargoCapacity() {
-		return 1;
+		return this.transportedSize;
 	}
 
 	public boolean isNeutralBuildingShowMinimapIcon() {

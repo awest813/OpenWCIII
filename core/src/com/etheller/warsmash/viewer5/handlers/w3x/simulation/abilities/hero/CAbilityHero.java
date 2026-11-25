@@ -28,6 +28,8 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetC
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityActivationReceiver;
 
 public class CAbilityHero extends AbstractCAbility {
+	private static final War3ID CLASSIC_FROST_ARMOR = War3ID.fromString("AUfa");
+	private static final War3ID AUTOCAST_FROST_ARMOR = War3ID.fromString("AUfu");
 	private Set<War3ID> skillsAvailable;
 	private int xp;
 	private int heroLevel;
@@ -124,6 +126,16 @@ public class CAbilityHero extends AbstractCAbility {
 	}
 
 	public void selectHeroSkill(final CSimulation game, final CUnit caster, final War3ID skillId) {
+		if (CLASSIC_FROST_ARMOR.equals(skillId) && !this.skillsAvailable.contains(CLASSIC_FROST_ARMOR)
+				&& this.skillsAvailable.contains(AUTOCAST_FROST_ARMOR) && caster.getAbilityLevel(AUTOCAST_FROST_ARMOR) == 0
+				&& game.getAbilityData().getAbilityType(CLASSIC_FROST_ARMOR) != null) {
+			// A classic script can request its manual spell while the expansion's unit table supplies the autocast slot.
+			final Set<War3ID> classicSkills = new LinkedHashSet<>();
+			for (final War3ID available : this.skillsAvailable) {
+				classicSkills.add(AUTOCAST_FROST_ARMOR.equals(available) ? CLASSIC_FROST_ARMOR : available);
+			}
+			this.skillsAvailable = classicSkills;
+		}
 		final BooleanAbilityActivationReceiver activationReceiver = BooleanAbilityActivationReceiver.INSTANCE;
 		checkCanUse(game, caster, skillId.getValue(), activationReceiver);
 		if (activationReceiver.isOk()) {
@@ -212,6 +224,18 @@ public class CAbilityHero extends AbstractCAbility {
 		return this.skillPoints;
 	}
 
+	public void retrain(final CSimulation game, final CUnit hero) {
+		final List<War3ID> innateAbilities = hero.getUnitType().getAbilityList();
+		for (final CAbility ability : List.copyOf(hero.getAbilities())) {
+			if (ability instanceof CLevelingAbility skill && this.skillsAvailable.contains(ability.getAlias())
+					&& !innateAbilities.contains(ability.getAlias()) && ability.getItem() == null) {
+				this.skillPoints += skill.getLevel();
+				hero.remove(game, ability);
+			}
+		}
+		hero.internalPublishHeroStatsChanged();
+	}
+
 	public void setSkillPoints(final int skillPoints) {
 		this.skillPoints = skillPoints;
 	}
@@ -266,6 +290,15 @@ public class CAbilityHero extends AbstractCAbility {
 
 	public void setXpSuspended(final boolean xpSuspended) {
 		this.xpSuspended = xpSuspended;
+	}
+
+	public void copyIllusionIdentity(final CSimulation game, final CUnit image, final CAbilityHero original) {
+		this.heroLevel = original.heroLevel;
+		this.xp = original.xp;
+		this.properName = original.properName;
+		this.skillPoints = 0;
+		this.xpSuspended = true;
+		calculateDerivatedFields(game, image);
 	}
 
 	public boolean isXpSuspended() {

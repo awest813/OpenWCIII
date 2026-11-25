@@ -106,6 +106,10 @@ public interface SimulationRenderController {
 
 	void spawnEffectOnUnit(CUnit unit, String effectPath);
 
+	default SimulationRenderComponent spawnPersistentEffectOnUnit(final CUnit unit, final String effectPath) {
+		return SimulationRenderComponent.DO_NOTHING;
+	}
+
 	void spawnTemporarySpellEffectOnUnit(CUnit unit, War3ID alias, CEffectType effectType);
 
 	SimulationRenderComponentModel spawnPersistentSpellEffectOnUnit(CUnit unit, War3ID alias, CEffectType effectType);

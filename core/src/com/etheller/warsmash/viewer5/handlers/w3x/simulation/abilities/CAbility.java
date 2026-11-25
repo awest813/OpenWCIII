@@ -52,4 +52,8 @@ public interface CAbility extends CAbilityView, CExtensibleHandle {
 
 	CItem getItem();
 
+	default boolean consumesItemChargeOnEffect() {
+		return false;
+	}
+
 }

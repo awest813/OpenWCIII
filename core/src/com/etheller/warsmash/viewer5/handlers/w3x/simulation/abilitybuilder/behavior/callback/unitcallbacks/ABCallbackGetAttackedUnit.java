@@ -10,7 +10,8 @@ public class ABCallbackGetAttackedUnit extends ABUnitCallback {
 
 	@Override
 	public CUnit callback(CSimulation game, CUnit caster, Map<String, Object> localStore, final int castId) {
-		return (CUnit) localStore.get(ABLocalStoreKeys.ATTACKEDUNIT+castId);
+		final Object attacked = localStore.get(ABLocalStoreKeys.ATTACKEDUNIT + castId);
+		return attacked instanceof CUnit unit ? unit : null;
 	}
 
 }

@@ -21,12 +21,16 @@ public abstract class AudioPanner {
 	public void setDistances(final float maxDistance, final float refDistance) {
 		this.maxDistance = maxDistance;
 		this.refDistance = refDistance;
-		this.maxDistanceSq = maxDistance * maxDistance;
+		setDistanceCutoff(maxDistance);
+	}
+
+	public void setDistanceCutoff(final float cutoffDistance) {
+		this.cutoffDistanceSquared = cutoffDistance * cutoffDistance;
 	}
 
 	public float maxDistance;
 	public float refDistance;
-	public float maxDistanceSq;
+	private float cutoffDistanceSquared;
 
 	public abstract void connect(AudioDestination destination);
 
@@ -34,6 +38,6 @@ public abstract class AudioPanner {
 		final float dx = this.listener.getX() - this.x;
 		final float dy = this.listener.getY() - this.y;
 		final float dz = this.listener.getZ() - this.z;
-		return ((dx * dx) + (dy * dy) + (dz * dz)) <= this.maxDistanceSq;
+		return ((dx * dx) + (dy * dy) + (dz * dz)) <= this.cutoffDistanceSquared;
 	}
 }

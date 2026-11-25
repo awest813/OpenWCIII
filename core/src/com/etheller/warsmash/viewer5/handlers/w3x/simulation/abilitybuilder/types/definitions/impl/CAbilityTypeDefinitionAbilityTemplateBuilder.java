@@ -77,6 +77,14 @@ public class CAbilityTypeDefinitionAbilityTemplateBuilder
 		}
 		final int manaCost = abilityEditorData.readSLKTagInt(MANA_COST+level);
 		final EnumSet<CTargetType> targetsAllowedAtLevel = CTargetType.parseTargetTypeSet(targetsAllowedAtLevelString);
+		if (targetsAllowedAtLevel.isEmpty()) {
+			targetsAllowedAtLevel.addAll(CTargetType.parseTargetTypeSet(abilityEditorData.readSLKTag(TARGETS_ALLOWED)));
+			final var overrides = this.parser.getOverrideFields();
+			final String defaultTargets = overrides == null ? null : overrides.getDefaultTargetsAllowed();
+			if (targetsAllowedAtLevel.isEmpty() && defaultTargets != null) {
+				targetsAllowedAtLevel.addAll(CTargetType.parseTargetTypeSet(defaultTargets));
+			}
+		}
 
 		int checkDeps = abilityEditorData.readSLKTagInt(CHECK_DEPENDENCIES);
 		List<CUnitTypeRequirement> requirements = null;

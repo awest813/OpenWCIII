@@ -11,6 +11,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbilityFields;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbstractCAbilityTypeDefinition;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CTargetType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CDamageType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CEffectType;
@@ -18,6 +19,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.C
 
 public class CAbilityThunderClap extends CAbilityNoTargetSpellBase {
 
+	private final int orderId;
 	private float damage;
 	private float areaOfEffect;
 	private War3ID buffId;
@@ -28,12 +30,17 @@ public class CAbilityThunderClap extends CAbilityNoTargetSpellBase {
 	private final EnumUnitsInRange enumUnitsInRange = new EnumUnitsInRange();
 
 	public CAbilityThunderClap(final int handleId, final War3ID alias) {
+		this(handleId, alias, OrderIds.thunderclap);
+	}
+
+	public CAbilityThunderClap(final int handleId, final War3ID alias, final int orderId) {
 		super(handleId, alias);
+		this.orderId = orderId;
 	}
 
 	@Override
 	public int getBaseOrderId() {
-		return OrderIds.thunderclap;
+		return this.orderId;
 	}
 
 	@Override
@@ -43,6 +50,9 @@ public class CAbilityThunderClap extends CAbilityNoTargetSpellBase {
 		this.buffId = AbstractCAbilityTypeDefinition.getBuffId(worldEditorAbility, level);
 		this.attackSpeedReductionPercent = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_D + level, 0);
 		this.movementSpeedReductionPercent = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_C + level, 0);
+		if (CTargetType.parseTargetTypeSet(worldEditorAbility.getFieldAsList(AbilityFields.TARGETS_ALLOWED + level)).isEmpty()) {
+			getTargetsAllowed().addAll(CTargetType.parseTargetTypeSet(worldEditorAbility.getFieldAsList(AbilityFields.TARGETS_ALLOWED)));
+		}
 	}
 
 	@Override

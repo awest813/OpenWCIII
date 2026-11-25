@@ -95,7 +95,7 @@ public class CBehaviorAbilityBuilderNoTarget implements ABBehavior {
 			}
 			this.castStartTick = game.getGameTurnTick();
 			
-			if (!this.unit.chargeMana(this.ability.getChargedManaCost())) {
+			if (!this.unit.chargeManaForSpell(game, this.ability.getChargedManaCost())) {
 				game.getCommandErrorListener().showInterfaceError(this.unit.getPlayerIndex(),
 						CommandStringErrorKeys.NOT_ENOUGH_MANA);
 				return this.unit.pollNextOrderBehavior(game);

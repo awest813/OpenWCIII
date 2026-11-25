@@ -2,6 +2,9 @@
 	"abilityList": [{
 		"ids": [{"id":"AEsh", "castId": "shadowstrike"}],
 		"type": "NORMAL_UNITTARGET",
+		"overrideFields": {
+			"defaultTargetsAllowed": "ground,air,enemy,neutral,organic"
+		},
 		"onEndCasting": [{
 				"type": "createUnitTargetedProjectile",
 				"source": {

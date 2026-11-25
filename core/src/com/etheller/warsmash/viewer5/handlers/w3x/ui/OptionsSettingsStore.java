@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CGameSpeed;
+
 /**
  * Persisted player options (main-menu Options screen).
  *
@@ -38,9 +40,11 @@ public final class OptionsSettingsStore {
 	private boolean unitSounds = true;
 	private boolean ambientSounds = true;
 	private boolean movementSounds = true;
+	private CGameSpeed gameSpeed;
 	private int mouseScrollSpeed = DEFAULT_SCROLL_SPEED;
 	private int keyScrollSpeed = DEFAULT_SCROLL_SPEED;
 	private boolean mouseScrollDisabled;
+	private boolean subgroupOrderModifier;
 	private boolean tooltips = true;
 	private boolean multibuttonMouse = true;
 	private boolean environmentalAudio = true;
@@ -76,9 +80,11 @@ public final class OptionsSettingsStore {
 		this.unitSounds = other.unitSounds;
 		this.ambientSounds = other.ambientSounds;
 		this.movementSounds = other.movementSounds;
+		this.gameSpeed = other.gameSpeed;
 		this.mouseScrollSpeed = other.mouseScrollSpeed;
 		this.keyScrollSpeed = other.keyScrollSpeed;
 		this.mouseScrollDisabled = other.mouseScrollDisabled;
+		this.subgroupOrderModifier = other.subgroupOrderModifier;
 		this.tooltips = other.tooltips;
 		this.multibuttonMouse = other.multibuttonMouse;
 		this.environmentalAudio = other.environmentalAudio;
@@ -180,6 +186,14 @@ public final class OptionsSettingsStore {
 		return this.mouseScrollSpeed;
 	}
 
+	public CGameSpeed getGameSpeed() {
+		return this.gameSpeed;
+	}
+
+	public void setGameSpeed(final CGameSpeed gameSpeed) {
+		this.gameSpeed = gameSpeed;
+	}
+
 	public void setMouseScrollSpeed(final int speed) {
 		this.mouseScrollSpeed = clamp(speed);
 	}
@@ -202,6 +216,14 @@ public final class OptionsSettingsStore {
 
 	public boolean isTooltips() {
 		return this.tooltips;
+	}
+
+	public boolean isSubgroupOrderModifier() {
+		return this.subgroupOrderModifier;
+	}
+
+	public void setSubgroupOrderModifier(final boolean subgroupOrderModifier) {
+		this.subgroupOrderModifier = subgroupOrderModifier;
 	}
 
 	public void setTooltips(final boolean tooltips) {
@@ -278,6 +300,7 @@ public final class OptionsSettingsStore {
 		this.mouseScrollSpeed = DEFAULT_SCROLL_SPEED;
 		this.keyScrollSpeed = DEFAULT_SCROLL_SPEED;
 		this.mouseScrollDisabled = false;
+		this.subgroupOrderModifier = false;
 		this.tooltips = true;
 		this.multibuttonMouse = true;
 		this.environmentalAudio = true;
@@ -318,9 +341,11 @@ public final class OptionsSettingsStore {
 		props.setProperty("unitSounds", Boolean.toString(this.unitSounds));
 		props.setProperty("ambientSounds", Boolean.toString(this.ambientSounds));
 		props.setProperty("movementSounds", Boolean.toString(this.movementSounds));
+		if (this.gameSpeed != null) props.setProperty("gameSpeed", this.gameSpeed.name());
 		props.setProperty("mouseScrollSpeed", Integer.toString(this.mouseScrollSpeed));
 		props.setProperty("keyScrollSpeed", Integer.toString(this.keyScrollSpeed));
 		props.setProperty("mouseScrollDisabled", Boolean.toString(this.mouseScrollDisabled));
+		props.setProperty("subgroupOrderModifier", Boolean.toString(this.subgroupOrderModifier));
 		props.setProperty("tooltips", Boolean.toString(this.tooltips));
 		props.setProperty("multibuttonMouse", Boolean.toString(this.multibuttonMouse));
 		props.setProperty("environmentalAudio", Boolean.toString(this.environmentalAudio));
@@ -377,9 +402,17 @@ public final class OptionsSettingsStore {
 		this.unitSounds = getBool(props, "unitSounds", this.unitSounds);
 		this.ambientSounds = getBool(props, "ambientSounds", this.ambientSounds);
 		this.movementSounds = getBool(props, "movementSounds", this.movementSounds);
+		final String savedGameSpeed = props.getProperty("gameSpeed");
+		if (savedGameSpeed != null) {
+			try {
+				this.gameSpeed = CGameSpeed.valueOf(savedGameSpeed);
+			}
+			catch (final IllegalArgumentException ignored) { }
+		}
 		this.mouseScrollSpeed = getInt(props, "mouseScrollSpeed", this.mouseScrollSpeed);
 		this.keyScrollSpeed = getInt(props, "keyScrollSpeed", this.keyScrollSpeed);
 		this.mouseScrollDisabled = getBool(props, "mouseScrollDisabled", this.mouseScrollDisabled);
+		this.subgroupOrderModifier = getBool(props, "subgroupOrderModifier", this.subgroupOrderModifier);
 		this.tooltips = getBool(props, "tooltips", this.tooltips);
 		this.multibuttonMouse = getBool(props, "multibuttonMouse", this.multibuttonMouse);
 		this.environmentalAudio = getBool(props, "environmentalAudio", this.environmentalAudio);

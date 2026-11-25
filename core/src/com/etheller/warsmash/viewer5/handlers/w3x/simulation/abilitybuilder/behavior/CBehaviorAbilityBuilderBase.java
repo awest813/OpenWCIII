@@ -114,7 +114,7 @@ public class CBehaviorAbilityBuilderBase extends CAbstractRangedBehavior impleme
 				return this.unit.pollNextOrderBehavior(game);
 			}
 			
-			if (!this.unit.chargeMana(this.ability.getChargedManaCost())) {
+			if (!this.unit.chargeManaForSpell(game, this.ability.getChargedManaCost())) {
 				game.getCommandErrorListener().showInterfaceError(this.unit.getPlayerIndex(),
 						CommandStringErrorKeys.NOT_ENOUGH_MANA);
 				return this.unit.pollNextOrderBehavior(game);

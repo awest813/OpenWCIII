@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Graphics;
+import com.badlogic.gdx.math.Rectangle;
+import com.etheller.warsmash.viewer5.Camera;
 
 public class GameCameraManagerTest {
 
@@ -171,6 +173,43 @@ public class GameCameraManagerTest {
 			org.junit.jupiter.api.Assertions.assertTrue(original.position.z > 512, "Descent must keep the eye above terrain");
 		}
 		assertEquals(889.4f, original.target.z, 0.001f);
+	}
+
+	@Test
+	public void rolledCinematicViewAndTransitionSurviveCheckpoint() throws Exception {
+		final GameCameraManager original = createCameraManager();
+		original.camera = new Camera();
+		original.resize(new Rectangle(0, 0, 960, 540));
+		final CustomCameraSetup unrolled = new CustomCameraSetup(304, 70, 90, 0, 1650, 5000, 100, 0);
+		final CustomCameraSetup rolled = new CustomCameraSetup(304, 70, 90, 24, 1650, 5000, 100, 0);
+		original.applyCameraSetupForceDuration(unrolled, false, 0);
+		final var levelOrientation = original.camera.rotation.cpy();
+		final var eye = original.camera.location.cpy();
+		original.applyCameraSetupForceDuration(rolled, false, 2);
+		original.updateCamera(0.5f);
+		assertEquals(Math.toRadians(6), original.getRoll(), 0.001);
+		assertEquals(eye, original.camera.location);
+		org.junit.jupiter.api.Assertions.assertNotEquals(levelOrientation, original.camera.rotation);
+
+		final var bytes = new java.io.ByteArrayOutputStream();
+		final var out = new java.io.DataOutputStream(bytes);
+		original.writeCheckpoint(out);
+		original.writeRollCheckpoint(out);
+		final GameCameraManager resumed = createCameraManager();
+		resumed.camera = new Camera();
+		resumed.resize(new Rectangle(0, 0, 960, 540));
+		resumed.applyCameraSetupForceDuration(rolled, false, 0);
+		final var in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray()));
+		resumed.readCheckpoint(in);
+		resumed.readRollCheckpoint(in);
+		original.updateCamera(1.5f);
+		resumed.updateCamera(1.5f);
+		assertEquals(Math.toRadians(24), resumed.getRoll(), 0.001);
+		assertEquals(original.camera.rotation, resumed.camera.rotation);
+		resumed.resetToGameCamera(0);
+		resumed.updateCamera(0);
+		assertEquals(0, resumed.getRoll());
+		assertEquals(levelOrientation, resumed.camera.rotation);
 	}
 
 	@Test

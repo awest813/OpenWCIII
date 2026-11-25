@@ -1,9 +1,7 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.shop;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CItem;
@@ -26,13 +24,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.CommandStringE
 
 public final class CAbilitySellItems extends AbstractCAbility {
 	private final List<War3ID> itemsSold;
-	/**
-	 * Trigger-managed stock counts (AddItemToStock), keyed by item rawcode value
-	 * to current/max counts. Entries absent from this map sell without limit
-	 * (object-editor stock). No timed replenish yet; counts only decrease on
-	 * purchase.
-	 */
-	private final Map<Integer, int[]> itemStock = new HashMap<>();
+	private final CShopStock itemStock = new CShopStock();
 
 	public CAbilitySellItems(final int handleId, final List<War3ID> itemsSold) {
 		super(handleId, War3ID.fromString("Asei"));
@@ -47,23 +39,23 @@ public final class CAbilitySellItems extends AbstractCAbility {
 		if (!this.itemsSold.contains(itemId)) {
 			this.itemsSold.add(itemId);
 		}
-		this.itemStock.put(itemId.getValue(), new int[] { currentStock, stockMax });
+		this.itemStock.set(itemId, currentStock, stockMax);
 	}
 
 	public void removeItemFromStock(final War3ID itemId) {
 		this.itemsSold.remove(itemId);
-		this.itemStock.remove(itemId.getValue());
+		this.itemStock.remove(itemId);
 	}
 
 	public int getItemStockCurrent(final War3ID itemId) {
-		final int[] counts = this.itemStock.get(itemId.getValue());
-		return counts == null ? Integer.MAX_VALUE : counts[0];
+		return this.itemStock.count(itemId);
 	}
 
-	private void recordSale(final War3ID itemId) {
-		final int[] counts = this.itemStock.get(itemId.getValue());
-		if (counts != null) {
-			counts[0] = Math.max(0, counts[0] - 1);
+	private void loadObjectStock(final CSimulation game) {
+		for (final War3ID itemId : this.itemsSold) {
+			final CItemType type = game.getItemData().getItemType(itemId);
+			if (type != null) this.itemStock.addAuthored(itemId, type.getStockMax(), type.getStockStartDelay(),
+					type.getStockReplenishInterval(), game.getGameTurnTick());
 		}
 	}
 
@@ -76,31 +68,19 @@ public final class CAbilitySellItems extends AbstractCAbility {
 			final War3ID itemTypeId = this.itemsSold.get(itemIndex);
 			final CItemType itemType = game.getItemData().getItemType(itemTypeId);
 			if (itemType != null) {
+				if (!this.itemStock.checkAvailable(itemTypeId, game.getGameTurnTick(), receiver)) return;
 				final CPlayer player = game.getPlayer(playerIndex);
-				if ((player.getGold() >= itemType.getGoldCost())) {
-					if ((player.getLumber() >= itemType.getLumberCost())) {
-						if (getItemStockCurrent(itemTypeId) <= 0) {
-							receiver.activationCheckFailed(CommandStringErrorKeys.OUT_OF_STOCK);
-						}
-						else {
-							receiver.useOk();
-						}
-					}
-					else {
-						receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_LUMBER);
-					}
-				}
-				else {
+				if (player.getGold() < itemType.getGoldCost()) {
 					receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_GOLD);
+					return;
+				}
+				if (player.getLumber() < itemType.getLumberCost()) {
+					receiver.activationCheckFailed(CommandStringErrorKeys.NOT_ENOUGH_LUMBER);
+					return;
 				}
 			}
-			else {
-				receiver.useOk();
-			}
 		}
-		else {
-			receiver.useOk();
-		}
+		receiver.useOk();
 	}
 
 	@Override
@@ -118,7 +98,6 @@ public final class CAbilitySellItems extends AbstractCAbility {
 	@Override
 	public final void checkCanTargetNoTarget(final CSimulation game, final CUnit unit, final int orderId,
 			final AbilityTargetCheckReceiver<Void> receiver) {
-		final int playerIndex = orderId & 0xFF; // TODO this is stupid, and should be passed as some "acting player" arg
 		final int itemIndex = ((orderId & 0xFF00) >> 8) - 1;
 		if ((itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
 			receiver.targetOk(null);
@@ -136,7 +115,7 @@ public final class CAbilitySellItems extends AbstractCAbility {
 
 	@Override
 	public void onAdd(final CSimulation game, final CUnit unit) {
-
+		loadObjectStock(game);
 	}
 
 	@Override
@@ -146,6 +125,7 @@ public final class CAbilitySellItems extends AbstractCAbility {
 
 	@Override
 	public void onTick(final CSimulation game, final CUnit unit) {
+		if (this.itemStock.replenish(game.getGameTurnTick())) unit.notifyOrdersChanged();
 	}
 
 	@Override
@@ -167,23 +147,16 @@ public final class CAbilitySellItems extends AbstractCAbility {
 		if ((itemIndex >= 0) && (itemIndex < this.itemsSold.size())) {
 			final War3ID itemTypeId = this.itemsSold.get(itemIndex);
 			final CItemType itemType = game.getItemData().getItemType(itemTypeId);
-			if ((neutralBuildingData != null) && (neutralBuildingData.getSelectedPlayerUnit(playerIndex) != null)) {
-				final CUnit purchasingHero = neutralBuildingData.getSelectedPlayerUnit(playerIndex);
-				final CAbilityInventory purchasingInventoryData = purchasingHero.getInventoryData();
-				if ((purchasingInventoryData != null) && (itemType != null)) {
-					if (game.getPlayer(playerIndex).charge(itemType.getGoldCost(), itemType.getLumberCost())) {
-						final CItem newItem = game.createItem(itemTypeId, caster.getX(), caster.getY());
-						purchasingInventoryData.giveItem(game, purchasingHero, newItem, false);
-						recordSale(itemTypeId);
-					}
-				}
-			}
-			else {
-				if (game.getPlayer(playerIndex).charge(itemType.getGoldCost(), itemType.getLumberCost())) {
-					game.createItem(itemTypeId, caster.getX(), caster.getY());
-					recordSale(itemTypeId);
-				}
-			}
+			if (itemType == null || this.itemStock.count(itemTypeId) <= 0) return null;
+			final CUnit buyer = neutralBuildingData == null ? null : neutralBuildingData.getSelectedPlayerUnit(playerIndex);
+			final CAbilityInventory inventory = buyer == null ? null : buyer.getInventoryData();
+			if (buyer != null && inventory == null) return null;
+			if (!game.getPlayer(playerIndex).charge(itemType.getGoldCost(), itemType.getLumberCost())) return null;
+			this.itemStock.sold(itemTypeId, game.getGameTurnTick());
+			final CItem item = game.createItem(itemTypeId, caster.getX(), caster.getY());
+			if (inventory != null) inventory.giveItem(game, buyer, item, false);
+			caster.fireItemSaleEvents(game, buyer, item);
+			caster.notifyOrdersChanged();
 		}
 		return null;
 	}
@@ -199,11 +172,11 @@ public final class CAbilitySellItems extends AbstractCAbility {
 
 	@Override
 	public void onSetUnitType(final CSimulation game, final CUnit cUnit) {
-		// NOTE: this method not actually used, because CAbilityQueue is not Aliased
 		final CUnitType unitType = cUnit.getUnitType();
 		this.itemsSold.clear();
 		this.itemsSold.addAll(unitType.getItemsSold());
 		this.itemStock.clear();
+		loadObjectStock(game);
 	}
 
 	@Override

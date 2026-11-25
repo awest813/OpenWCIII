@@ -13,6 +13,12 @@ public interface CDestructableBuff extends CHandle, Aliased {
 	void onRemove(CSimulation game, CDestructable dest);
 
 	void onDeath(CSimulation game, CDestructable dest);
+
+	default void onDamage(CSimulation game, CDestructable dest) { }
+
+	default boolean isDispellable() {
+		return false;
+	}
 	
 	int getLevel();
 

@@ -366,3 +366,16 @@ Both continuations matched tick **431**, state
 The engine mismatch and altered state fixtures returned to the menu as expected;
 resave, defeat-to-load, victory, Human02 carryover and the outcome menus passed.
 This verification does not close the remaining campaign playthrough gaps.
+
+## Local sound state follow-up
+
+The rendered 96-unit battle exposed a fresh-process mismatch in a local
+audio timestamp. The gameplay digest excludes the voice clock, cursor
+and playback status. It still checks script settings such as gain and
+pitch. JASS sound observations are recorded so replay can return the same
+values to the mission without depending on the current audio device.
+
+The battle saved at tick **202** with eight missiles in flight. The
+fresh process matched the uninterrupted run at tick **3,002**, with 34
+deaths, seven missiles in flight and identical gameplay state. The
+full audit also passed its resave, defeat-to-load and Human02 handoff.

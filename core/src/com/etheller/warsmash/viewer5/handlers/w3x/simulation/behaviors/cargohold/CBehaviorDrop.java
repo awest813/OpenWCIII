@@ -41,7 +41,9 @@ public class CBehaviorDrop extends CAbstractRangedBehavior {
 		// TODO i do a nonstandard Math.ceil() here to make this one feel a bit slower
 		final float durationTicks = (int) Math.ceil(cargoData.getDuration() / WarsmashConstants.SIMULATION_STEP_TIME);
 		if (deltaTicks >= durationTicks) {
-			cargoData.dropUnitByIndex(simulation, unit, 0);
+			if (!cargoData.dropUnitByIndex(simulation, this.unit, 0, (AbilityPointTarget) this.target)) {
+				return this.unit.pollNextOrderBehavior(simulation);
+			}
 			this.unit.notifyOrdersChanged();
 			this.lastDropTick = gameTurnTick;
 		}

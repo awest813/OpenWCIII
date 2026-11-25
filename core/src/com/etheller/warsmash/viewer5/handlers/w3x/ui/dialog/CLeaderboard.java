@@ -63,12 +63,7 @@ public class CLeaderboard {
 	}
 
 	public boolean hasPlayerItem(final int playerIndex) {
-		for (final Item item : this.items) {
-			if (item.playerIndex == playerIndex) {
-				return true;
-			}
-		}
-		return false;
+		return indexOfPlayer(playerIndex) >= 0;
 	}
 
 	/**
@@ -78,20 +73,21 @@ public class CLeaderboard {
 	 * @return true if a row was removed
 	 */
 	public boolean removePlayerItem(final int playerIndex) {
-		for (int i = 0; i < this.items.size(); i++) {
-			if (this.items.get(i).playerIndex == playerIndex) {
-				this.items.remove(i);
-				return true;
-			}
+		final int index = indexOfPlayer(playerIndex);
+		if (index < 0) {
+			return false;
 		}
-		return false;
+		this.items.remove(index);
+		return true;
 	}
 
-	public int getPlayerIndex(final int itemIndex) {
-		if ((itemIndex < 0) || (itemIndex >= this.items.size())) {
-			return -1;
+	public int indexOfPlayer(final int playerIndex) {
+		for (int i = 0; i < this.items.size(); i++) {
+			if (this.items.get(i).playerIndex == playerIndex) {
+				return i;
+			}
 		}
-		return this.items.get(itemIndex).playerIndex;
+		return -1;
 	}
 
 	public void setItemValue(final int index, final int value) {

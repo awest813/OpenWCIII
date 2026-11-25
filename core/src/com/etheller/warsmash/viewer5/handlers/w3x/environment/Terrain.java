@@ -1251,6 +1251,9 @@ public class Terrain {
 	}
 
 	public BuildingShadow addShadow(final String file, final float shadowX, final float shadowY) {
+		if ((file == null) || file.isEmpty() || "_".equals(file) || "none".equalsIgnoreCase(file)) {
+			return null;
+		}
 		if (!this.shadows.containsKey(file)) {
 			final String path = "ReplaceableTextures\\Shadows\\" + file + ".blp";
 			this.shadows.put(file, new ArrayList<>());

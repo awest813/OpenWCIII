@@ -12,6 +12,16 @@ public class AbilityBuilderOverrideFields {
 	private ABFloatCallback rangeOverride;
 	private ABFloatCallback cooldownOverride;
 	private ABIntegerCallback manaCostOverride;
+	private String defaultTargetsAllowed;
+	private boolean disableAutocastWhileHolding;
+
+	public String getDefaultTargetsAllowed() {
+		return this.defaultTargetsAllowed;
+	}
+
+	public boolean isDisableAutocastWhileHolding() {
+		return this.disableAutocastWhileHolding;
+	}
 	
 	private ABAutocastTypeCallback autocastTypeOverride;
 	

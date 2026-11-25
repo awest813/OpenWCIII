@@ -20,13 +20,11 @@ public class CUnitDefaultThornsListener implements CUnitAttackDamageTakenListene
 	@Override
 	public void onDamage(final CSimulation simulation, CUnit attacker, CUnit target, boolean isAttack, boolean isRanged,
 			CDamageType damageType, float damage, float bonusDamage, float trueDamage) {
-		if (damageType == CDamageType.NORMAL && !isRanged && target.canBeTargetedBy(simulation, attacker, ENEMY_TARGET)
+		if (this.amount > 0 && isAttack && !isRanged && trueDamage > 0 && attacker != null && !attacker.isDead()
+				&& damageType == CDamageType.NORMAL && target.canBeTargetedBy(simulation, attacker, ENEMY_TARGET)
 				&& (!simulation.getGameplayConstants().isMagicImmuneResistsThorns()
 						|| !attacker.isUnitType(CUnitTypeJass.MAGIC_IMMUNE))) {
-			float thornsAmount = amount;
-			if (percentage) {
-				thornsAmount *= damage;
-			}
+			final float thornsAmount = this.percentage ? this.amount * trueDamage : this.amount;
 			attacker.damage(simulation, target, false, true, CAttackType.SPELLS, CDamageType.DEFENSIVE,
 					CWeaponSoundTypeJass.WHOKNOWS.name(), thornsAmount);
 		}

@@ -6,6 +6,16 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.attacks.CUnitAttack;
 
 public class CBuffSlow extends CBuffTimed {
+	@Override
+	public boolean isDispellable() {
+		return true;
+	}
+
+	@Override
+	public DispelPolarity getDispelPolarity() {
+		return DispelPolarity.HARMFUL;
+	}
+
 
 	private final float attackSpeedReductionPercent;
 	private final float moveSpeedReductionPercent;

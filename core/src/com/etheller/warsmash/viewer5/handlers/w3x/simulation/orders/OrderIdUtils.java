@@ -26,6 +26,8 @@ public class OrderIdUtils {
 				e.printStackTrace();
 			}
 		}
+		stringToOrderId.put("serpentward", OrderIds.ward);
+		stringToOrderId.put("absorbmana", OrderIds.absorb);
 	}
 
 	public static int getOrderId(final String orderIdString) {

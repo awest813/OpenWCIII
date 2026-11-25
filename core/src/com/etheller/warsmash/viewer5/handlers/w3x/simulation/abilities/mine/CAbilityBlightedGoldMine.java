@@ -13,6 +13,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorAcolyteHarvest;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerScore;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CEffectType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityActivationReceiver;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetCheckReceiver;
@@ -85,16 +86,23 @@ public class CAbilityBlightedGoldMine extends CAbilityOverlayedMine {
 					+ (int) (currentInterval / WarsmashConstants.SIMULATION_STEP_TIME);
 			final int currentTurnTick = game.getGameTurnTick();
 			final CAbilityGoldMinable parentGoldMineAbility = getParentGoldMineAbility();
+			if (parentGoldMineAbility == null) return;
 			final int totalGoldAvailable = parentGoldMineAbility.getGold();
-			if ((currentTurnTick >= nextIncomeTick) && (parentGoldMineAbility != null) && (totalGoldAvailable > 0)) {
+			if ((currentTurnTick >= nextIncomeTick) && (totalGoldAvailable > 0)) {
 				this.lastIncomeTick = currentTurnTick;
 				final CPlayer player = game.getPlayer(unit.getPlayerIndex());
 				final int goldMined = Math.min(totalGoldAvailable, this.goldPerInterval);
 				final int goldTax = Math.round(goldMined * (player.getGoldUpkeepRate() / 100.0f));
 				final int goldGained = goldMined - goldTax;
 				player.addGold(goldGained);
+				player.recordMissionScore(CPlayerScore.GOLD_MINED_TOTAL, goldMined);
 				parentGoldMineAbility.setGold(totalGoldAvailable - goldMined);
 				game.unitGainResourceEvent(unit, player.getId(), ResourceType.GOLD, goldGained);
+			}
+			if (parentGoldMineAbility.getGold() == 0) {
+				for (final CBehaviorAcolyteHarvest miner : this.activeMiners) {
+					if (miner != null && miner.unsummonDepletedMine(game, unit)) break;
+				}
 			}
 		}
 //		final boolean empty = this.activeMiners.isEmpty();

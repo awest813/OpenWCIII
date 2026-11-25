@@ -611,15 +611,14 @@ public class CommandCardPopulatingAbilityVisitor implements CAbilityVisitor<Void
 	public Void accept(final CAbilitySellItems ability) {
 		if ((this.menuBaseOrderId == 0) && ability.isIconShowing()) {
 			int itemIndex = 1;
-			for (final War3ID unitType : ability.getItemsSold()) {
-				final IconUI unitUI = this.abilityDataUI.getItemUI(unitType).getIconUI();
-				if (unitUI != null) {
-					final CItemType simulationUnitType = this.game.getItemData().getItemType(unitType);
-					int goldCost, lumberCost;
-					goldCost = simulationUnitType.getGoldCost();
-					lumberCost = simulationUnitType.getLumberCost();
-					addCommandButton(ability, unitUI, ability.getHandleId(), this.localPlayerIndex | (itemIndex << 8),
-							0, false, false, goldCost, lumberCost, 0, 0, -1);
+			for (final War3ID itemType : ability.getItemsSold()) {
+				final var itemUI = this.abilityDataUI.getItemUI(itemType);
+				final CItemType definition = this.game.getItemData().getItemType(itemType);
+				if (itemUI != null && itemUI.getIconUI() != null && definition != null) {
+					final int stock = ability.getItemStockCurrent(itemType);
+					addCommandButton(ability, itemUI.getIconUI(), ability.getHandleId(), this.localPlayerIndex | (itemIndex << 8),
+							0, false, false, definition.getGoldCost(), definition.getLumberCost(), 0, 0,
+							stock == Integer.MAX_VALUE ? -1 : stock);
 				}
 				itemIndex++;
 			}
@@ -639,9 +638,10 @@ public class CommandCardPopulatingAbilityVisitor implements CAbilityVisitor<Void
 						final int goldCost = simulationUnitType.getGoldCost();
 						final int lumberCost = simulationUnitType.getLumberCost();
 						final int foodCost = simulationUnitType.getFoodUsed();
+						final int stock = ability.getUnitStockCurrent(unitType);
 						addCommandButton(ability, unitUI, ability.getHandleId(),
 								this.localPlayerIndex | (unitIndex << 8), 0, false, false, goldCost, lumberCost,
-								foodCost, 0, -1);
+								foodCost, 0, stock == Integer.MAX_VALUE ? -1 : stock);
 					}
 				}
 				unitIndex++;

@@ -14,6 +14,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.unit.CUnitTypeJass;
 public class ABCallbackGetAbilityDuration extends ABFloatCallback {
 
 	private ABUnitCallback target;
+	private boolean includeSkeletalLongevity;
 
 	@SuppressWarnings("unchecked")
 	@Override
@@ -21,23 +22,28 @@ public class ABCallbackGetAbilityDuration extends ABFloatCallback {
 			final int castId) {
 		final List<CAbilityTypeAbilityBuilderLevelData> levelData = (List<CAbilityTypeAbilityBuilderLevelData>) localStore
 				.get(ABLocalStoreKeys.LEVELDATA);
+		final var level = levelData.get(((int) localStore.get(ABLocalStoreKeys.CURRENTLEVEL)) - 1);
+		float duration = level.getDurationNormal();
 		if (this.target != null) {
 			final CUnit tar = this.target.callback(game, caster, localStore, castId);
 			if (tar.isHero() || tar.isUnitType(CUnitTypeJass.RESISTANT)) {
-				return levelData.get(((int) localStore.get(ABLocalStoreKeys.CURRENTLEVEL)) - 1).getDurationHero();
+				duration = level.getDurationHero();
 			}
 		}
-		return levelData.get(((int) localStore.get(ABLocalStoreKeys.CURRENTLEVEL)) - 1).getDurationNormal();
+		if (this.includeSkeletalLongevity && duration > 0) {
+			duration += game.getUpgradeData().getRaiseDeadDurationBonus(caster.getUnitType(),
+					game.getPlayer(caster.getPlayerIndex()));
+		}
+		return duration;
 	}
 
 	@Override
 	public String generateJassEquivalent(final JassTextGenerator jassTextGenerator) {
-		if (this.target != null) {
-			return "GetAbilityDurationForTargetAU(" + jassTextGenerator.getTriggerLocalStore() + ", "
-					+ this.target.generateJassEquivalent(jassTextGenerator) + ")";
-		}
-		return "GetAbilityDurationAU(" + jassTextGenerator.getTriggerLocalStore() + ")";
-
+		final String duration = this.target == null ? "GetAbilityDurationAU(" + jassTextGenerator.getTriggerLocalStore() + ")"
+				: "GetAbilityDurationForTargetAU(" + jassTextGenerator.getTriggerLocalStore() + ", "
+						+ this.target.generateJassEquivalent(jassTextGenerator) + ")";
+		return this.includeSkeletalLongevity
+				? "ApplySkeletalLongevityAU(" + duration + ", " + jassTextGenerator.getCaster() + ")" : duration;
 	}
 
 }

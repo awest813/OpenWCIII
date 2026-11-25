@@ -77,6 +77,15 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 		}
 	};
 
+	private static GenericResource loadEventTable(final ModelViewer viewer, final PathSolver pathSolver,
+			final Object solverParams, final String path) {
+		final String resolvedPath = pathSolver.solve(path, solverParams).finalSrc;
+		if (viewer instanceof War3MapViewer mapViewer && mapViewer.mapMpq != null) {
+			return viewer.loadGeneric(resolvedPath, FetchDataTypeName.SLK, mappedDataCallback, mapViewer.mapMpq);
+		}
+		return viewer.loadGeneric(resolvedPath, FetchDataTypeName.SLK, mappedDataCallback);
+	}
+
 	private int geometryEmitterType = -1;
 	public final String type;
 	private final String id;
@@ -149,32 +158,19 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 		final Object solverParams = model.solverParams;
 
 		if ("SPN".equals(type)) {
-			tables.add(viewer.loadGeneric(pathSolver.solve("Splats\\SpawnData.slk", solverParams).finalSrc,
-					FetchDataTypeName.SLK, mappedDataCallback));
+			tables.add(loadEventTable(viewer, pathSolver, solverParams, "Splats\\SpawnData.slk"));
 		}
-		else if ("SPL".equals(type)) {
-			tables.add(viewer.loadGeneric(pathSolver.solve("Splats\\SplatData.slk", solverParams).finalSrc,
-					FetchDataTypeName.SLK, mappedDataCallback));
-		}
-		else if ("FPT".equals(type)) {
-			tables.add(viewer.loadGeneric(pathSolver.solve("Splats\\SplatData.slk", solverParams).finalSrc,
-					FetchDataTypeName.SLK, mappedDataCallback));
+		else if ("SPL".equals(type) || "FPT".equals(type)) {
+			tables.add(loadEventTable(viewer, pathSolver, solverParams, "Splats\\SplatData.slk"));
 		}
 		else if ("UBR".equals(type)) {
-			tables.add(viewer.loadGeneric(pathSolver.solve("Splats\\UberSplatData.slk", solverParams).finalSrc,
-					FetchDataTypeName.SLK, mappedDataCallback));
+			tables.add(loadEventTable(viewer, pathSolver, solverParams, "Splats\\UberSplatData.slk"));
 		}
 		else if ("SND".equals(type)) {
 			if (!model.reforged) {
-				tables.add(viewer.loadGeneric(pathSolver.solve("UI\\SoundInfo\\AnimLookups.slk", solverParams).finalSrc,
-						FetchDataTypeName.SLK, mappedDataCallback));
-				tables.add(viewer.loadGeneric(pathSolver.solve("UI\\SoundInfo\\AnimSounds.slk", solverParams).finalSrc,
-						FetchDataTypeName.SLK, mappedDataCallback));
+				tables.add(loadEventTable(viewer, pathSolver, solverParams, "UI\\SoundInfo\\AnimLookups.slk"));
 			}
-			else {
-				tables.add(viewer.loadGeneric(pathSolver.solve("UI\\SoundInfo\\AnimSounds.slk", solverParams).finalSrc,
-						FetchDataTypeName.SLK, mappedDataCallback));
-			}
+			tables.add(loadEventTable(viewer, pathSolver, solverParams, "UI\\SoundInfo\\AnimSounds.slk"));
 		}
 		else {
 			// Units\Critters\BlackStagMale\BlackStagMale.mdx has an event object named
@@ -234,7 +230,15 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 		if (firstTable == null) {
 			return;
 		}
-		final MappedDataRow row = firstTable.getRow(this.id.trim());
+		final String eventId = this.id.trim();
+		MappedDataRow row = firstTable.getRow(eventId);
+		if (row == null && "FPT".equals(this.type)) {
+			// Classic models can zero-pad footprint IDs that the splat table stores unpadded.
+			final String unpaddedId = eventId.replaceFirst("(?<=\\D)0+(?=\\d+$)", "");
+			if (!eventId.equals(unpaddedId)) {
+				row = firstTable.getRow(unpaddedId);
+			}
+		}
 
 		if (row != null) {
 			final MdxModel model = this.model;
@@ -242,7 +246,8 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 			final PathSolver pathSolver = model.pathSolver;
 
 			if ("SPN".equals(this.type)) {
-				this.internalModel = War3MapViewer.loadModelMdx(viewer.dataSource, viewer, (String) row.get("Model"),
+				final String modelPath = (String) row.get("Model");
+				this.internalModel = War3MapViewer.loadModelMdx(viewer.dataSource, viewer, modelPath,
 						pathSolver, model.solverParams);
 
 				if (this.internalModel != null) {
@@ -317,25 +322,24 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 						this.pitchVariance = getFloat(animSoundsRow, "PitchVariance");
 						this.volume = getFloat(animSoundsRow, "Volume") / 127f;
 
-						final String[] fileNames = ((String) animSoundsRow.get("FileNames")).split(",");
-						final GenericResource[] resources = new GenericResource[fileNames.length];
-						for (int i = 0; i < fileNames.length; i++) {
-							final String directoryBase = (String) animSoundsRow.get("DirectoryBase");
-							String path;
-							if (directoryBase != null) {
-								path = (directoryBase) + fileNames[i];
+						final String fileNames = (String) animSoundsRow.get("FileNames");
+						if (fileNames == null) {
+							return;
+						}
+						final String directoryBase = (String) animSoundsRow.get("DirectoryBase");
+						for (final String entry : fileNames.split(",")) {
+							final String fileName = entry.trim();
+							if (fileName.isEmpty() || "_".equals(fileName)) {
+								continue;
 							}
-							else {
-								path = fileNames[i];
-							}
+							final String path = directoryBase == null ? fileName : directoryBase + fileName;
 							try {
 								final String pathString = pathSolver.solve(path, model.solverParams).finalSrc;
 								final GenericResource genericResource = viewer.loadGeneric(pathString,
 										FetchDataTypeName.ARRAY_BUFFER, new LoadGenericSoundCallback(pathString));
-								if (genericResource == null) {
-									System.err.println("Null sound: " + fileNames[i]);
+								if (genericResource != null && genericResource.data instanceof Sound sound) {
+									this.decodedBuffers.add(sound);
 								}
-								resources[i] = genericResource;
 							}
 							catch (final Exception exc) {
 								System.err.println("Failed to load sound: " + path);
@@ -343,13 +347,7 @@ public class EventObjectEmitterObject extends GenericObject implements EmitterOb
 							}
 						}
 
-						// TODO JS async removed
-						for (final GenericResource resource : resources) {
-							if (resource != null) {
-								this.decodedBuffers.add((Sound) resource.data);
-							}
-						}
-						this.ok = true;
+						this.ok = !this.decodedBuffers.isEmpty();
 					}
 				}
 			}

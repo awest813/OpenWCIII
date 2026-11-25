@@ -208,17 +208,21 @@ public class CPlayerFogOfWar {
 	}
 
 	public void setFogStateRadius(PathingGrid pathingGrid, float myX, float myY, float radius, CFogState state) {
-		final float radSq = radius * radius;
-		setVisible(pathingGrid.getFogOfWarIndexX(myX), pathingGrid.getFogOfWarIndexY(myY), state);
+		setFogStateRadius(pathingGrid, myX, myY, radius, state, (byte) 0);
+	}
 
-		for (int y = 0; y <= (int) Math.floor(radius); y += 128) {
-			for (int x = 0; x <= (int) Math.floor(radius); x += 128) {
+	public void setFogStateRadius(final PathingGrid pathingGrid, final float myX, final float myY,
+			final float radius, final CFogState state, final byte detectionLevels) {
+		final float radSq = radius * radius;
+
+		for (int y = 0; y <= (int) Math.floor(radius); y += GRID_STEP) {
+			for (int x = 0; x <= (int) Math.floor(radius); x += GRID_STEP) {
 				final float distance = (x * x) + (y * y);
 				if (distance <= radSq) {
-					setVisible(pathingGrid.getFogOfWarIndexX(myX - x), pathingGrid.getFogOfWarIndexY(myY - y), state);
-					setVisible(pathingGrid.getFogOfWarIndexX(myX - x), pathingGrid.getFogOfWarIndexY(myY + y), state);
-					setVisible(pathingGrid.getFogOfWarIndexX(myX + x), pathingGrid.getFogOfWarIndexY(myY - y), state);
-					setVisible(pathingGrid.getFogOfWarIndexX(myX + x), pathingGrid.getFogOfWarIndexY(myY + y), state);
+					setDetecting(pathingGrid, myX - x, myY - y, state, detectionLevels);
+					setDetecting(pathingGrid, myX - x, myY + y, state, detectionLevels);
+					setDetecting(pathingGrid, myX + x, myY - y, state, detectionLevels);
+					setDetecting(pathingGrid, myX + x, myY + y, state, detectionLevels);
 				}
 			}
 		}

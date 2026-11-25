@@ -13,6 +13,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.definitions.impl.AbilityFields;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CTargetType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CDamageType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CWeaponSoundTypeJass;
@@ -71,6 +72,15 @@ public class CAbilityKaboom extends CAbilityUnitOrPointTargetSpellBase implement
 		explodesOnDeath = worldEditorAbility.getFieldAsBoolean(AbilityFields.DATA_F + level, 0);
 		buildingDamageFactor = worldEditorAbility.getFieldAsFloat(AbilityFields.DATA_E + level, 0);
 
+		if (worldEditorAbility.getFieldAsString(AbilityFields.TARGETS_ALLOWED + level, 0).isBlank()) {
+			final var defaultTargets = CTargetType.parseTargetTypeSet(worldEditorAbility.getFieldAsList(AbilityFields.TARGETS_ALLOWED));
+			if (defaultTargets.isEmpty()) {
+				defaultTargets.add(CTargetType.GROUND);
+				defaultTargets.add(CTargetType.STRUCTURE);
+				defaultTargets.add(CTargetType.TREE);
+			}
+			getTargetsAllowed().addAll(defaultTargets);
+		}
 		setCastRange(getCastRange() + 128);
 	}
 
@@ -95,6 +105,15 @@ public class CAbilityKaboom extends CAbilityUnitOrPointTargetSpellBase implement
 		final float radius = StrictMath.max(partialDamageRadius, fullDamageRadius);
 		simulation.getWorldCollision().enumUnitsInRange(caster.getX(), caster.getY(), radius,
 				this.enumUnitsInRange.reset(simulation, caster));
+		simulation.getWorldCollision().enumDestructablesInRange(caster.getX(), caster.getY(), radius, target -> {
+			if (target.canBeTargetedBy(simulation, caster, getTargetsAllowed())) {
+				final float damage = caster.canReach(target, this.fullDamageRadius)
+						? this.fullDamageAmount : this.partialDamageAmount;
+				target.damage(simulation, caster, false, true, CAttackType.SPELLS, CDamageType.DEMOLITION,
+						CWeaponSoundTypeJass.WHOKNOWS.name(), damage);
+			}
+			return false;
+		});
 	}
 
 	private final class EnumUnitsInRange implements CUnitEnumFunction {

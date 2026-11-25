@@ -7,6 +7,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.cargohold.CAbilityCargoHold;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.cargohold.CAbilityMeatWagonCargo;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.generic.CLevelingAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.types.CAbilityType;
 
@@ -20,6 +21,10 @@ public class CAbilityTypeCargoHold extends CAbilityType<CAbilityTypeCargoHoldLev
 	@Override
 	public CAbility createAbility(final int handleId) {
 		final CAbilityTypeCargoHoldLevelData levelData = getLevelData(0);
+		if (CAbilityMeatWagonCargo.CODE.equals(getCode())) {
+			return new CAbilityMeatWagonCargo(handleId, getAlias(), levelData.getCargoCapcity(), levelData.getDuration(),
+					levelData.getCastRange(), levelData.getTargetsAllowed());
+		}
 		return new CAbilityCargoHold(handleId, getCode(), getAlias(), levelData.getCargoCapcity(), levelData.getDuration(),
 				levelData.getCastRange(), levelData.getTargetsAllowed());
 	}

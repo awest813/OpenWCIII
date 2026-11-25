@@ -1,5 +1,32 @@
 # Campaign screens, messages, and events audit
 
+## November 25 rendered client regression
+
+The current desktop build passed `outcomeMenuRenderAudit` for victory, defeat,
+retry, Quit, restart cancellation, modal input, and layout at three sizes.
+Mission results now include mined gold, harvested lumber, trained units,
+completed buildings, enemy kills, and structures razed. Loaded-map fixtures
+exercise mining, construction, training, and razing. The compact summary
+passed at 960×540, 800×600, and 600×800.
+The original interface table now supplies result-screen difficulty, elapsed
+time, resource, unit, and building labels. A separate desktop run verified
+the outcome summaries and their controls at all three resolutions.
+An installed `IntroX` movie passed two consecutive in-mission plays and
+Escape restored control after both. At the capture points the first session
+had displayed 8.17 seconds of video and submitted 8.13 seconds of audio to
+the playback device. The second measured 3.00 and 2.93 seconds. Both movie
+entry points use the same audio lifecycle and start playback at the first
+video frame.
+The same film reached its natural ending in a separate desktop run with
+188.84 seconds of video displayed and 187.98 seconds of audio submitted.
+The mission interface restored controls and subsequent Escape playback and
+outcome dialogs passed in that session.
+`graphicsSettingsRenderAudit` passed glow, fractional borders, texture quality,
+level-of-detail animation identity, and foliage fades. `skyBackgroundRenderAudit`
+passed the framebuffer checks for distant terrain, sky color, and hidden scenes.
+`campaignPersistenceRenderAudit` verified progress and profile isolation across
+five separate launches and rendered the main menu at the same three sizes.
+
 ## September 27: opening-mission black screen
 
 The NightElfX01 opening was reproduced with the real mission scripts. Its
@@ -111,13 +138,21 @@ reviewed in code; its existing calls remain in place.
 
 ## Remaining campaign presentation work
 
-- Victory/defeat use a simple outcome dialog, not the retail statistics screen.
-- Several outcome labels and fallback messages are English literals rather than
-  verified localized retail strings.
-- `DisplayTimedTextToPlayer` still ignores requested x/y placement in the UI.
+- The compact victory and defeat summaries still need coverage of the remaining
+  retail statistics categories and localization.
+- Several outcome labels and fallback messages are English literals. Their
+  original localized strings still need verification.
+- Scripted `StopMusic(true)` fades to silence over two seconds before
+  pausing. Playback tests cover completion, interruption during fade-in,
+  and resuming the same track. The two-second interval is a compatibility
+  estimate pending measurement against the original client.
+- Scripted sound channels apply the Ambient, Movement, and Unit Sounds
+  options alongside the map's volume groups. Playback tests cover toggling
+  gain without restarting the sound or muting the combat channel.
+- `DisplayTimedTextToPlayer` and `DisplayTextToPlayer` pass their requested x/y offsets to the message stack. The anchor tests cover scripted offsets, default placement, and invalid values. A rendered comparison with the original client remains open.
 - Rendered chapter selection, letterbox layout, portrait animation, subtitle
-  wrapping, hotkeys/focus, movie audio/video synchronization, and transitions
-  need in-game inspection at supported resolutions.
+  wrapping, hotkeys/focus, movie finish and menu return, and transitions need
+  wider coverage at supported resolutions.
 - A complete mission playthrough must verify objective messages, cinematic-skip
   triggers, victory/defeat events, and next-chapter loading together. Passing
   headless tests or idle campaign smoke checks does not establish that result.

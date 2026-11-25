@@ -98,4 +98,48 @@ class MusicPlayerLibGDXTest {
         assertTrue(first.disposed);
         assertTrue(tracks.get(1).disposed);
     }
+
+
+    @Test
+    void scriptedFadeStopsAtSilenceAndResumesTheSameTrackAtTheConfiguredVolume() {
+        final List<Track> tracks = new ArrayList<>();
+        final MusicPlayerLibGDX player = player(tracks);
+        player.setVolume(80);
+        player.playMusicEx("one.mp3;two.mp3", false, 0, 3500, 0);
+        final Track first = tracks.get(0);
+
+        player.stopMusic(true);
+        player.update(1f);
+        assertEquals(40f / 127f, first.volume, 0.001f);
+        assertTrue(first.playing);
+        player.stopMusic(true);
+        player.update(1f);
+        assertEquals(0f, first.volume);
+        assertFalse(first.playing);
+        assertFalse(tracks.get(1).playing);
+
+        player.resumeMusic();
+        assertTrue(first.playing);
+        assertEquals(3.5f, first.position);
+        assertEquals(80f / 127f, first.volume, 0.001f);
+    }
+
+    @Test
+    void stoppingDuringFadeInStartsAtTheAudibleGainAndResumeCancelsTheStop() {
+        final List<Track> tracks = new ArrayList<>();
+        final MusicPlayerLibGDX player = player(tracks);
+        player.playMusicEx("one.mp3;two.mp3", false, 0, 0, 1000);
+        final Track first = tracks.get(0);
+
+        player.update(0.4f);
+        player.stopMusic(true);
+        assertEquals(0.4f, first.volume, 0.001f);
+        player.update(0.5f);
+        assertEquals(0.3f, first.volume, 0.001f);
+        player.resumeMusic();
+        player.update(2f);
+        assertEquals(1f, first.volume);
+        assertTrue(first.playing);
+        assertFalse(tracks.get(1).playing);
+    }
 }

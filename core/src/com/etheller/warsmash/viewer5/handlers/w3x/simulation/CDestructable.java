@@ -83,12 +83,18 @@ public class CDestructable extends CWidget {
 			return 0;
 		}
 		final boolean wasDead = isDead();
-		this.life -= damage;
+		final float applied = source != null && isAttack ? damage * source.attackDamageDealtMultiplier() : damage;
+		this.life -= applied;
 		simulation.destructableDamageEvent(this, weaponSoundType, this.destType.getArmorType());
 		if (!wasDead && isDead()) {
 			kill(simulation);
 		}
-		return damage;
+		else if (!wasDead && applied > 0 && this.buffs != null) {
+			for (int i = this.buffs.size() - 1; i >= 0; i--) {
+				this.buffs.get(i).onDamage(simulation, this);
+			}
+		}
+		return applied;
 	}
 
 	@Override
@@ -289,11 +295,29 @@ public class CDestructable extends CWidget {
 	}
 
 	public void remove(final CSimulation simulation, final CDestructableBuff buff) {
-		this.buffs.remove(buff);
-		buff.onRemove(simulation, this);
+		if (this.buffs != null && this.buffs.remove(buff)) {
+			buff.onRemove(simulation, this);
+		}
+	}
+
+	public boolean hasBuff(final Class<? extends CDestructableBuff> type) {
+		return this.buffs != null && this.buffs.stream().anyMatch(type::isInstance);
+	}
+
+	public void dispelBuffs(final CSimulation game) {
+		if (this.buffs != null) {
+			for (final var buff : List.copyOf(this.buffs)) {
+				if (buff.isDispellable()) remove(game, buff);
+			}
+		}
 	}
 
 	public void onRemove(CSimulation cSimulation) {
+		if (this.buffs != null) {
+			for (int i = this.buffs.size() - 1; i >= 0; i--) {
+				remove(cSimulation, this.buffs.get(i));
+			}
+		}
 		if (this.pathingInstance != null) {
 			this.pathingInstance.remove();
 		}

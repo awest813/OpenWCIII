@@ -11,6 +11,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.core
 public class ABTimedTickingPausedBuff extends ABTimedBuff {
 
 	private List<ABAction> onTickActions;
+	private boolean dispellable;
 
 	public ABTimedTickingPausedBuff(int handleId, War3ID alias, float duration, boolean showTimedLifeBar, Map<String, Object> localStore,
 			List<ABAction> onAddActions, List<ABAction> onRemoveActions, List<ABAction> onExpireActions, List<ABAction> onTickActions, boolean showIcon, final int castId) {
@@ -22,6 +23,15 @@ public class ABTimedTickingPausedBuff extends ABTimedBuff {
 			List<ABAction> onAddActions, List<ABAction> onRemoveActions, List<ABAction> onExpireActions, List<ABAction> onTickActions, final int castId) {
 		super(handleId, alias, duration, showTimedLifeBar, localStore, onAddActions, onRemoveActions, onExpireActions, castId);
 		this.onTickActions = onTickActions;
+	}
+
+	@Override
+	public boolean isDispellable() {
+		return this.dispellable;
+	}
+
+	public void setDispellable(final boolean dispellable) {
+		this.dispellable = dispellable;
 	}
 
 	@Override

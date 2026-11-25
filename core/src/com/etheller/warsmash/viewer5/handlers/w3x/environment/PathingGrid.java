@@ -200,9 +200,8 @@ public class PathingGrid {
 	}
 
 	public boolean contains(final float x, final float y) {
-		final int cellX = getCellX(x);
-		final int cellY = getCellY(y);
-		return (cellX >= 0) && (cellY >= 0) && (cellX < this.pathingGridSizes[0]) && (cellY < this.pathingGridSizes[1]);
+		return x >= this.centerOffset[0] && x < getWorldXFromCorner(this.pathingGridSizes[0])
+				&& y >= this.centerOffset[1] && y < getWorldYFromCorner(this.pathingGridSizes[1]);
 	}
 
 	public short getPathing(final float x, final float y) {

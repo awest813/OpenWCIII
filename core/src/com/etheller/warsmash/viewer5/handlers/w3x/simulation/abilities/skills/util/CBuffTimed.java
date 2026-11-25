@@ -30,9 +30,24 @@ public abstract class CBuffTimed extends AbstractCBuff {
 	@Override
 	public void onAdd(final CSimulation game, final CUnit unit) {
 		onBuffAdd(game, unit);
-		this.fx = game.createPersistentSpellEffectOnUnit(unit, getAlias(), CEffectType.TARGET);
+		this.fx = createArt(game, unit);
+		refreshDuration(game);
+	}
+
+	protected SimulationRenderComponent createArt(final CSimulation game, final CUnit unit) {
+		return game.createPersistentSpellEffectOnUnit(unit, getAlias(), CEffectType.TARGET);
+	}
+
+	protected final void refreshDuration(final CSimulation game) {
 		final int durationTicks = (int) (this.duration / WarsmashConstants.SIMULATION_STEP_TIME);
 		this.expireTick = game.getGameTurnTick() + durationTicks;
+	}
+
+	public final void transferTo(final CSimulation game, final CUnit source, final CUnit recipient) {
+		final int expiry = this.expireTick;
+		source.remove(game, this);
+		recipient.add(game, this);
+		this.expireTick = expiry;
 	}
 
 	@Override

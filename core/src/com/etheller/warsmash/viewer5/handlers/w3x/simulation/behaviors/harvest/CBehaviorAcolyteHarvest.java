@@ -102,6 +102,10 @@ public class CBehaviorAcolyteHarvest extends CAbstractRangedBehavior {
 		return this.target.visit(AbilityTargetStillAliveVisitor.INSTANCE);
 	}
 
+	public boolean unsummonDepletedMine(final CSimulation game, final CUnit mine) {
+		return this.unit.orderAutomatically(game, OrderIds.unsummon, mine);
+	}
+
 	@Override
 	protected void resetBeforeMoving(final CSimulation simulation) {
 		if (this.harvesting) {

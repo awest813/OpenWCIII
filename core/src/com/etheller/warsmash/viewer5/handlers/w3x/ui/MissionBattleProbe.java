@@ -10,7 +10,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 /** Opt-in mass combat in a cleared walkable arena, using retail ranged units and actual AI orders. */
 final class MissionBattleProbe {
     static final boolean ENABLED = "battle".equals(System.getProperty("warsmash.missionResumeScenario", ""));
-    static final int CONTINUATION_TICKS = 2400;
+    static final int CONTINUATION_TICKS = 2800;
     static final String SCRIPT = """
 native CheckpointBattleArena takes real x, real y returns nothing
 globals

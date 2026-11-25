@@ -2,9 +2,11 @@ package com.etheller.warsmash.parsers.jass;
 
 import java.awt.image.BufferedImage;
 import java.io.StringReader;
+import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
+import java.util.Comparator;
 import java.util.List;
 
 import com.badlogic.gdx.math.Rectangle;
@@ -62,6 +64,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorReturnResources;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.harvest.CBehaviorWispHarvest;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.config.War3MapConfig;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.COrderTargetPoint;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
@@ -95,8 +98,13 @@ public class JassAIEnvironment {
 	private float captainY;
 	private boolean captainAtHome = true;
 	private final List<CUnit> assaultGroup = new ArrayList<>();
+	private final List<CUnit> defenseGroup = new ArrayList<>();
+	private int requestedAssaultSize;
+	private final ArrayDeque<AiCommand> pendingCommands = new ArrayDeque<>();
 	private float nextExpansionX = 0f;
 	private float nextExpansionY = 0f;
+
+	private record AiCommand(int command, int data) { }
 
 	private static final class GuardPost {
 		final War3ID unitId;
@@ -372,7 +380,10 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> {
 					final CUnit unit = arguments.size() > 0 && arguments.get(0) != null
 							? arguments.get(0).visit(ObjectJassValueVisitor.getInstance()) : null;
-					return BooleanJassValue.of(unit != null && !unit.isDead());
+					final CPlayer player = arguments.size() > 1 && arguments.get(1) != null
+							? arguments.get(1).visit(ObjectJassValueVisitor.getInstance()) : null;
+					return BooleanJassValue.of(simulation != null && player != null && unit != null && !unit.isDead()
+							&& !unit.isHidden() && unit.getInvisLevels() > 0 && unit.isVisible(simulation, player.getId()));
 				});
 
 		jassProgramVisitor.getJassNativeManager().createNative("StartThread",
@@ -425,6 +436,11 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> {
 					final CUnit unit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
 					return BooleanJassValue.of((unit != null) && !unit.isDead());
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("UnitInvis",
+				(arguments, globalScope, triggerScope) -> {
+					final CUnit unit = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
+					return BooleanJassValue.of(unit != null && unit.getInvisLevels() > 0);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("DoNothing",
 				(arguments, globalScope, triggerScope) -> null);
@@ -481,11 +497,12 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("InitAssault",
 				(arguments, globalScope, triggerScope) -> {
 					JassAIEnvironment.this.assaultGroup.clear();
+					JassAIEnvironment.this.requestedAssaultSize = 0;
 					return null;
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("InitDefense",
 				(arguments, globalScope, triggerScope) -> {
-					JassAIEnvironment.this.assaultGroup.clear();
+					JassAIEnvironment.this.defenseGroup.clear();
 					return null;
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("WaitForSignal",
@@ -619,6 +636,15 @@ public class JassAIEnvironment {
 					}
 					final CUnitType ut = simulation.getUnitData().getUnitType(new War3ID(unitId));
 					return IntegerJassValue.of(ut != null ? ut.getLumberCost() : 0);
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("GetUnitBuildTime",
+				(arguments, globalScope, triggerScope) -> {
+					final int unitId = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
+					if (simulation == null) {
+						return IntegerJassValue.ZERO;
+					}
+					final CUnitType unitType = simulation.getUnitData().getUnitType(new War3ID(unitId));
+					return IntegerJassValue.of(unitType != null ? unitType.getBuildTime() : 0);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetUpgradeGoldCost",
 				(arguments, globalScope, triggerScope) -> {
@@ -845,13 +871,14 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> {
 					final int count = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
 					final int unitId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
-					return BooleanJassValue.of(addUnitsToAssault(count, unitId));
+					JassAIEnvironment.this.requestedAssaultSize += Math.max(0, count);
+					return BooleanJassValue.of(addUnitsToCaptain(assaultGroup, defenseGroup, count, unitId));
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("AddDefenders",
 				(arguments, globalScope, triggerScope) -> {
 					final int count = arguments.get(0).visit(IntegerJassValueVisitor.getInstance());
 					final int unitId = arguments.get(1).visit(IntegerJassValueVisitor.getInstance());
-					return BooleanJassValue.of(addUnitsToAssault(count, unitId));
+					return BooleanJassValue.of(addUnitsToCaptain(defenseGroup, assaultGroup, count, unitId));
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetCaptainX",
 				(arguments, globalScope, triggerScope) -> RealJassValue.of(JassAIEnvironment.this.captainX));
@@ -860,7 +887,13 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("GetCaptainLoc",
 				(arguments, globalScope, triggerScope) -> locationType.getNullValue());
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainInCombat",
-				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
+				(arguments, globalScope, triggerScope) -> {
+					final List<CUnit> group = arguments.get(0).visit(BooleanJassValueVisitor.getInstance())
+							? this.assaultGroup : this.defenseGroup;
+					pruneCaptainGroup(group);
+					return BooleanJassValue.of(group.stream().anyMatch(unit -> unit.getCurrentBehavior() != null
+							&& unit.getCurrentBehavior().getBehaviorCategory() == CBehaviorCategory.ATTACK));
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainIsHome",
 				(arguments, globalScope, triggerScope) -> BooleanJassValue.of(JassAIEnvironment.this.captainAtHome));
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainIsEmpty",
@@ -871,7 +904,8 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainIsFull",
 				(arguments, globalScope, triggerScope) -> {
 					pruneAssaultGroup();
-					return BooleanJassValue.of(!JassAIEnvironment.this.assaultGroup.isEmpty());
+					return BooleanJassValue.of(this.requestedAssaultSize > 0
+							&& this.assaultGroup.size() >= this.requestedAssaultSize);
 				});
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainRetreating",
 				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
@@ -903,9 +937,9 @@ public class JassAIEnvironment {
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainVsPlayer",
 				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainReadiness",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(assaultHealthPercent()));
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainReadinessHP",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(assaultHealthPercent()));
 		jassProgramVisitor.getJassNativeManager().createNative("CaptainGroupSize",
 				(arguments, globalScope, triggerScope) -> {
 					pruneAssaultGroup();
@@ -932,54 +966,25 @@ public class JassAIEnvironment {
 					}
 					return null;
 				});
+		jassProgramVisitor.getJassNativeManager().createNative("SuicideUnit",
+				(arguments, globalScope, triggerScope) -> {
+					issueUnitAttackWave(arguments.get(0).visit(IntegerJassValueVisitor.getInstance()),
+							arguments.get(1).visit(IntegerJassValueVisitor.getInstance()), -1);
+					return null;
+				});
+		jassProgramVisitor.getJassNativeManager().createNative("SuicideUnitEx",
+				(arguments, globalScope, triggerScope) -> {
+					issueUnitAttackWave(arguments.get(0).visit(IntegerJassValueVisitor.getInstance()),
+							arguments.get(1).visit(IntegerJassValueVisitor.getInstance()),
+							arguments.get(2).visit(IntegerJassValueVisitor.getInstance()));
+					return null;
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("SuicidePlayer",
-				(arguments, globalScope, triggerScope) -> {
-					final CPlayer target = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-					if (target == null) {
-						return BooleanJassValue.FALSE;
-					}
-					float tx = 0f;
-					float ty = 0f;
-					int count = 0;
-					for (final CUnit unit : JassAIEnvironment.this.simulation.getUnitsIncludingPending()) {
-						if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == target.getId())) {
-							tx += unit.getX();
-							ty += unit.getY();
-							count++;
-						}
-					}
-					if (count == 0) {
-						return BooleanJassValue.FALSE;
-					}
-					tx /= count;
-					ty /= count;
-					issueAllCombatUnitsAttack(tx, ty);
-					return BooleanJassValue.TRUE;
-				});
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.of(
+						launchAssault(arguments.get(0).visit(ObjectJassValueVisitor.getInstance()), true)));
 		jassProgramVisitor.getJassNativeManager().createNative("SuicidePlayerUnits",
-				(arguments, globalScope, triggerScope) -> {
-					final CPlayer target = arguments.get(0).visit(ObjectJassValueVisitor.getInstance());
-					if (target == null) {
-						return BooleanJassValue.FALSE;
-					}
-					float tx = 0f;
-					float ty = 0f;
-					int count = 0;
-					for (final CUnit unit : JassAIEnvironment.this.simulation.getUnitsIncludingPending()) {
-						if ((unit != null) && !unit.isDead() && (unit.getPlayerIndex() == target.getId())) {
-							tx += unit.getX();
-							ty += unit.getY();
-							count++;
-						}
-					}
-					if (count == 0) {
-						return BooleanJassValue.FALSE;
-					}
-					tx /= count;
-					ty /= count;
-					issueAllCombatUnitsAttack(tx, ty);
-					return BooleanJassValue.TRUE;
-				});
+				(arguments, globalScope, triggerScope) -> BooleanJassValue.of(
+						launchAssault(arguments.get(0).visit(ObjectJassValueVisitor.getInstance()), false)));
 		jassProgramVisitor.getJassNativeManager().createNative("UnitAliveCheck",
 				(arguments, globalScope, triggerScope) -> BooleanJassValue.FALSE);
 		jassProgramVisitor.getJassNativeManager().createNative("GroupTimedLife",
@@ -988,15 +993,27 @@ public class JassAIEnvironment {
 				(arguments, globalScope, triggerScope) -> null);
 		jassProgramVisitor.getJassNativeManager().createNative("SetAmphibious",
 				(arguments, globalScope, triggerScope) -> null);
-		// Ignore unused locals that some AI scripts declare against BooleanJassValueVisitor
 		jassProgramVisitor.getJassNativeManager().createNative("CommandsWaiting",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> IntegerJassValue.of(this.pendingCommands.size()));
 		jassProgramVisitor.getJassNativeManager().createNative("PopLastCommand",
-				(arguments, globalScope, triggerScope) -> null);
+				(arguments, globalScope, triggerScope) -> {
+					this.pendingCommands.pollLast();
+					return null;
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetLastCommand",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> {
+					final AiCommand command = this.pendingCommands.peekLast();
+					return IntegerJassValue.of(command == null ? 0 : command.command());
+				});
 		jassProgramVisitor.getJassNativeManager().createNative("GetLastData",
-				(arguments, globalScope, triggerScope) -> IntegerJassValue.ZERO);
+				(arguments, globalScope, triggerScope) -> {
+					final AiCommand command = this.pendingCommands.peekLast();
+					return IntegerJassValue.of(command == null ? 0 : command.data());
+				});
+	}
+
+	public void pushCommand(final int command, final int data) {
+		this.pendingCommands.addLast(new AiCommand(command, data));
 	}
 
 	public GlobalScope getGlobalScope() {
@@ -1042,35 +1059,37 @@ public class JassAIEnvironment {
 	}
 
 	private void pruneAssaultGroup() {
-		final Iterator<CUnit> it = this.assaultGroup.iterator();
-		while (it.hasNext()) {
-			final CUnit unit = it.next();
-			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
-				it.remove();
-			}
-		}
+		pruneCaptainGroup(this.assaultGroup);
 	}
 
-	private boolean addUnitsToAssault(final int count, final int unitTypeId) {
-		if (count <= 0) {
+	private void pruneCaptainGroup(final List<CUnit> group) {
+		group.removeIf(unit -> unit.isDead() || unit.getPlayerIndex() != this.aiPlayerIndex);
+	}
+
+	private boolean addUnitsToCaptain(final List<CUnit> group, final List<CUnit> otherGroup, final int count,
+			final int unitTypeId) {
+		if (count <= 0 || this.simulation == null) {
 			return false;
 		}
+		pruneCaptainGroup(group);
+		pruneCaptainGroup(otherGroup);
 		final War3ID typeId = unitTypeId == 0 ? null : new War3ID(unitTypeId);
 		int added = 0;
 		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
 			if (added >= count) {
 				break;
 			}
-			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+			if (unit == null || unit.isDead() || unit.isHidden() || unit.isConstructing()
+					|| unit.getPlayerIndex() != this.aiPlayerIndex) {
 				continue;
 			}
 			if ((typeId != null) && (unit.getTypeId().getValue() != typeId.getValue())) {
 				continue;
 			}
-			if (this.assaultGroup.contains(unit)) {
+			if (group.contains(unit) || otherGroup.contains(unit)) {
 				continue;
 			}
-			this.assaultGroup.add(unit);
+			group.add(unit);
 			added++;
 		}
 		return added > 0;
@@ -1083,15 +1102,75 @@ public class JassAIEnvironment {
 		}
 	}
 
-	private void issueAllCombatUnitsAttack(final float x, final float y) {
-		for (final CUnit unit : this.simulation.getUnitsIncludingPending()) {
-			if ((unit == null) || unit.isDead() || (unit.getPlayerIndex() != this.aiPlayerIndex)) {
+	private int assaultHealthPercent() {
+		pruneAssaultGroup();
+		float health = 0;
+		float maximumHealth = 0;
+		for (final CUnit unit : this.assaultGroup) {
+			health += unit.getLife();
+			maximumHealth += unit.getMaximumLife();
+		}
+		return maximumHealth > 0 ? Math.round(100 * health / maximumHealth) : 0;
+	}
+
+	private boolean launchAssault(final CPlayer targetPlayer, final boolean preferBuildings) {
+		if (targetPlayer == null || this.simulation == null) {
+			return false;
+		}
+		pruneAssaultGroup();
+		if (this.assaultGroup.isEmpty()) {
+			return false;
+		}
+		final CUnit leader = this.assaultGroup.get(0);
+		final var targets = Comparator.<CUnit>comparingInt(unit -> preferBuildings && unit.isBuilding() ? 0 : 1)
+				.thenComparingDouble(leader::distanceSquaredNoCollision);
+		final CUnit target = this.simulation.getUnitsIncludingPending().stream()
+				.filter(unit -> unit.getPlayerIndex() == targetPlayer.getId() && !unit.isDead() && !unit.isHidden()
+						&& !unit.isInvulnerable() && (preferBuildings || !unit.isBuilding()))
+				.min(targets).orElse(null);
+		if (target == null) {
+			return false;
+		}
+		this.captainX = target.getX();
+		this.captainY = target.getY();
+		this.captainAtHome = false;
+		issueAssaultPointOrder(this.captainX, this.captainY, OrderIds.attack);
+		return true;
+	}
+
+	private void issueUnitAttackWave(final int count, final int unitTypeId, final int targetPlayer) {
+		if (count <= 0 || this.simulation == null) {
+			return;
+		}
+		final var units = this.simulation.getUnitsIncludingPending();
+		final CPlayer self = this.simulation.getPlayer(this.aiPlayerIndex);
+		CUnit target = targetPlayer < 0 ? getEnemyBase() : null;
+		if (target == null || target.isHidden()) {
+			target = units.stream().filter(unit -> !unit.isDead() && !unit.isHidden()
+					&& unit.getPlayerIndex() != this.aiPlayerIndex
+					&& (targetPlayer < 0 || targetPlayer == unit.getPlayerIndex())
+					&& !self.hasAlliance(unit.getPlayerIndex(), CAllianceType.PASSIVE)).findFirst().orElse(null);
+		}
+		if (target == null) {
+			return;
+		}
+		final float x = target.getX();
+		final float y = target.getY();
+		int sent = 0;
+		for (final CUnit unit : units) {
+			if (unit.isDead() || unit.isHidden() || unit.isBuilding() || unit.getPlayerIndex() != this.aiPlayerIndex
+					|| (unitTypeId != 0 && unit.getTypeId().getValue() != unitTypeId)) {
 				continue;
 			}
-			if (unit.isBuilding()) {
+			if (unit.getCurrentOrder() instanceof COrderTargetPoint point
+					&& point.getOrderId() == OrderIds.attack && point.getTarget(this.simulation).x == x
+					&& point.getTarget(this.simulation).y == y) {
 				continue;
 			}
 			issuePointOrder(unit, x, y, OrderIds.attack);
+			if (++sent == count) {
+				break;
+			}
 		}
 	}
 
@@ -1916,23 +1995,24 @@ public class JassAIEnvironment {
 			+ "constant native GetPlayerStartLocation takes player whichPlayer returns integer\n"
 			+ "constant native IsUnitDetected takes unit whichUnit, player whichPlayer returns boolean\n";
 
-	private static volatile List<JassDefinitionBlock> cachedCommonAiBlocks = null;
-	private static final Object COMMON_AI_LOCK = new Object();
+	private static WeakReference<DataSource> cachedCommonAiSource = new WeakReference<>(null);
+	private static List<JassDefinitionBlock> cachedCommonAiBlocks;
 
 	public static void preloadCommonAi(final DataSource dataSource) {
-		if (cachedCommonAiBlocks == null) {
-			synchronized (COMMON_AI_LOCK) {
-				if (cachedCommonAiBlocks == null) {
-					loadCommonAiBlocks(dataSource);
-				}
-			}
-		}
+		getCommonAiBlocks(dataSource);
 	}
 
-	public static void resetCachedCommonAi() {
-		synchronized (COMMON_AI_LOCK) {
-			cachedCommonAiBlocks = null;
+	private static synchronized List<JassDefinitionBlock> getCommonAiBlocks(final DataSource dataSource) {
+		if (cachedCommonAiSource.get() != dataSource || cachedCommonAiBlocks == null) {
+			cachedCommonAiBlocks = loadCommonAiBlocks(dataSource);
+			cachedCommonAiSource = new WeakReference<>(dataSource);
 		}
+		return cachedCommonAiBlocks;
+	}
+
+	public static synchronized void resetCachedCommonAi() {
+		cachedCommonAiSource.clear();
+		cachedCommonAiBlocks = null;
 	}
 
 	private static List<JassDefinitionBlock> loadCommonAiBlocks(final DataSource dataSource) {
@@ -1964,13 +2044,13 @@ public class JassAIEnvironment {
 				final SmashJassParser extraParser = new SmashJassParser(new StringReader(COMMON_AI_EXTRA_NATIVES));
 				extraParser.scanAndParse("COMMON_AI_EXTRA_NATIVES", collector);
 				Jass2.readJassFile(dataSource, collector, commonPath);
-				cachedCommonAiBlocks = Collections.unmodifiableList(collected);
+				return List.copyOf(collected);
 			}
 			catch (final Exception e) {
 				System.err.println("Failed to cache common.ai: " + e.getMessage());
 			}
 		}
-		return cachedCommonAiBlocks;
+		return null;
 	}
 
 	/**
@@ -1995,9 +2075,9 @@ public class JassAIEnvironment {
 			}
 			catch (final java.io.IOException error) { throw new IllegalStateException(error); }
 		}
-		preloadCommonAi(dataSource);
-		if (cachedCommonAiBlocks != null) {
-			jassProgramVisitor.addAll(cachedCommonAiBlocks);
+		final List<JassDefinitionBlock> commonAiBlocks = getCommonAiBlocks(dataSource);
+		if (commonAiBlocks != null) {
+			jassProgramVisitor.addAll(commonAiBlocks);
 		}
 		else {
 			final String[] preambleFiles = new String[] { "Scripts\\common.j", "Scripts\\common.ai" };

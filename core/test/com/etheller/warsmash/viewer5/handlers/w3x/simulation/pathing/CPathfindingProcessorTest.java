@@ -6,6 +6,8 @@ import java.awt.geom.Point2D;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import com.badlogic.gdx.math.Rectangle;
 import com.etheller.warsmash.parsers.w3x.wpm.War3MapWpm;
 import com.etheller.warsmash.viewer5.handlers.w3x.environment.PathingGrid;
@@ -15,6 +17,56 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWorldCollision;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorMove;
 
 class CPathfindingProcessorTest {
+    @ParameterizedTest
+    @CsvSource({ "24,230", "118,138" })
+    void longDetourCanReachTheOtherSideOfAWall(final int startX, final int goalX) throws Exception {
+        final int size = 256;
+        final War3MapWpm wpm = new War3MapWpm(null);
+        wpm.getSize()[0] = size;
+        wpm.getSize()[1] = size;
+        final short[] cells = new short[size * size];
+        for (int y = 0; y < 235; y++) cells[y * size + 128] = 2;
+        wpm.setPathing(cells);
+        final PathingGrid grid = new PathingGrid(wpm, new float[] { 0, 0 });
+        final CWorldCollision collision = new CWorldCollision(new Rectangle(0, 0, size * 32, size * 32), 64);
+        final CPathfindingProcessor processor = new CPathfindingProcessor(grid, collision);
+        final Point2D.Float goal = new Point2D.Float(grid.getWorldX(goalX), grid.getWorldY(24));
+        final Result result = new Result();
+        processor.findNaiveSlowPath(null, null, grid.getWorldX(startX), grid.getWorldY(24), goal,
+                MovementType.FOOT, 0, false, result);
+        for (int i = 0; i < 80 && result.path == null; i++) processor.update(null);
+        assertNotNull(result.path, "The job should finish within its incremental search budget");
+        assertFalse(result.path.isEmpty(), "The wall has a reachable opening");
+        assertEquals(goal, result.path.get(result.path.size() - 1));
+        assertTrue(result.path.stream().anyMatch(point -> point.y >= grid.getWorldY(235)),
+                "The route should go around the wall through the opening");
+    }
+
+    @Test
+    void ordersOutsideTheMapFinishWithoutBlockingTheNextPath() throws Exception {
+        final int size = 32;
+        final War3MapWpm wpm = new War3MapWpm(null);
+        wpm.getSize()[0] = size;
+        wpm.getSize()[1] = size;
+        wpm.setPathing(new short[size * size]);
+        final PathingGrid grid = new PathingGrid(wpm, new float[] { -64, -32 });
+        final var collision = new CWorldCollision(new Rectangle(-64, -32, size * 32, size * 32), 64);
+        final var processor = new CPathfindingProcessor(grid, collision);
+        final var outsideGoal = new Result();
+        final var outsideStart = new Result();
+        final var inside = new Result();
+        final var goal = new Point2D.Float(128, 96);
+        processor.findNaiveSlowPath(null, null, 0, 0, new Point2D.Float(960, 96),
+                MovementType.FLY, 0, false, outsideGoal);
+        processor.findNaiveSlowPath(null, null, -65, 0, goal, MovementType.FOOT, 8, false, outsideStart);
+        processor.findNaiveSlowPath(null, null, 0, 0, goal, MovementType.FOOT, 8, false, inside);
+        processor.update(null);
+        assertEquals(List.of(), outsideGoal.path);
+        assertEquals(List.of(), outsideStart.path);
+        assertNotNull(inside.path);
+        assertEquals(goal, inside.path.get(inside.path.size() - 1));
+    }
+
     @Test
     void interleavedPlayersProduceTheSamePathsAsIndependentSearches() throws Exception {
         final War3MapWpm wpm = new War3MapWpm(null);

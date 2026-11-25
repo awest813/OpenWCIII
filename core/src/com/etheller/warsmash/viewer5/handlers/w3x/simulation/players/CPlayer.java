@@ -42,6 +42,7 @@ public class CPlayer extends CBasePlayer {
 	private int heroTokens;
 	private int foodCap;
 	private int foodUsed;
+	private final int[] missionScores = new int[CPlayerScore.VALUES.length];
 	private int foodCapCeiling = 101; // TODO should not have a default, I put 101 to make it stand out
 	private final Map<War3ID, Integer> rawcodeToTechtreeUnlocked = new HashMap<>();
 	private final Map<War3ID, Integer> rawcodeToTechtreeInProgress = new HashMap<>();
@@ -182,6 +183,14 @@ public class CPlayer extends CBasePlayer {
 		setLumber(getLumber() + lumber);
 	}
 
+	public void recordMissionScore(final CPlayerScore score, final int amount) {
+		this.missionScores[score.ordinal()] += amount;
+	}
+
+	public int getMissionScore(final CPlayerScore score) {
+		return this.missionScores[score.ordinal()];
+	}
+
 	public void setHeroTokens(final int heroTokens) {
 		this.heroTokens = heroTokens;
 		this.stateNotifier.heroTokensChanged();
@@ -189,6 +198,8 @@ public class CPlayer extends CBasePlayer {
 
 	public void setFoodCap(final int foodCap) {
 		this.foodCap = foodCap;
+		final int score = CPlayerScore.FOOD_MAXPROD.ordinal();
+		this.missionScores[score] = Math.max(this.missionScores[score], foodCap);
 		this.stateNotifier.foodChanged();
 	}
 
@@ -199,6 +210,8 @@ public class CPlayer extends CBasePlayer {
 
 	public void setFoodUsed(final int foodUsed) {
 		this.foodUsed = foodUsed;
+		final int score = CPlayerScore.FOOD_MAXUSED.ordinal();
+		this.missionScores[score] = Math.max(this.missionScores[score], foodUsed);
 		recalculateUpkeep();
 		this.stateNotifier.foodChanged();
 	}
@@ -340,14 +353,11 @@ public class CPlayer extends CBasePlayer {
 	}
 
 	public void setUnitFoodUsed(final CUnit unit, final int foodUsed) {
-		this.foodUsed += unit.setFoodUsed(foodUsed);
-		recalculateUpkeep();
-		this.stateNotifier.foodChanged();
+		setFoodUsed(this.foodUsed + unit.setFoodUsed(foodUsed));
 	}
 
 	public void setUnitFoodMade(final CUnit unit, final int foodMade) {
-		this.foodCap += unit.setFoodMade(foodMade);
-		this.stateNotifier.foodChanged();
+		setFoodCap(this.foodCap + unit.setFoodMade(foodMade));
 	}
 
 	public void onHeroDeath(final CUnit hero) {
@@ -443,6 +453,17 @@ public class CPlayer extends CBasePlayer {
 			for (final CPlayerEvent event : eventList) {
 				event.fire(dyingUnit, CommonTriggerExecutionScope.unitDeathScope(
 						JassGameEventsWar3.EVENT_PLAYER_UNIT_DEATH, event.getTrigger(), dyingUnit, killingUnit, this));
+			}
+		}
+	}
+
+	public void fireUnitSummonEvents(final CUnit summoningUnit, final CUnit summonedUnit) {
+		final JassGameEventsWar3 eventId = JassGameEventsWar3.EVENT_PLAYER_UNIT_SUMMON;
+		final List<CPlayerEvent> eventList = getEventList(eventId);
+		if (eventList != null) {
+			for (final CPlayerEvent event : eventList) {
+				event.fire(summoningUnit, CommonTriggerExecutionScope.unitSummonScope(eventId, event.getTrigger(),
+						summoningUnit, summonedUnit, this));
 			}
 		}
 	}
@@ -546,12 +567,21 @@ public class CPlayer extends CBasePlayer {
 		}
 	}
 
-	public void firePickUpItemEvents(final CUnit unit, final CItem item, final CSimulation game) {
-		final List<CPlayerEvent> eventList = getEventList(JassGameEventsWar3.EVENT_PLAYER_UNIT_PICKUP_ITEM);
+	public void fireItemEvents(final CUnit unit, final CItem item, final JassGameEventsWar3 eventId) {
+		final List<CPlayerEvent> eventList = getEventList(eventId);
 		if (eventList != null) {
 			for (final CPlayerEvent event : eventList) {
-				event.fire(unit, CommonTriggerExecutionScope.unitPickupItemScope(
-						JassGameEventsWar3.EVENT_PLAYER_UNIT_PICKUP_ITEM, event.getTrigger(), unit, item));
+				event.fire(unit, CommonTriggerExecutionScope.unitItemScope(eventId, event.getTrigger(), unit, item));
+			}
+		}
+	}
+
+	public void fireItemSaleEvents(final CUnit seller, final CUnit buyer, final CItem item) {
+		final JassGameEventsWar3 eventId = JassGameEventsWar3.EVENT_PLAYER_UNIT_SELL_ITEM;
+		final List<CPlayerEvent> events = getEventList(eventId);
+		if (events != null) {
+			for (final CPlayerEvent event : events) {
+				event.fire(seller, CommonTriggerExecutionScope.itemSaleScope(eventId, event.getTrigger(), seller, buyer, item, this));
 			}
 		}
 	}
@@ -863,7 +893,7 @@ public class CPlayer extends CBasePlayer {
 			final int setToLevel = previousUnlockCount + levels;
 			setTechToLevel(simulation, techIdRawcodeId, setToLevel);
 		}
-		fireRequirementUpdateForAbilities(simulation, false);
+		fireRequirementUpdateForAbilities(simulation, levels < 0);
 	}
 
 	public void setTechResearched(final CSimulation simulation, final War3ID techIdRawcodeId, final int setToLevel) {
@@ -871,7 +901,7 @@ public class CPlayer extends CBasePlayer {
 		if ((setToLevel > previousUnlockCount) || (setToLevel < previousUnlockCount)) {
 			setTechToLevel(simulation, techIdRawcodeId, setToLevel);
 		}
-		fireRequirementUpdateForAbilities(simulation, false);
+		fireRequirementUpdateForAbilities(simulation, setToLevel < previousUnlockCount);
 	}
 
 	private void setTechToLevel(final CSimulation simulation, final War3ID techIdRawcodeId, final int setToLevel) {

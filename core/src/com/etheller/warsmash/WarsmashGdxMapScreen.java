@@ -92,7 +92,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
     private CGameSave pendingSave;
     private com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionCheckpoint checkpoint;
 	private final int startupProbeSeconds = Integer.getInteger("warsmash.startupProbeSeconds", 0);
-	private float startupProbeElapsed;
+	private long startupProbeStartedAt;
 	private int startupProbeReport;
 
 	public WarsmashGdxMapScreen(final War3MapViewer mapViewer, final WarsmashGdxMultiScreenGame screenManager,
@@ -239,9 +239,9 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		catch (final IOException e) {
 			throw new RuntimeException(e);
 		}
-        if (this.menuScreen != null && this.menuScreen.getMenuUI() != null) {
-            this.pendingSaveFile = this.menuScreen.getMenuUI().consumePendingSaveFile();
-        }
+        final var pendingLoad = this.menuScreen == null || this.menuScreen.getMenuUI() == null ? null
+                : this.menuScreen.getMenuUI().consumePendingSave();
+        this.pendingSaveFile = pendingLoad == null ? null : pendingLoad.file();
         this.pendingSave = this.pendingSaveFile == null ? null : CGameSave.tryLoad(this.pendingSaveFile);
         if (this.pendingSaveFile != null && (this.pendingSave == null || this.pendingSave.checkpoint == null)) {
             failSaveLoad("No complete mission checkpoint in " + this.pendingSaveFile);
@@ -251,6 +251,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
             this.viewer.simulation, this.pendingSave == null ? null : this.pendingSave.checkpoint);
         this.checkpoint.bind(this.viewer, baseMeleeUI);
         this.checkpoint.setLastSaveFile(this.pendingSaveFile);
+        this.checkpoint.setScriptedReload(pendingLoad != null && pendingLoad.scriptedReload());
         this.checkpoint.setSinglePlayer(this.uiOrderListener instanceof com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListenerDelaying);
         this.checkpoint.setBeforeSave(() -> {
             if (this.uiOrderListener instanceof com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderListenerDelaying)
@@ -261,10 +262,10 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
             this.checkpoint.getLog().difficulty = this.viewer.getMapConfig().getGameDifficulty().ordinal();
             this.checkpoint.getLog().defaultDifficulty = this.viewer.getMapConfig().getDefaultGameDifficulty().ordinal();
         }
-        this.checkpoint.setLoadHandler(file -> Gdx.app.postRunnable(() -> {
+        this.checkpoint.setLoadHandler((file, scriptedReload) -> Gdx.app.postRunnable(() -> {
             this.menuScreen.onReturnFromGame();
             this.screenManager.setScreen(this.menuScreen);
-            this.menuScreen.getMenuUI().requestLoadSave(file);
+            this.menuScreen.getMenuUI().requestLoadSave(file, scriptedReload);
         }));
         try {
             this.checkpoint.verifyScripts(this.viewer.mapMpq, WarsmashConstants.JASS_FILE_LIST);
@@ -369,6 +370,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 		Gdx.gl30.glBindVertexArray(WarsmashGdxGame.VAO);
 		this.meleeUI.update(deltaTime);
 		this.viewer.updateAndRender();
+		this.commonEnv.updateMapSounds();
 		applyPendingSave();
         com.etheller.warsmash.viewer5.handlers.w3x.ui.MissionResumeProbe.afterMapRender(this.viewer, this.baseMeleeUI, this.commonEnv);
         if (this.checkpoint.getFailure() != null) { failSaveLoad(this.checkpoint.getFailure()); return; }
@@ -380,13 +382,47 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
 		com.etheller.warsmash.viewer5.handlers.w3x.ui.HumanCampaignPlaythroughProbe.afterMapRender(
 				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.UndeadOpeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.NightElfEscapePlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.NightElfAwakeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.NightElfBarrowOpeningProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.NightElfOpeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcOpeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcMarchPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcSettlementPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcLumberPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcWyvernPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcOraclePlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.OrcFinalePlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.FrozenThroneOpeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.HumanExpansionOpeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
+		com.etheller.warsmash.viewer5.handlers.w3x.ui.RexxarOpeningPlaythroughProbe.afterMapRender(
+				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
 		com.etheller.warsmash.viewer5.handlers.w3x.ui.OutcomeMenuProbe.afterMapRender(
 				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
 		com.etheller.warsmash.viewer5.handlers.w3x.ui.CampaignPersistenceProbe.afterMapRender(
 				this.viewer, this.baseMeleeUI, this.commonEnv.isInitializationComplete());
 		if (this.startupProbeSeconds > 0) {
-			this.startupProbeElapsed += delta;
-			if (this.startupProbeElapsed >= this.startupProbeReport) {
+			final long now = System.nanoTime();
+			if (this.startupProbeStartedAt == 0) {
+				this.startupProbeStartedAt = now;
+			}
+			final double elapsedSeconds = (now - this.startupProbeStartedAt) / 1_000_000_000.0;
+			if (elapsedSeconds >= this.startupProbeReport) {
 				this.startupProbeReport += 5;
 				if (Boolean.getBoolean("warsmash.graphicsProbe")) {
 					final com.etheller.warsmash.viewer5.handlers.w3x.ui.OptionsSettingsStore graphics =
@@ -426,7 +462,7 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 					}
 				}
 			}
-			if (this.startupProbeElapsed >= this.startupProbeSeconds) {
+			if (elapsedSeconds >= this.startupProbeSeconds) {
 				System.out.println("[StartupProbe] complete");
 				Gdx.app.exit();
 			}
@@ -469,6 +505,9 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public void dispose() {
+		if (this.commonEnv != null) {
+			this.commonEnv.stopMapSounds();
+		}
 		this.meleeUI.dispose();
 		this.batch.dispose();
 		this.viewer.getGameUI().dispose();
@@ -511,7 +550,8 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public boolean keyTyped(final char character) {
-		return false;
+		if (this.checkpoint != null && this.checkpoint.isRestoring()) return true;
+		return this.meleeUI.keyTyped(character);
 	}
 
 	@Override
@@ -679,6 +719,9 @@ public class WarsmashGdxMapScreen implements InputProcessor, Screen {
 
 	@Override
 	public void hide() {
+		if (this.commonEnv != null) {
+			this.commonEnv.stopMapSounds();
+		}
 		this.meleeUI.gameClosed();
 	}
 }

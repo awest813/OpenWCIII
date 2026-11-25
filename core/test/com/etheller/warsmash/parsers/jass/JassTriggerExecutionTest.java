@@ -6,10 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.StringReader;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
 import com.etheller.interpreter.ast.execution.JassThread;
+import com.etheller.interpreter.ast.scope.GlobalScope;
 import com.etheller.interpreter.ast.scope.TriggerExecutionScope;
 import com.etheller.interpreter.ast.scope.trigger.Trigger;
 import com.etheller.interpreter.ast.util.JassProgram;
@@ -19,6 +21,27 @@ import com.etheller.interpreter.ast.value.visitor.IntegerJassValueVisitor;
 import net.warsmash.parsers.jass.SmashJassParser;
 
 class JassTriggerExecutionTest {
+	@Test
+	void disabledTriggerStillAllowsExplicitEvaluationAndExecution() {
+		final var globals = new GlobalScope();
+		final var trigger = new Trigger();
+		final var scope = trigger.getTriggerExecutionScope();
+		final var calls = new AtomicInteger();
+		trigger.addCondition((g, s) -> true);
+		trigger.addAction((args, g, s) -> {
+			calls.incrementAndGet();
+			return null;
+		});
+		trigger.setEnabled(false);
+
+		globals.queueTrigger(null, scope, trigger, scope, scope, true);
+		assertEquals(0, calls.get());
+		assertTrue(trigger.evaluateConditions(globals, scope));
+		trigger.executeImmediately(globals, scope);
+		assertEquals(1, calls.get());
+		assertFalse(trigger.isEnabled());
+	}
+
 	@Test
 	void nestedInitializationCompletesBeforeOpeningReadsHeroState() throws Exception {
 		final var program = new JassProgram();

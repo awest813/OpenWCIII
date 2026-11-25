@@ -43,7 +43,7 @@ public class CAbilityCargoHold extends AbstractGenericNoIconAbility {
 
 	@Override
 	public void onRemove(final CSimulation game, final CUnit unit) {
-		unloadAllInstant(game, unit);
+		releaseRemainingPassengers(game, unit, false);
 	}
 
 	@Override
@@ -68,12 +68,28 @@ public class CAbilityCargoHold extends AbstractGenericNoIconAbility {
 		return caster.pollNextOrderBehavior(game);
 	}
 
-	public void dropUnitByIndex(final CSimulation game, final CUnit caster, final int targetIndex) {
+	public boolean dropUnitByIndex(final CSimulation game, final CUnit caster, final int targetIndex) {
+		return dropUnitByIndex(game, caster, targetIndex, null);
+	}
+
+	public boolean dropUnitByIndex(final CSimulation game, final CUnit caster, final int targetIndex,
+			final AbilityPointTarget destination) {
+		final CUnit passenger = getUnit(targetIndex);
+		final var landing = destination == null ? null : passenger.findUnstuckPoint(destination.getX(), destination.getY(), game);
+		// Prefer the selected shore and allow nearby space for the other passengers.
+		final var point = landing != null && landing.dst2(destination.getX(), destination.getY()) <= 96 * 96
+				? landing : passenger.findUnstuckPoint(caster.getX(), caster.getY(), game);
+		if (point == null) return false;
+		removeUnitAtIndex(caster, targetIndex);
 		game.unitSoundEffectEvent(caster, getAlias());
-		final CUnit firstUnit = removeUnitAtIndex(caster, targetIndex);
-		firstUnit.setPointAndCheckUnstuck(caster.getX(), caster.getY(), game);
-		firstUnit.setHidden(false);
-		firstUnit.setPaused(false);
+		releasePassenger(game, passenger, point.x, point.y);
+		return true;
+	}
+
+	private static void releasePassenger(final CSimulation game, final CUnit passenger, final float x, final float y) {
+		passenger.relocate(x, y, game);
+		passenger.setHidden(false);
+		passenger.setPaused(false);
 	}
 
 	@Override
@@ -127,7 +143,21 @@ public class CAbilityCargoHold extends AbstractGenericNoIconAbility {
 
 	@Override
 	public void onDeath(final CSimulation game, final CUnit unit) {
-		unloadAllInstant(game, unit);
+		releaseRemainingPassengers(game, unit, true);
+	}
+
+	private void releaseRemainingPassengers(final CSimulation game, final CUnit unit, final boolean killWithoutLanding) {
+		final CAbilityCargoHoldDeath crash = killWithoutLanding ? unit.getFirstAbilityOfType(CAbilityCargoHoldDeath.class) : null;
+		while (!isEmpty()) {
+			final int index = getCargoCount() - 1;
+			final CUnit passenger = getUnit(index);
+			if (!dropUnitByIndex(game, unit, index)) {
+				removeUnitAtIndex(unit, index);
+				releasePassenger(game, passenger, unit.getX(), unit.getY());
+				if (killWithoutLanding) passenger.kill(game);
+			}
+			else if (crash != null) crash.onPassengerReleased(game, unit, passenger);
+		}
 	}
 
 	public int getCargoCapacity() {
@@ -151,11 +181,20 @@ public class CAbilityCargoHold extends AbstractGenericNoIconAbility {
 	}
 
 	public void addUnit(final CUnit cargoHoldUnit, final CUnit target) {
+		if (target.getTransport() != null) return;
 		this.cargoUnits.add(target);
+		target.setTransport(cargoHoldUnit);
 	}
 
 	public CUnit removeUnitAtIndex(final CUnit cargoHoldUnit, final int index) {
-		return this.cargoUnits.remove(index);
+		final CUnit passenger = this.cargoUnits.remove(index);
+		if (passenger.getTransport() == cargoHoldUnit) passenger.setTransport(null);
+		return passenger;
+	}
+
+	public void removePassenger(final CSimulation game, final CUnit carrier, final CUnit passenger) {
+		final int index = this.cargoUnits.indexOf(passenger);
+		if (index >= 0) removeUnitAtIndex(carrier, index);
 	}
 
 	public boolean isEmpty() {
@@ -179,22 +218,18 @@ public class CAbilityCargoHold extends AbstractGenericNoIconAbility {
 	}
 
 	public boolean hasCapacity(final int cargoCapacityOfNewUnit) {
-		if (cargoCapacityOfNewUnit == 0) {
-			return false;
+		if (cargoCapacityOfNewUnit <= 0 || cargoCapacityOfNewUnit > this.cargoCapacity) return false;
+		int freeSlots = this.cargoCapacity - cargoCapacityOfNewUnit;
+		for (final CUnit passenger : this.cargoUnits) {
+			freeSlots -= passenger.getUnitType().getCargoCapacity();
+			if (freeSlots < 0) return false;
 		}
-		return (cargoUnits.size() + cargoCapacityOfNewUnit) <= cargoCapacity;
+		return true;
 	}
 
 	public void unloadAllInstant(final CSimulation game, final CUnit caster) {
-		if (!isEmpty()) {
-			game.unitSoundEffectEvent(caster, getAlias());
-			final int cargoCount = getCargoCount();
-			for (int i = 0; i < cargoCount; i++) {
-				final CUnit droppedUnit = removeUnitAtIndex(caster, cargoCount - i - 1);
-				droppedUnit.setPointAndCheckUnstuck(caster.getX(), caster.getY(), game);
-				droppedUnit.setHidden(false);
-				droppedUnit.setPaused(false);
-			}
+		for (int index = getCargoCount() - 1; index >= 0; index = Math.min(index - 1, getCargoCount() - 1)) {
+			dropUnitByIndex(game, caster, index);
 		}
 	}
 }

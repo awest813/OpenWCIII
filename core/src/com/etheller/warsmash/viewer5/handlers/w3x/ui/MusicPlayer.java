@@ -9,6 +9,10 @@ public interface MusicPlayer {
 
 	public void stopMusic();
 
+	default void stopMusic(final boolean fadeOut) {
+		stopMusic();
+	}
+
 	public Music setDefaultMusic(String musicField, boolean random, int index);
 
 	public Music playDefaultMusic();

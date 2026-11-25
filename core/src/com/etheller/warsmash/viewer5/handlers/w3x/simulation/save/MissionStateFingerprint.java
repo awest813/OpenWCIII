@@ -140,7 +140,10 @@ public final class MissionStateFingerprint {
 				if (name.equals("com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWorldCollision") && !field.getName().endsWith("Collision") && !field.getName().endsWith("ForEnum") && !field.getName().equals("maxCollisionRadius")) continue;
 				if (name.contains("simulation.pathing.CPathfindingProcessor") && Set.of("nodes", "cornerNodes", "searchGraph", "worldCollision", "pathingGrid").contains(field.getName())) continue;
 				if (name.contains("environment.PathingGrid") && !Set.of("pathingGrid", "dynamicPathingOverlay", "pathingGridSizes", "centerOffset").contains(field.getName())) continue;
-				if (value instanceof com.etheller.warsmash.parsers.jass.JassAIEnvironment && !Set.of("aiPlayerIndex", "captainHomeX", "captainHomeY", "captainX", "captainY", "captainAtHome", "assaultGroup", "nextExpansionX", "nextExpansionY", "guardPosts").contains(field.getName())) continue;
+				if (value instanceof com.etheller.warsmash.parsers.jass.JassAIEnvironment
+						&& !Set.of("aiPlayerIndex", "captainHomeX", "captainHomeY", "captainX", "captainY", "captainAtHome",
+								"assaultGroup", "defenseGroup", "requestedAssaultSize", "nextExpansionX", "nextExpansionY",
+								"guardPosts", "pendingCommands").contains(field.getName())) continue;
 				if (Modifier.isStatic(field.getModifiers()) || Modifier.isTransient(field.getModifiers())) continue;
 				if (value instanceof CSimulation && !SIMULATION_FIELDS.contains(field.getName())) continue;
 				if (value instanceof GlobalScope && !GLOBAL_FIELDS.contains(field.getName())) continue;

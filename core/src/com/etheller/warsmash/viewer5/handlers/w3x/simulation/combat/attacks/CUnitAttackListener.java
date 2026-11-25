@@ -5,6 +5,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting
 public interface CUnitAttackListener {
 	void onLaunch();
 
+	default void onBeforeDamage(final AbilityTarget target) {
+	}
+
 	void onHit(AbilityTarget target, float damage);
 
 	CUnitAttackListener DO_NOTHING = new CUnitAttackListener() {

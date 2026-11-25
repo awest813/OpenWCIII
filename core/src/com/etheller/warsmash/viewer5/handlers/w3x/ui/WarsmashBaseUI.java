@@ -18,6 +18,10 @@ public interface WarsmashBaseUI {
 
 	boolean keyUp(int keycode);
 
+	default boolean keyTyped(final char character) {
+		return false;
+	}
+
 	boolean touchDown(int screenX, int screenY, float worldScreenY, int button);
 
 	boolean touchUp(int screenX, int screenY, float worldScreenY, int button);

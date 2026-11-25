@@ -97,6 +97,17 @@ public abstract class CWidget extends CExtensibleHandleAbstract implements Abili
 				BooleanAbilityTargetCheckReceiver.<CWidget>getInstance().reset());
 	}
 
+	public boolean canBeAttackedBy(final CSimulation simulation, final CUnit source,
+			final EnumSet<CTargetType> targetsAllowed) {
+		return canBeAttackedBy(simulation, source, true, targetsAllowed,
+				BooleanAbilityTargetCheckReceiver.<CWidget>getInstance().reset());
+	}
+
+	public boolean canBeAttackedBy(final CSimulation simulation, final CUnit source, final boolean targeted,
+			final EnumSet<CTargetType> targetsAllowed, final AbilityTargetCheckReceiver<CWidget> receiver) {
+		return canBeTargetedBy(simulation, source, targetsAllowed, receiver);
+	}
+
 	public double distanceSquaredNoCollision(final AbilityTarget target) {
 		return distanceSquaredNoCollision(target.getX(), target.getY());
 	}

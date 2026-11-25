@@ -17,9 +17,15 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityActivat
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.AbilityTargetCheckReceiver;
 
 public class CAbilityBuildInProgress extends AbstractCAbility {
+	private final boolean refundConstruction;
 
 	public CAbilityBuildInProgress(final int handleId) {
+		this(handleId, true);
+	}
+
+	public CAbilityBuildInProgress(final int handleId, final boolean refundConstruction) {
 		super(handleId, War3ID.fromString("ABnP"));
+		this.refundConstruction = refundConstruction;
 	}
 
 	@Override
@@ -57,7 +63,7 @@ public class CAbilityBuildInProgress extends AbstractCAbility {
 			player.removeTechtreeInProgress(caster.getUpgradeIdType());
 			caster.cancelUpgrade(game);
 		}
-		else {
+		else if (this.refundConstruction) {
 			final CUnitType unitType = caster.getUnitType();
 			player.refundFor(unitType);
 			player.removeTechtreeInProgress(unitType.getTypeId());

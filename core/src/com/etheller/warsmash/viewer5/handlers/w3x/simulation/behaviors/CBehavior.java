@@ -18,6 +18,10 @@ public interface CBehavior {
 	int getHighlightOrderId();
 	
 	boolean interruptable();
+
+	default boolean acceptsOrders() {
+		return true;
+	}
 	
 	CBehaviorCategory getBehaviorCategory();
 

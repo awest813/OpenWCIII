@@ -221,7 +221,8 @@ public class MenuUI {
 	private CMapDifficulty campaignDifficulty = CMapDifficulty.NORMAL;
 	private boolean resolutionChanged;
 	/** When set, the next map screen applies this save file after its scripts boot. */
-	private File pendingSaveFile;
+	public record PendingSave(File file, boolean scriptedReload) { }
+	private PendingSave pendingSave;
 
 	// Main-menu Load Saved screen (retail LoadSavedGameScreen.fdf when present)
 	private UIFrame loadSavedScreen;
@@ -2110,7 +2111,7 @@ public class MenuUI {
 	private boolean startMap(final String mapFilename,
 			final CampaignMapTransition transition) {
 		if (!tryLoadAndCacheMapConfigs(mapFilename, transition)) {
-			this.pendingSaveFile = null;
+			this.pendingSave = null;
 			this.beginGameInformation = null;
 			return false;
 		}
@@ -2298,6 +2299,10 @@ public class MenuUI {
 	}
 
     public boolean requestLoadSave(final File saveFile) {
+        return requestLoadSave(saveFile, false);
+    }
+
+    public boolean requestLoadSave(final File saveFile, final boolean scriptedReload) {
         final CGameSave save = CGameSave.tryLoad(saveFile);
         if (save == null || save.checkpoint == null || save.savedMapPath.isEmpty()) {
             this.dialog.showError("This save has no complete mission checkpoint.", null);
@@ -2310,19 +2315,19 @@ public class MenuUI {
         this.currentMapConfig.setGameDifficulty(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty.values()[save.checkpoint.difficulty]);
         this.currentMapConfig.setDefaultGameDifficulty(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.CMapDifficulty.values()[save.checkpoint.defaultDifficulty]);
         this.beginGameInformation.localPlayerIndex = save.checkpoint.localPlayer;
-        this.pendingSaveFile = saveFile;
+        this.pendingSave = new PendingSave(saveFile, scriptedReload);
         return true;
     }
     public void reportSaveLoadError(final String error) { this.dialog.showError(error, null); }
 
 	public void setPendingSaveFile(final File saveFile) {
-		this.pendingSaveFile = saveFile;
+		this.pendingSave = saveFile == null ? null : new PendingSave(saveFile, false);
 	}
 
-	public File consumePendingSaveFile() {
-		final File saveFile = this.pendingSaveFile;
-		this.pendingSaveFile = null;
-		return saveFile;
+	public PendingSave consumePendingSave() {
+		final PendingSave save = this.pendingSave;
+		this.pendingSave = null;
+		return save;
 	}
 
 	private boolean hasCampaignMap(final String path) {
@@ -2661,6 +2666,7 @@ public class MenuUI {
 											executor);
 									uiOrderListener = delayingListener;
 									warsmashClient = null;
+									mapViewer.setLocalGameSpeed(OptionsSettingsStore.get().getGameSpeed());
 									mapViewer.setGameTurnManager(new GameTurnManager() {
 										@Override
 										public void turnCompleted(final int gameTurnTick) {

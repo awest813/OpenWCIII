@@ -10,17 +10,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import com.etheller.warsmash.datasources.CompoundDataSource;
 import com.etheller.warsmash.datasources.DataSource;
+import com.etheller.warsmash.datasources.FolderDataSource;
 import com.etheller.warsmash.datasources.MpqDataSource;
 import com.etheller.warsmash.parsers.jass.JassAIEnvironment;
 import com.etheller.warsmash.parsers.w3x.War3Map;
@@ -47,6 +51,28 @@ class CampaignLoadingTest {
 			assertNotNull(map);
 		}
 		assertFalse(closed.get(), "Returning from a chapter must retain shared game assets");
+	}
+
+	@Test
+	void preloadedMapResourcesAreReusableAndFollowSourceChanges(@TempDir final Path dir) throws IOException {
+		final Path shared = Files.createDirectory(dir.resolve("shared"));
+		final Path chapter = Files.createDirectory(dir.resolve("chapter"));
+		final String sound = "dialogue.mp3";
+		Files.write(shared.resolve(sound), new byte[] { 1 });
+		Files.write(chapter.resolve(sound), new byte[] { 2 });
+		final DataSource sharedSource = new FolderDataSource(shared);
+		try (War3Map map = new War3Map(sharedSource, chapter.toFile())) {
+			map.preloadResource(sound);
+			Files.write(chapter.resolve(sound), new byte[] { 3 });
+			try (InputStream first = map.getResourceAsStream(sound); InputStream second = map.getResourceAsStream(sound)) {
+				assertEquals(2, first.read());
+				assertEquals(2, second.read());
+			}
+			map.setDataSource(sharedSource);
+			try (InputStream replacement = map.getResourceAsStream(sound)) {
+				assertEquals(1, replacement.read());
+			}
+		}
 	}
 
 	@Test

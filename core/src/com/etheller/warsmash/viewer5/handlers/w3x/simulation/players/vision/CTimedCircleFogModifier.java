@@ -8,6 +8,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.enumtypes.C
 
 public class CTimedCircleFogModifier extends CFogModifier {
 	private final CFogState state;
+	private final byte detections;
 	private boolean enabled = true;
 	private float myX;
 	private float myY;
@@ -16,7 +17,13 @@ public class CTimedCircleFogModifier extends CFogModifier {
 	private int endTurnTick;
 
 	public CTimedCircleFogModifier(final CFogState fogState, final float radius, final float x, final float y, final float duration) {
+		this(fogState, radius, x, y, duration, (byte) 0);
+	}
+
+	public CTimedCircleFogModifier(final CFogState fogState, final float radius, final float x, final float y,
+			final float duration, final byte detections) {
 		this.state = fogState;
+		this.detections = detections;
 		this.radius = radius;
 		this.myX = x;
 		this.myY = y;
@@ -35,30 +42,12 @@ public class CTimedCircleFogModifier extends CFogModifier {
 
 	@Override
 	public void update(final CSimulation game, final CPlayer player, final PathingGrid pathingGrid, final CPlayerFogOfWar fogOfWar) {
-		if (!this.enabled || this.radius <= 0) {
-			return;
-		}
 		if (game.getGameTurnTick() > endTurnTick) {
 			player.removeFogModifer(game, this);
 			return;
 		}
-		final float radSq = this.radius * this.radius;
-		fogOfWar.setVisible(pathingGrid.getFogOfWarIndexX(this.myX), pathingGrid.getFogOfWarIndexY(this.myY), state);
-
-		for (int y = 0; y <= (int) Math.floor(this.radius); y += 128) {
-			for (int x = 0; x <= (int) Math.floor(this.radius); x += 128) {
-				float distance = x * x + y * y;
-				if (distance <= radSq) {
-					fogOfWar.setVisible(pathingGrid.getFogOfWarIndexX(myX - x),
-							pathingGrid.getFogOfWarIndexY(myY - y), state);
-					fogOfWar.setVisible(pathingGrid.getFogOfWarIndexX(myX - x),
-							pathingGrid.getFogOfWarIndexY(myY + y), state);
-					fogOfWar.setVisible(pathingGrid.getFogOfWarIndexX(myX + x),
-							pathingGrid.getFogOfWarIndexY(myY - y), state);
-					fogOfWar.setVisible(pathingGrid.getFogOfWarIndexX(myX + x),
-							pathingGrid.getFogOfWarIndexY(myY + y), state);
-				}
-			}
+		if (this.enabled && this.radius > 0) {
+			fogOfWar.setFogStateRadius(pathingGrid, this.myX, this.myY, this.radius, this.state, this.detections);
 		}
 	}
 }

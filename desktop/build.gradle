@@ -70,8 +70,10 @@ task graphicsSettingsMapAudit(dependsOn: classes, type: JavaExec) {
     mainClass = project.mainClassName
     classpath = sourceSets.main.runtimeClasspath
     workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(3)
     def auditHome = file("$buildDir/graphics-audit-home")
     def quality = project.findProperty('graphicsQuality') ?: '0'
+    def map = project.findProperty('graphicsAuditMap') ?: 'Maps\\Campaign\\Human01.w3m'
     def auditOutput = new ByteArrayOutputStream()
     standardOutput = auditOutput
     errorOutput = auditOutput
@@ -80,7 +82,7 @@ task graphicsSettingsMapAudit(dependsOn: classes, type: JavaExec) {
     systemProperty 'warsmash.startupProbeSeconds', '8'
     systemProperty 'warsmash.graphicsProbe', 'true'
     args '--profile=safe', '--width=960', '--height=540', '--fps=30', '--msaa=0', '--novsync',
-            '-nolog', '-loadfile', 'Maps\\Campaign\\Human01.w3m'
+            '-nolog', '-loadfile', map
     doFirst {
         def optionsFile = new File(auditHome, '.warsmash/options.properties')
         optionsFile.parentFile.mkdirs()
@@ -95,6 +97,7 @@ task graphicsSettingsMapAudit(dependsOn: classes, type: JavaExec) {
         // The bundled LWJGL backend exits -1 even after normal shutdown. Require
         // the render-thread completion marker, rather than masking exit codes alone.
         if (!output.contains('[StartupProbe] complete') || output.contains('GL ERROR:') ||
+                output.contains('JassException') || !output.contains('initialized=true') ||
                 !output.contains('[GraphicsProbe] quality=2') ||
                 !output.contains('Display: windowed 960x540') || !output.contains('VSync: disabled') ||
                 !output.contains('FPS cap: fg=30, bg=30') || !output.contains('MSAA samples: 0')) {
@@ -278,13 +281,15 @@ task campaignPlaythroughAudit(dependsOn: classes, type: JavaExec) {
     }
 }
 
-def verifyHuman02PlaythroughReport = { File report, File auditHome, boolean chain ->
+def verifyHuman02PlaythroughReport = { File report, File auditHome, boolean chain, boolean resumed = false ->
     def output = report.getText('UTF-8')
+    def captures = resumed ? ['interlude', 'human03'] : ['base-objectives', 'interlude', 'human03']
     if (!output.contains('[Human02PlaythroughProbe] complete:') || output.contains('GL ERROR:') || output.contains('JassException')
-            || !['base-objectives', 'interlude', 'human03'].every { capture ->
+            || !captures.every { capture ->
                 output.contains("[Human02PlaythroughProbe] captured $capture")
                         && new File(auditHome, "human02/${capture}.png").length() > 0
             }
+            || (resumed && !output.contains('[Human02PlaythroughProbe] Searinox checkpoint restored'))
             || (chain && !output.contains('[CampaignPlaythroughProbe] complete:'))) {
         throw new GradleException("Human02 playthrough failed; see $report")
     }
@@ -293,6 +298,11 @@ def verifyHuman02PlaythroughReport = { File report, File auditHome, boolean chai
     new File(auditHome, 'human02/human02-victory.properties').withInputStream { victory.load(it) }
     new File(auditHome, 'human02/human03.properties').withInputStream { restored.load(it) }
     if (victory != restored) throw new GradleException("Human03 hero evidence differs; see $auditHome")
+    if (resumed) {
+        def uninterrupted = new Properties()
+        new File(auditHome, 'human02/outcome.properties').withInputStream { uninterrupted.load(it) }
+        if (uninterrupted != victory) throw new GradleException("Resumed hero evidence differs; see $auditHome")
+    }
 }
 
 task human02PlaythroughReportAudit {
@@ -300,7 +310,9 @@ task human02PlaythroughReportAudit {
     doLast {
         def report = file(project.property('human02AuditReport'))
         def auditHome = file(project.property('human02AuditHome'))
-        verifyHuman02PlaythroughReport(report, auditHome, (project.findProperty('campaignHuman02Chain') ?: 'false').toString() == 'true')
+        verifyHuman02PlaythroughReport(report, auditHome,
+            (project.findProperty('campaignHuman02Chain') ?: 'false').toString() == 'true',
+            project.findProperty('human02AuditPhase') == 'read')
         println "PASS: retained Human02 playthrough evidence; report: $report; home: $auditHome"
     }
 }
@@ -380,7 +392,7 @@ def human02ResumeProfile = 'p-' + java.security.MessageDigest.getInstance('SHA-2
         }
         doLast {
             standardOutput.close()
-            verifyHuman02PlaythroughReport(report,human02ResumeHome,false)
+            verifyHuman02PlaythroughReport(report, human02ResumeHome, false, phase == 'read')
             def output = report.getText('UTF-8')
             if (!output.contains('[Human02PlaythroughProbe] Searinox heart returned; Orb of Fire earned')
                     || !output.contains(phase == 'write' ? '[Human02PlaythroughProbe] actual Searinox Quick Save' : '[Human02PlaythroughProbe] Searinox checkpoint restored'))
@@ -398,10 +410,13 @@ task humanCampaignPlaythroughAudit(dependsOn: classes, type: JavaExec) {
     timeout = java.time.Duration.ofHours(4)
     def start = (project.findProperty('humanCampaignStart') ?: 'Human03').toString()
     def stop = (project.findProperty('humanCampaignStop') ?: 'Human04').toString()
+    def earnedCache = project.findProperty('humanCampaignCache')
     def auditHome = file("$buildDir/human-campaign-home-${System.currentTimeMillis()}")
     systemProperty 'user.home', auditHome.absolutePath
     systemProperty 'warsmash.humanCampaignAudit', 'true'
+    systemProperty 'warsmash.humanCampaignAuditTicksPerFrame', (project.findProperty('humanCampaignTicksPerFrame') ?: '0').toString()
     systemProperty 'warsmash.humanCampaignStop', stop
+    systemProperty 'warsmash.humanCampaignRequireCaravan', (project.findProperty('humanCampaignRequireCaravan') ?: 'true').toString()
     systemProperty 'warsmash.human02PlaythroughAudit', (start == 'Human01' || start == 'Human02').toString()
     systemProperty 'warsmash.campaignPlaythroughAudit', (start == 'Human01').toString()
     systemProperty 'warsmash.campaignPlaythroughFull', 'true'
@@ -410,6 +425,16 @@ task humanCampaignPlaythroughAudit(dependsOn: classes, type: JavaExec) {
     ignoreExitValue = true
     doFirst {
         freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory())
+                throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+            println "Seeded the isolated audit with the earned campaign cache from $cacheDirectory"
+        }
         def options = new File(auditHome, '.warsmash/options.properties'); options.parentFile.mkdirs()
         options.text = 'musicEnabled=false\nsoundEnabled=false\n'
         standardOutput = new FileOutputStream(report); errorOutput = standardOutput
@@ -424,6 +449,907 @@ task humanCampaignPlaythroughAudit(dependsOn: classes, type: JavaExec) {
         if (stop.equalsIgnoreCase('Complete') && !output.contains('[HumanCampaignProbe] final native Human campaign victory; Undead campaign unlocked'))
             throw new GradleException("Missing final Human campaign victory/unlock; see $report")
         println "PASS: retail Human campaign $start to $stop; report: $report; home: $auditHome"
+    }
+}
+
+task undeadOpeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the installed Undead opening and checks the native victory and Arthas carryover.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(30)
+    def auditHome = file("$buildDir/undead-opening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/undead-opening.log")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.undeadOpeningAudit', 'true'
+    systemProperty 'warsmash.undeadOpeningAuditTicksPerFrame', (project.findProperty('undeadOpeningAuditTicksPerFrame') ?: '0').toString()
+    systemProperty 'warsmash.undeadOpeningSkipIntro', (project.findProperty('undeadOpeningSkipIntro') ?: 'false').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Undead01.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[UndeadOpeningProbe] native acolyte rescue and optional graveyard completed')
+                || !output.contains('[UndeadOpeningProbe] entered Undead02; Arthas carryover verified')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Undead opening audit:'))
+            throw new GradleException("Undead opening playthrough failed; see $report")
+        println "PASS: Undead01 objectives and Undead02 carryover; report: $report; home: $auditHome"
+    }
+}
+
+task nightElfOpeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the original Night Elf base tutorial and verifies Tyrande entering NightElf02.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    def campaignChain = (project.findProperty('nightElfCampaignChain') ?: 'false').toString().toBoolean()
+    timeout = java.time.Duration.ofMinutes(campaignChain ? 60 : 20)
+    def auditHome = file("$buildDir/night-elf-opening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/night-elf-opening.log")
+    def furbolgAudit = (project.findProperty('nightElfFurbolgAudit') ?: 'false').toString().toBoolean()
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.nightElfOpeningAudit', 'true'
+    systemProperty 'warsmash.nightElfFurbolgAudit', furbolgAudit.toString()
+    if (campaignChain) {
+        ['nightElfCampaignChain', 'nightElfEscapeAudit', 'nightElfAwakeningAudit', 'nightElfBarrowOpeningAudit',
+                'nightElfBarrowPlaythrough', 'nightElfDungeonOpening', 'nightElfDungeonBridge', 'nightElfDungeonBears',
+                'nightElfDungeonFurion', 'nightElfDungeonPlates', 'nightElfDungeonWaygate', 'nightElfDungeonPlaythrough',
+                'nightElfSkullQuest', 'nightElfDefeatTichondrius', 'nightElfFinaleOpening', 'nightElfFinaleVictory'].each {
+            systemProperty "warsmash.$it", 'true'
+        }
+    }
+    systemProperty 'warsmash.nightElfOpeningAuditTicksPerFrame', (project.findProperty('nightElfOpeningAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\NightElf01.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[NightElfOpeningProbe] native mine, Ancient of War, Moon Well and Archer objectives completed')
+                || (furbolgAudit && !output.contains('[NightElfOpeningProbe] completed the original Furbolg quest and received reinforcements'))
+                || !output.contains('[NightElfOpeningProbe] defeated the original Paladin')
+                || !output.contains('[NightElfOpeningProbe] entered NightElf02; Tyrande carryover verified')
+                || campaignChain && [
+                        '[NightElfEscapeProbe] entered NightElf03; Tyrande carryover verified',
+                        '[NightElfAwakeningProbe] entered NightElf04 and verified Tyrande carryover',
+                        '[NightElfBarrowOpeningProbe] entered NightElf05 and verified Tyrande and Furion carryover',
+                        '[NightElfDungeonProbe] entered the original NightElf06 after freeing Illidan',
+                        '[NightElfSkullProbe] defeated the original Tichondrius and completed NightElf06',
+                        '[NightElfFinaleProbe] restored both earned heroes',
+                        '[NightElfFinaleProbe] reached the original Night Elf campaign credits'].any { !output.contains(it) }
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Night Elf opening audit:')) {
+            throw new GradleException("Night Elf opening playthrough failed; see $report")
+        }
+        println "PASS: NightElf01 base, Paladin and NightElf02 carryover; report: $report; home: $auditHome"
+        if (campaignChain) println 'PASS: unbroken original Night Elf campaign from a fresh profile through the credits'
+    }
+}
+
+task nightElfEscapePlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the installed Night Elf escape and verifies Hide and Tyrande carryover.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(20)
+    def auditHome = file("$buildDir/night-elf-escape-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/night-elf-escape.log")
+    def earnedCache = project.findProperty('nightElfEscapeCache')
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.nightElfEscapeAudit', 'true'
+    systemProperty 'warsmash.nightElfEscapeAuditTicksPerFrame', (project.findProperty('nightElfEscapeAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\NightElf02.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+            println "Seeded the isolated audit with the earned campaign cache from $cacheDirectory"
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[NightElfEscapeProbe] original opening Hide order concealed Tyrande')
+                || !output.contains('[NightElfEscapeProbe] ordinary Hide order concealed Tyrande near an active patrol')
+                || !output.contains('[NightElfEscapeProbe] the original Huntress used Sentinel to reveal the Shade')
+                || !output.contains('[NightElfEscapeProbe] entered NightElf03; Tyrande carryover verified')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Night Elf escape audit:')) {
+            throw new GradleException("Night Elf escape playthrough failed; see $report")
+        }
+        println "PASS: NightElf02 escape and NightElf03 carryover; report: $report; home: $auditHome"
+    }
+}
+
+task nightElfAwakeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the original Moonglade expedition and verifies Tyrande entering NightElf04.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(25)
+    def auditHome = file("$buildDir/night-elf-awakening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/night-elf-awakening.log")
+    def earnedCache = project.findProperty('nightElfAwakeningCache')
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.nightElfAwakeningAudit', 'true'
+    systemProperty 'warsmash.nightElfAwakeningAuditTicksPerFrame', (project.findProperty('nightElfAwakeningAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\NightElf03.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+            println "Seeded the isolated audit with the earned campaign cache from $cacheDirectory"
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[NightElfAwakeningProbe] reached the original Moonglade Isle objective')
+                || !output.contains('[NightElfAwakeningProbe] defeated the original Keepers of the Grove')
+                || !output.contains('[NightElfAwakeningProbe] the original Horn of Cenarius awakened Furion')
+                || !output.contains('[NightElfAwakeningProbe] entered NightElf04 and verified Tyrande carryover')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Night Elf awakening audit:')) {
+            throw new GradleException("Night Elf awakening playthrough failed; see $report")
+        }
+        println "PASS: NightElf03 awakening and NightElf04 carryover; report: $report; home: $auditHome"
+    }
+}
+
+task nightElfBarrowOpeningAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Verifies the original uprooted base and first gold delivery in NightElf04.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    def playthrough = (project.findProperty('nightElfBarrowPlaythrough') ?: 'false').toString().toBoolean()
+    def finaleVictory = (project.findProperty('nightElfFinaleVictory') ?: 'false').toString().toBoolean()
+    def finaleOpening = finaleVictory || (project.findProperty('nightElfFinaleOpening') ?: 'false').toString().toBoolean()
+    def defeatTichondrius = finaleOpening || (project.findProperty('nightElfDefeatTichondrius') ?: 'false').toString().toBoolean()
+    def skullQuest = defeatTichondrius || (project.findProperty('nightElfSkullQuest') ?: 'false').toString().toBoolean()
+    def dungeonPlaythrough = (project.findProperty('nightElfDungeonPlaythrough') ?: 'false').toString().toBoolean()
+    def dungeonWaygate = dungeonPlaythrough || (project.findProperty('nightElfDungeonWaygate') ?: 'false').toString().toBoolean()
+    def dungeonPlates = dungeonWaygate || (project.findProperty('nightElfDungeonPlates') ?: 'false').toString().toBoolean()
+    def dungeonFurion = dungeonPlates || (project.findProperty('nightElfDungeonFurion') ?: 'false').toString().toBoolean()
+    def dungeonBears = dungeonFurion || (project.findProperty('nightElfDungeonBears') ?: 'false').toString().toBoolean()
+    def dungeonBridge = dungeonBears || (project.findProperty('nightElfDungeonBridge') ?: 'false').toString().toBoolean()
+    def dungeonOpening = dungeonBridge || (project.findProperty('nightElfDungeonOpening') ?: 'false').toString().toBoolean()
+    timeout = java.time.Duration.ofMinutes(playthrough || dungeonOpening || skullQuest ? 25 : 10)
+    def auditHome = file("$buildDir/night-elf-barrow-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/night-elf-barrow-opening.log")
+    def earnedCache = project.findProperty('nightElfBarrowCache')
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.nightElfBarrowOpeningAudit', 'true'
+    systemProperty 'warsmash.nightElfBarrowPlaythrough', playthrough.toString()
+    systemProperty 'warsmash.nightElfSkullQuest', skullQuest.toString()
+    systemProperty 'warsmash.nightElfDefeatTichondrius', defeatTichondrius.toString()
+    systemProperty 'warsmash.nightElfFinaleOpening', finaleOpening.toString()
+    systemProperty 'warsmash.nightElfFinaleVictory', finaleVictory.toString()
+    systemProperty 'warsmash.nightElfDungeonOpening', dungeonOpening.toString()
+    systemProperty 'warsmash.nightElfDungeonBridge', dungeonBridge.toString()
+    systemProperty 'warsmash.nightElfDungeonBears', dungeonBears.toString()
+    systemProperty 'warsmash.nightElfDungeonFurion', dungeonFurion.toString()
+    systemProperty 'warsmash.nightElfDungeonPlates', dungeonPlates.toString()
+    systemProperty 'warsmash.nightElfDungeonWaygate', dungeonWaygate.toString()
+    systemProperty 'warsmash.nightElfDungeonPlaythrough', dungeonPlaythrough.toString()
+    systemProperty 'warsmash.nightElfBarrowOpeningAuditTicksPerFrame', (project.findProperty('nightElfBarrowOpeningAuditTicksPerFrame') ?: '0').toString()
+    def chapter = skullQuest ? 'NightElf06.w3m' : dungeonOpening ? 'NightElf05.w3m' : 'NightElf04.w3m'
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', "Maps\\Campaign\\${chapter}".toString()
+    ignoreExitValue = true
+    doFirst {
+        if (dungeonOpening && earnedCache == null) throw new GradleException('The dungeon opening requires the earned NightElf04 cache')
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (skullQuest) {
+            if (!output.contains('[NightElfSkullProbe] watched the original introduction and discovered the Skull of Gul\'dan quest')
+                    || !output.contains('[NightElfSkullProbe] destroyed the original Demon Gate and completed Illidan\'s Skull transformation')
+                    || defeatTichondrius && (!output.contains('[NightElfSkullProbe] defeated the original Tichondrius and completed NightElf06')
+                            || !output.contains('[NightElfSkullProbe] entered the original NightElf06 interlude'))
+                    || finaleOpening && (!output.contains('[NightElfFinaleProbe] restored both earned heroes')
+                            || !output.contains('[NightElfFinaleProbe] mined gold and trained a new Archer'))
+                    || finaleVictory && (!output.contains('[NightElfFinaleProbe] survived the native Mount Hyjal countdown')
+                            || !output.contains('[NightElfFinaleProbe] reached the original Night Elf campaign credits'))
+                    || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Night Elf Skull audit:')) {
+                throw new GradleException("NightElf06 Skull of Gul'dan playthrough failed; see $report")
+            }
+            println "PASS: NightElf06 original Demon Gate and Illidan's Skull transformation; report: $report"
+            if (defeatTichondrius) println 'PASS: NightElf06 native victory and the original interlude'
+            if (finaleOpening) println 'PASS: original NightElf07 restored both heroes and began the Mount Hyjal defence'
+            if (finaleVictory) println 'PASS: original Mount Hyjal defence, native victory, and the Night Elf campaign credits'
+            return
+        }
+        if (dungeonOpening) {
+            if (!output.contains('[NightElfDungeonProbe] restored earned Tyrande and Furion after the original introduction')
+                    || !output.contains('[NightElfDungeonProbe] the original dungeon gate split the heroes and replaced their quests')
+                    || dungeonBridge && !output.contains('[NightElfDungeonProbe] Furion raised and crossed the original lava bridge')
+                    || dungeonBears && !output.contains('[NightElfDungeonProbe] played the original Druid of the Claw encounter')
+                    || dungeonFurion && !output.contains('[NightElfDungeonProbe] completed Furion\'s original quest and regained control of Tyrande')
+                    || dungeonPlates && !output.contains('[NightElfDungeonProbe] activated both original pressure plates and opened Tyrande\'s gate')
+                    || dungeonWaygate && !output.contains('[NightElfDungeonProbe] Tyrande travelled through the original prison waygate')
+                    || dungeonPlaythrough && (!output.contains('[NightElfDungeonProbe] defeated the original prison guards, freed Illidan, and verified both stored heroes')
+                            || !output.contains('[NightElfDungeonProbe] entered the original NightElf06 after freeing Illidan'))
+                    || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Night Elf dungeon opening audit:')) {
+                throw new GradleException("Night Elf dungeon opening failed; see $report")
+            }
+            def milestone = dungeonPlaythrough ? 'native prison victory, stored heroes, and NightElf06 transition'
+                    : dungeonWaygate ? 'Tyrande\'s original prison waygate'
+                    : dungeonPlates ? 'Tyrande\'s original pressure plate gate'
+                    : dungeonFurion ? 'original Furion quest and return to Tyrande' : dungeonBears ? 'original Druid of the Claw encounter'
+                    : dungeonBridge ? 'original lava bridge' : 'earned heroes, original introduction, and dungeon gate'
+            println "PASS: NightElf05 $milestone; report: $report"
+            return
+        }
+        if (!output.contains('[NightElfBarrowOpeningProbe] original construction event registered the Entangled Gold Mine')
+                || !output.contains('[NightElfBarrowOpeningProbe] uprooted Tree of Ages took root and delivered the first gold')
+                || playthrough && (!output.contains('[NightElfBarrowOpeningProbe] destroyed the original Satyr base')
+                        || !output.contains('[NightElfBarrowOpeningProbe] Furion woke the Druids through the original quest')
+                        || !output.contains('[NightElfBarrowOpeningProbe] entered NightElf05 and verified Tyrande and Furion carryover'))
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Night Elf barrow opening audit:')) {
+            throw new GradleException("Night Elf barrow opening failed; see $report")
+        }
+        def milestone = playthrough ? 'NightElf04 Barrow Dens and both heroes carried into NightElf05' : 'NightElf04 mine established through original player orders'
+        println "PASS: $milestone; report: $report; home: $auditHome"
+    }
+}
+
+task orcOpeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays Landfall and verifies the original centaur defense and Thrall carryover.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(20)
+    def auditHome = file("$buildDir/orc-opening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-opening.log")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcOpeningAudit', 'true'
+    systemProperty 'warsmash.orcOpeningAuditTicksPerFrame', (project.findProperty('orcOpeningAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Orc01.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[OrcOpeningProbe] verified the authored 12356 ms dialogue duration')
+                || !output.contains('[OrcOpeningProbe] native ship rescue completed and Cairne encountered')
+                || !output.contains('[OrcOpeningProbe] native centaur defense completed')
+                || !output.contains('[OrcOpeningProbe] entered Orc02; Thrall carryover verified')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc opening audit:')) {
+            throw new GradleException("Landfall playthrough failed; see $report")
+        }
+        println "PASS: Landfall and Orc02 carryover; report: $report; home: $auditHome"
+    }
+}
+
+task orcMarchPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays The Long March, its original interlude, and verifies Thrall in Orc03.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(20)
+    def auditHome = file("$buildDir/orc-march-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-march.log")
+    def earnedCache = project.findProperty('orcMarchCache')
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcMarchAudit', 'true'
+    systemProperty 'warsmash.orcMarchAuditTicksPerFrame', (project.findProperty('orcMarchAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Orc02.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[OrcMarchProbe] completed the original caravan escort')
+                || !output.contains('[OrcMarchProbe] entered the original Orc02 story interlude')
+                || !output.contains('[OrcMarchProbe] entered Orc03; Thrall carryover verified')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc march audit:')) {
+            throw new GradleException("The Long March playthrough failed; see $report")
+        }
+        println "PASS: The Long March, story interlude and Orc03 carryover; report: $report; home: $auditHome"
+    }
+}
+
+task orcSettlementPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Establishes the Orc03 settlement and verifies gold delivery and the Zeppelin quest.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    def zeppelinObjective = (project.findProperty('orcSettlementZeppelin') ?: 'false').toString().toBoolean()
+    timeout = java.time.Duration.ofMinutes(zeppelinObjective ? 20 : 8)
+    def auditHome = file("$buildDir/orc-settlement-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-settlement.log")
+    def earnedCache = project.findProperty('orcSettlementCache')
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcSettlementAudit', 'true'
+    systemProperty 'warsmash.orcSettlementZeppelin', zeppelinObjective.toString()
+    systemProperty 'warsmash.orcSettlementAuditTicksPerFrame', (project.findProperty('orcSettlementAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Orc03.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+            println "Seeded the isolated audit with the earned campaign cache from $cacheDirectory"
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[OrcSettlementProbe] the original town quest completed and Zeppelin quest opened')
+                || !output.contains('[OrcSettlementProbe] Peons delivered 100 gold to the completed Great Hall')
+                || zeppelinObjective && (!output.contains('[OrcSettlementProbe] defeated the original Harpies and opened the laboratory')
+                    || !output.contains('[OrcSettlementProbe] bought two Zeppelins through the original Goblin Laboratory')
+                    || !output.contains('[OrcSettlementProbe] the original ending continued into Orc04'))
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc settlement audit:')) {
+            throw new GradleException("Orc03 settlement audit failed; see $report")
+        }
+        def verified = zeppelinObjective ? 'Orc03 settlement and Zeppelin victory into Orc04' : 'Orc03 Great Hall, original gold mine and Zeppelin quest'
+        println "PASS: $verified; report: $report; home: $auditHome"
+    }
+}
+
+task orcLumberPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Verifies the original Pillage research and first Tree of Life lumber bonus in Orc04.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    def playthrough = (project.findProperty('orcLumberPlaythrough') ?: 'false').toString().toBoolean()
+    def resumeInterlude = (project.findProperty('orcLumberResumeInterlude') ?: 'false').toString().toBoolean()
+    def hunterVictory = (project.findProperty('orcHunterVictory') ?: 'false').toString().toBoolean()
+    def hunterFountain = hunterVictory || (project.findProperty('orcHunterFountain') ?: 'false').toString().toBoolean()
+    def hunterOpening = hunterFountain || (project.findProperty('orcHunterOpening') ?: 'false').toString().toBoolean()
+    timeout = java.time.Duration.ofMinutes(playthrough || hunterFountain ? 35 : 15)
+    def auditHome = file("$buildDir/orc-lumber-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-lumber.log")
+    def earnedCache = project.findProperty('orcLumberCache')
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcLumberAudit', 'true'
+    systemProperty 'warsmash.orcLumberPlaythrough', (playthrough || resumeInterlude).toString()
+    systemProperty 'warsmash.orcLumberResumeInterlude', resumeInterlude.toString()
+    systemProperty 'warsmash.orcHunterOpening', hunterOpening.toString()
+    systemProperty 'warsmash.orcHunterFountain', hunterFountain.toString()
+    systemProperty 'warsmash.orcHunterVictory', hunterVictory.toString()
+    systemProperty 'warsmash.orcLumberAuditTicksPerFrame', (project.findProperty('orcLumberAuditTicksPerFrame') ?: '0').toString()
+    def chapter = hunterOpening ? 'Orc05.w3m' : resumeInterlude ? 'Orc04Interlude.w3m' : 'Orc04.w3m'
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile',
+            "Maps\\Campaign\\${chapter}".toString()
+    ignoreExitValue = true
+    doFirst {
+        if ((resumeInterlude || hunterOpening) && earnedCache == null) throw new GradleException('Continuing requires the earned Orc04 cache')
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException("Campaign game cache directory does not exist: $cacheDirectory")
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report); errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (hunterOpening) {
+            if (!output.contains('[OrcLumberProbe] restored earned Grom and placed an original Sentry Ward in Orc05')
+                    || hunterFountain && (!output.contains('[OrcLumberProbe] Grom crossed the original Satyr waygate')
+                            || !output.contains('[OrcLumberProbe] the original Fountain of Blood cinematic transformed Grom'))
+                    || hunterVictory && (!output.contains('[OrcLumberProbe] assembled Chaos reinforcements for the original Cenarius fight')
+                            || !output.contains('[OrcLumberProbe] defeated the original Cenarius and verified stored Chaos Grom')
+                            || !output.contains('[OrcLumberProbe] entered the original Orc06 after defeating Cenarius'))
+                    || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc lumber audit:')) {
+                throw new GradleException("Orc05 opening failed; see $report")
+            }
+            def milestone = hunterVictory ? 'Cenarius victory, stored Chaos Grom, and Orc06 transition'
+                    : hunterFountain ? 'Satyr waygate and Fountain of Blood transformation' : 'earned Grom, original gold income, and Sentry Ward'
+            println "PASS: Orc05 $milestone; report: $report"
+            return
+        }
+        if (!resumeInterlude && (!output.contains('[OrcLumberProbe] the original Pillage research event fired')
+                    || !output.contains('[OrcLumberProbe] earned the original 3000 lumber bonus through ordinary attacks')
+                    || playthrough && !output.contains('[OrcLumberProbe] completed the original 15000 lumber objective'))
+                || (playthrough || resumeInterlude) && (!output.contains('[OrcLumberProbe] entered the original Orc04 story interlude')
+                    || !output.contains('[OrcLumberProbe] entered Orc05 and verified Grom carryover'))
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc lumber audit:')) {
+            throw new GradleException("Orc04 lumber audit failed; see $report")
+        }
+        def milestone = resumeInterlude ? 'Orc04 story interlude and earned Grom carryover'
+                : playthrough ? 'Orc04 original lumber victory and Grom carryover' : 'Orc04 original Pillage research and first lumber bonus'
+        println "PASS: $milestone; report: $report; home: $auditHome"
+    }
+}
+
+task orcWyvernPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Restores earned Thrall and frees the six original Wyverns in Orc06.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(12)
+    def auditHome = file("$buildDir/orc-wyvern-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-wyvern.log")
+    def earnedCache = project.findProperty('orcWyvernCache')
+    def victory = (project.findProperty('orcWyvernVictory') ?: 'false').toString().toBoolean()
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcWyvernAudit', 'true'
+    systemProperty 'warsmash.orcWyvernVictory', victory.toString()
+    systemProperty 'warsmash.orcWyvernAuditTicksPerFrame', (project.findProperty('orcWyvernAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Orc06.w3m'
+    ignoreExitValue = true
+    doFirst {
+        def cacheDirectory = earnedCache == null ? null : file(earnedCache)
+        if (cacheDirectory == null || !cacheDirectory.isDirectory()) {
+            throw new GradleException('The Wyvern playthrough requires the earned campaign cache from Orc05')
+        }
+        freezeAuditRuntime(delegate, auditHome, false)
+        copy {
+            from cacheDirectory
+            into new File(auditHome, '.warsmash/gamecache')
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[OrcWyvernProbe] original introduction restored earned Thrall and recruited Cairne')
+                || !output.contains('[OrcWyvernProbe] defeated the original Harpies and freed all six Wyverns')
+                || victory && (!output.contains('[OrcWyvernProbe] captured the original summit and verified both stored heroes')
+                    || !output.contains('[OrcWyvernProbe] entered the original Orc07 and verified Thrall and Cairne carryover'))
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc Wyvern audit:')) {
+            throw new GradleException("Orc06 Wyvern playthrough failed; see $report")
+        }
+        println "PASS: original Orc06 introduction, earned Thrall, Cairne, and all six Wyverns; report: $report"
+        if (victory) println 'PASS: original Orc06 summit victory and both heroes carried into Orc07'
+    }
+}
+
+task orcOraclePlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the original Oracle opening through the Blade Key and King\'s Door.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(12)
+    def auditHome = file("$buildDir/orc-oracle-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-oracle.log")
+    def earnedCache = project.findProperty('orcOracleCache')
+    def victory = (project.findProperty('orcOracleVictory') ?: 'false').toString().toBoolean()
+    def gemstone = victory || (project.findProperty('orcOracleGemstone') ?: 'false').toString().toBoolean()
+    def returnHeart = gemstone || (project.findProperty('orcOracleReturnHeart') ?: 'false').toString().toBoolean()
+    def heart = returnHeart || (project.findProperty('orcOracleHeart') ?: 'false').toString().toBoolean()
+    def dragon = heart || (project.findProperty('orcOracleDragon') ?: 'false').toString().toBoolean()
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcOracleAudit', 'true'
+    systemProperty 'warsmash.orcOracleDragon', dragon.toString()
+    systemProperty 'warsmash.orcOracleHeart', heart.toString()
+    systemProperty 'warsmash.orcOracleReturnHeart', returnHeart.toString()
+    systemProperty 'warsmash.orcOracleGemstone', gemstone.toString()
+    systemProperty 'warsmash.orcOracleVictory', victory.toString()
+    systemProperty 'warsmash.orcOracleAuditTicksPerFrame', (project.findProperty('orcOracleAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Orc07.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException('The specified Orc campaign cache is missing')
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[OrcOracleProbe] watched the original cave-in separate Thrall from Cairne')
+                || !output.contains('[OrcOracleProbe] opened the original King\'s Door with the Blade Key')
+                || dragon && !output.contains('[OrcOracleProbe] reached the Dragon chamber and triggered the original encounter')
+                || heart && !output.contains('[OrcOracleProbe] defeated the original Dragon and picked up the Heart of Aszune')
+                || returnHeart && !output.contains('[OrcOracleProbe] returned the Heart of Aszune and opened the original statue passage')
+                || gemstone && !output.contains('[OrcOracleProbe] returned the original Enchanted Gemstone and raised the bridge')
+                || victory && !output.contains('[OrcOracleProbe] entered the original Orc08 with Thrall and Cairne restored from the earned cache')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc Oracle audit:')) {
+            throw new GradleException("Orc07 Oracle playthrough failed; see $report")
+        }
+        println "PASS: original Orc07 cave-in, Blade Key, and King's Door; report: $report"
+        if (dragon) println 'PASS: original waygate and Dragon encounter trigger'
+        if (heart) println 'PASS: original Dragon defeated and Heart of Aszune collected'
+        if (returnHeart) println 'PASS: Heart of Aszune returned and the original statue passage opened'
+        if (gemstone) println 'PASS: Cairne returned the original Enchanted Gemstone and raised the bridge'
+        if (victory) println 'PASS: original Orc07 victory and both heroes restored in Orc08'
+    }
+}
+
+task orcFinalePlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Captures Grom and brings him to the Circle of Power in the original Orc finale.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(16)
+    def auditHome = file("$buildDir/orc-finale-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/orc-finale.log")
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.orcFinaleAudit', 'true'
+    systemProperty 'warsmash.orcFinaleAuditTicksPerFrame', (project.findProperty('orcFinaleAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\Campaign\\Orc08.w3m'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def earnedCache = project.findProperty('orcFinaleCache')
+        if (earnedCache != null) {
+            def cacheDirectory = file(earnedCache)
+            if (!cacheDirectory.isDirectory()) throw new GradleException('The specified Orc campaign cache is missing')
+            copy {
+                from cacheDirectory
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+        }
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains("[OrcFinaleProbe] captured Grom and obtained the original map's filled Soul Gem")
+                || !output.contains('[OrcFinaleProbe] purged Grom at the original Circle of Power and completed the quest')
+                || !output.contains('[OrcFinaleProbe] final native Orc campaign victory and Night Elf campaign unlock')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Orc finale audit:')) {
+            throw new GradleException("Orc08 finale playthrough failed; see $report")
+        }
+        println "PASS: original Orc08 Soul Gem and Circle of Power; report: $report"
+    }
+}
+
+task rexxarOpeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Delivers Mogrin\'s Report to Thrall and verifies the native Rexxar opening quests.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(12)
+    def auditHome = file("$buildDir/rexxar-opening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/rexxar-opening.log")
+    def collapseAllTunnels = (project.findProperty('rexxarCollapseAllTunnels') ?: 'false').toString().toBoolean()
+    def collapseFirstTunnel = collapseAllTunnels || (project.findProperty('rexxarCollapseFirstTunnel') ?: 'false').toString().toBoolean()
+    def returnFromTunnels = collapseFirstTunnel || (project.findProperty('rexxarReturnFromGoblinTunnels') ?: 'false').toString().toBoolean()
+    def backUpZones = (project.findProperty('rexxarBackUpZoneSaves') ?: 'false').toString().toBoolean()
+    def enterTunnels = returnFromTunnels || backUpZones || (project.findProperty('rexxarEnterGoblinTunnels') ?: 'false').toString().toBoolean()
+    def returnThunderHerbs = (project.findProperty('rexxarReturnThunderHerbs') ?: 'false').toString().toBoolean()
+    def collectThunderHerbs = returnThunderHerbs || (project.findProperty('rexxarCollectThunderHerbs') ?: 'false').toString().toBoolean()
+    def harpyThreat = (project.findProperty('rexxarHarpyThreat') ?: 'false').toString().toBoolean()
+    def acceptQuests = enterTunnels || collectThunderHerbs || harpyThreat || (project.findProperty('rexxarAcceptOpeningQuests') ?: 'false').toString().toBoolean()
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.rexxarOpeningAudit', 'true'
+    systemProperty 'warsmash.rexxarAcceptOpeningQuests', acceptQuests.toString()
+    systemProperty 'warsmash.rexxarEnterGoblinTunnels', enterTunnels.toString()
+    systemProperty 'warsmash.rexxarReturnFromGoblinTunnels', returnFromTunnels.toString()
+    systemProperty 'warsmash.rexxarBackUpZoneSaves', backUpZones.toString()
+    systemProperty 'warsmash.rexxarCollapseFirstTunnel', collapseFirstTunnel.toString()
+    systemProperty 'warsmash.rexxarCollapseAllTunnels', collapseAllTunnels.toString()
+    systemProperty 'warsmash.rexxarCollectThunderHerbs', collectThunderHerbs.toString()
+    systemProperty 'warsmash.rexxarReturnThunderHerbs', returnThunderHerbs.toString()
+    systemProperty 'warsmash.rexxarHarpyThreat', harpyThreat.toString()
+    systemProperty 'warsmash.rexxarOpeningAuditTicksPerFrame', (project.findProperty('rexxarOpeningAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile', 'Maps\\FrozenThrone\\Campaign\\OrcX01.w3x'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[RexxarOpeningProbe] watched the original introduction and accepted Mogrin\'s Report')
+                || !output.contains('[RexxarOpeningProbe] Misha joined the original party')
+                || !output.contains('[RexxarOpeningProbe] delivered Mogrin\'s Report to Thrall and recruited Rokhan')
+                || acceptQuests && ['Gazlowe', "Drek'Thar", 'Nazgrel'].any { name ->
+                    !output.contains("[RexxarOpeningProbe] accepted the original assignment from $name")
+                }
+                || enterTunnels && !output.contains('[RexxarOpeningProbe] entered the original Goblin Tunnels with both heroes and archived Durotar')
+                || backUpZones && !output.contains('[RexxarOpeningProbe] Quick Save backed up the Durotar archive through the original save trigger')
+                || collapseFirstTunnel && !output.contains('[RexxarOpeningProbe] rescued a Goblin Sapper and destroyed the first pair of original support columns')
+                || collapseAllTunnels && !output.contains('[RexxarOpeningProbe] collapsed all three original Goblin Tunnels')
+                || collectThunderHerbs && !output.contains('[RexxarOpeningProbe] gathered six original Shimmerweed and completed the native collection requirement')
+                || returnThunderHerbs && (!output.contains('[RexxarOpeningProbe] returned to Durotar with Thunder Ridge archived and the collection preserved')
+                    || !output.contains('[RexxarOpeningProbe] turned in the original Shimmerweed quest to Drek\'Thar and received its reward'))
+                || harpyThreat && (!output.contains('[RexxarOpeningProbe] defeated the original Bloodfeather and verified her native drop')
+                    || !output.contains('[RexxarOpeningProbe] returned to Nazgrel and verified the original armory choices')
+                    || !output.contains('[RexxarOpeningProbe] completed the original Harpy Threat by claiming the armory reward'))
+                || returnFromTunnels && !output.contains('[RexxarOpeningProbe] returned from the original Goblin Tunnels and restored the Durotar archive')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Rexxar opening audit:')) {
+            throw new GradleException("Rexxar opening playthrough failed; see $report")
+        }
+        println "PASS: original Founding of Durotar introduction, Misha, Mogrin's Report and Rokhan; report: $report"
+        if (acceptQuests) println 'PASS: original assignments from Gazlowe, Drek\'Thar, and Nazgrel'
+        if (enterTunnels) println 'PASS: original Goblin Tunnels transition and Durotar archive'
+        if (backUpZones) println 'PASS: Quick Save includes the original Durotar zone archive'
+        if (collapseFirstTunnel) println 'PASS: original Goblin Sapper rendezvous and first support column objective'
+        if (collapseAllTunnels) println 'PASS: all three original Goblin Tunnels collapse and the native quest requirement completes'
+        if (collectThunderHerbs) println 'PASS: original Thunder Ridge zone and six Shimmerweed pickups'
+        if (returnThunderHerbs) println 'PASS: original Thunder Ridge return and Drek\'Thar reward'
+        if (harpyThreat) println 'PASS: original Bloodfeather, Nazgrel turn-in, and armory reward'
+        if (returnFromTunnels) println 'PASS: original Goblin Tunnels round trip and Durotar restoration'
+    }
+}
+
+task frozenThroneOpeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the original Frozen Throne Night Elf opening and verifies Maiev in the next chapter.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(20)
+    def auditHome = file("$buildDir/frozen-throne-opening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/frozen-throne-opening.log")
+    def checkpoint = project.findProperty('frozenThroneOpeningCheckpoint')
+    def saveHarbor = project.findProperty('frozenThroneOpeningSaveHarbor')
+    def checkpointRuntimeHome = project.findProperty('frozenThroneOpeningRuntimeHome')
+    def islandCache = project.findProperty('frozenThroneIslandCache')
+    def tombCache = project.findProperty('frozenThroneTombCache')
+    def afterTombCache = project.findProperty('frozenThroneAfterTombCache')
+    def afterTombSeaEscape = (project.findProperty('frozenThroneAfterTombSeaEscape') ?: 'false').toString().toBoolean()
+    def afterTombRunner = afterTombSeaEscape || (project.findProperty('frozenThroneAfterTombRunner') ?: 'false').toString().toBoolean()
+    def tombEscape = (project.findProperty('frozenThroneTombEscape') ?: 'false').toString().toBoolean()
+    def tombEye = tombEscape || (project.findProperty('frozenThroneTombEye') ?: 'false').toString().toBoolean()
+    def thirdTombBarrier = tombEye || (project.findProperty('frozenThroneTombThirdBarrier') ?: 'false').toString().toBoolean()
+    def secondTombBarrier = thirdTombBarrier || (project.findProperty('frozenThroneTombSecondBarrier') ?: 'false').toString().toBoolean()
+    def firstTombBarrier = secondTombBarrier || (project.findProperty('frozenThroneTombFirstBarrier') ?: 'false').toString().toBoolean()
+    def islandPlaythrough = (project.findProperty('frozenThroneIslandPlaythrough') ?: 'false').toString().toBoolean()
+    def islandLandfall = islandPlaythrough || (project.findProperty('frozenThroneIslandLandfall') ?: 'false').toString().toBoolean()
+    def islandVoyage = islandLandfall || (project.findProperty('frozenThroneIslandVoyage') ?: 'false').toString().toBoolean()
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.frozenThroneOpeningAudit', 'true'
+    systemProperty 'warsmash.frozenThroneOpeningAuditTicksPerFrame', (project.findProperty('frozenThroneOpeningAuditTicksPerFrame') ?: '0').toString()
+    if (checkpoint != null) systemProperty 'warsmash.frozenThroneOpeningResumeHarbor', 'true'
+    if (saveHarbor != null) systemProperty 'warsmash.frozenThroneOpeningSaveHarbor', file(saveHarbor).absolutePath
+    if (islandCache != null) systemProperty 'warsmash.frozenThroneIslandOpening', 'true'
+    if (tombCache != null) systemProperty 'warsmash.frozenThroneTombOpening', 'true'
+    if (afterTombCache != null) systemProperty 'warsmash.frozenThroneAfterTomb', 'true'
+    systemProperty 'warsmash.frozenThroneAfterTombRunner', afterTombRunner.toString()
+    systemProperty 'warsmash.frozenThroneAfterTombSeaEscape', afterTombSeaEscape.toString()
+    systemProperty 'warsmash.frozenThroneTombFirstBarrier', firstTombBarrier.toString()
+    systemProperty 'warsmash.frozenThroneTombSecondBarrier', secondTombBarrier.toString()
+    systemProperty 'warsmash.frozenThroneTombThirdBarrier', thirdTombBarrier.toString()
+    systemProperty 'warsmash.frozenThroneTombEye', tombEye.toString()
+    systemProperty 'warsmash.frozenThroneTombEscape', tombEscape.toString()
+    systemProperty 'warsmash.frozenThroneIslandVoyage', islandVoyage.toString()
+    systemProperty 'warsmash.frozenThroneIslandLandfall', islandLandfall.toString()
+    systemProperty 'warsmash.frozenThroneIslandPlaythrough', islandPlaythrough.toString()
+    def chapter = afterTombCache != null ? 'NightElfX04.w3x' : tombCache != null ? 'NightElfX03.w3x'
+            : islandCache != null ? 'NightElfX02.w3x' : 'NightElfX01.w3x'
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile',
+        checkpoint == null ? "Maps\\FrozenThrone\\Campaign\\${chapter}".toString() : file(checkpoint).absolutePath
+    ignoreExitValue = true
+    doFirst {
+        if (islandPlaythrough && islandCache == null) throw new GradleException('The island playthrough requires the earned NightElfX01 cache')
+        if (firstTombBarrier && tombCache == null) throw new GradleException('The tomb barrier requires the earned NightElfX02 cache')
+        freezeAuditRuntime(delegate, checkpointRuntimeHome == null ? auditHome : file(checkpointRuntimeHome),
+                checkpointRuntimeHome != null)
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        def earnedCache = afterTombCache ?: tombCache ?: islandCache
+        if (earnedCache != null) {
+            def source = file(earnedCache)
+            if (!source.isDirectory()) throw new GradleException("Earned Maiev cache does not exist: $source")
+            copy {
+                from source
+                into new File(auditHome, '.warsmash/gamecache')
+            }
+        }
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (afterTombCache != null) {
+            if (!output.contains('[FrozenThroneOpeningProbe] restored earned Maiev for the original NightElfX04 boat rescue')
+                    || !output.contains('[FrozenThroneOpeningProbe] completed the original NightElfX04 boat rescue through normal orders')
+                    || afterTombRunner && !output.contains('[FrozenThroneOpeningProbe] boarded the original NightElfX04 runner in a rescued transport')
+                    || afterTombSeaEscape && !output.contains('[FrozenThroneOpeningProbe] sailed the courier into the original NightElfX04 escape region')
+                    || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Frozen Throne opening audit:')) {
+                throw new GradleException("Frozen Throne NightElfX04 boat rescue failed; see $report")
+            }
+            def milestone = afterTombSeaEscape ? 'boat rescue and original courier escape' : afterTombRunner ? 'boat rescue and runner boarding' : 'boat rescue with earned Maiev'
+            println "PASS: original NightElfX04 $milestone; report: $report"
+            return
+        }
+        if (tombCache != null) {
+            if (!output.contains('[FrozenThroneOpeningProbe] watched the original tomb introduction and restored earned Maiev')
+                    || !output.contains('[FrozenThroneOpeningProbe] reached the original Tomb of Sargeras Blink hint')
+                    || !output.contains('[FrozenThroneOpeningProbe] used Blink to claim the original Rune of Mana')
+                    || firstTombBarrier && !output.contains('[FrozenThroneOpeningProbe] destroyed the first original rock barrier and freed the Watchers')
+                    || secondTombBarrier && (!output.contains('[FrozenThroneOpeningProbe] the original floor switch opened the lower tomb passage')
+                            || !output.contains('[FrozenThroneOpeningProbe] destroyed the second original rock barrier and freed the Dryads'))
+                    || thirdTombBarrier && (!output.contains('[FrozenThroneOpeningProbe] Maiev blinked across the river and raised the original tomb bridge')
+                            || !output.contains('[FrozenThroneOpeningProbe] crossed the original tomb bridge, rescued the third party and completed the barrier quest'))
+                    || tombEye && !output.contains('[FrozenThroneOpeningProbe] broke through the original Eye chamber, watched Illidan\'s cinematic and started the timed escape')
+                    || tombEscape && (!output.contains('[FrozenThroneOpeningProbe] reached the original Tomb exit before the timer expired')
+                            || !output.contains('[FrozenThroneOpeningProbe] entered NightElfX04 and verified Maiev carryover after escaping the tomb'))
+                    || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Frozen Throne opening audit:')) {
+                throw new GradleException("Frozen Throne Tomb of Sargeras opening failed; see $report")
+            }
+            def milestone = tombEscape ? 'timed escape, native victory and earned carryover to NightElfX04'
+                    : tombEye ? 'Eye chamber cinematic and escape timer'
+                    : thirdTombBarrier ? 'bridge crossing and complete original barrier quest'
+                    : secondTombBarrier ? 'floor switch, first two barriers, and rescue'
+                    : firstTombBarrier ? 'first barrier and Watcher rescue' : 'introduction, earned Maiev, Blink and Rune of Mana'
+            println "PASS: original Tomb of Sargeras $milestone; report: $report"
+            return
+        }
+        if (islandCache != null) {
+            if (!output.contains('[FrozenThroneOpeningProbe] restored Maiev and mined gold from the original NightElfX02 settlement')
+                    || islandVoyage && !output.contains('[FrozenThroneOpeningProbe] sailed the original NightElfX02 channel with both passengers aboard')
+                    || islandLandfall && !output.contains('[FrozenThroneOpeningProbe] disembarked the expedition and opened the original northern tomb approach')
+                    || islandPlaythrough && (!output.contains('[FrozenThroneOpeningProbe] defeated the original Tomb Guardians')
+                            || !output.contains('[FrozenThroneOpeningProbe] entered NightElfX03 and verified Maiev carryover'))
+                    || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Frozen Throne opening audit:')) {
+                throw new GradleException("Frozen Throne island opening failed; see $report")
+            }
+            def milestone = islandPlaythrough ? 'island victory and Maiev carryover into the Tomb of Sargeras'
+                    : islandLandfall ? 'original northern island landing' : islandVoyage
+                    ? 'original shipyard purchase and island channel voyage' : 'original island opening, Maiev carryover and gold income'
+            println "PASS: Frozen Throne $milestone; report: $report"
+            return
+        }
+        if (saveHarbor != null) {
+            if (!output.contains('[FrozenThroneOpeningProbe] saved the original harbor approach') || !file(saveHarbor).isFile()) {
+                throw new GradleException("Frozen Throne harbor checkpoint failed; see $report")
+            }
+            println "PASS: original Frozen Throne harbor checkpoint; report: $report; runtime home: $auditHome"
+            return
+        }
+        if (!output.contains('[FrozenThroneOpeningProbe] reached Illidan\'s harbor and opened the original ship defense')
+                || !output.contains('[FrozenThroneOpeningProbe] completed the original ship defense')
+                || !output.contains('[FrozenThroneOpeningProbe] entered NightElfX02 and verified Maiev carryover')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Frozen Throne opening audit:')) {
+            throw new GradleException("Frozen Throne opening playthrough failed; see $report")
+        }
+        println "PASS: original Frozen Throne pursuit, ship defense and Maiev carryover; report: $report; home: $auditHome"
+    }
+}
+
+task humanExpansionOpeningPlaythroughAudit(dependsOn: classes, type: JavaExec) {
+    description = 'Plays the original Blood Elf introduction and repairs the first Observatory.'
+    mainClass = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = project.assetsDir
+    timeout = java.time.Duration.ofMinutes(12)
+    def auditHome = file("$buildDir/human-expansion-opening-home-${System.currentTimeMillis()}")
+    def report = file("$buildDir/human-expansion-opening.log")
+    def allObservatories = (project.findProperty('humanExpansionOpeningAllObservatories') ?: 'false').toString().toBoolean()
+    def secondObservatory = allObservatories || (project.findProperty('humanExpansionOpeningSecondObservatory') ?: 'false').toString().toBoolean()
+    def cache = secondObservatory || (project.findProperty('humanExpansionOpeningCache') ?: 'false').toString().toBoolean()
+    def landing = cache || (project.findProperty('humanExpansionOpeningLanding') ?: 'false').toString().toBoolean()
+    def boats = landing || (project.findProperty('humanExpansionOpeningBoats') ?: 'false').toString().toBoolean()
+    systemProperty 'user.home', auditHome.absolutePath
+    systemProperty 'warsmash.humanExpansionOpeningAudit', 'true'
+    systemProperty 'warsmash.humanExpansionOpeningBoats', boats.toString()
+    systemProperty 'warsmash.humanExpansionOpeningLanding', landing.toString()
+    systemProperty 'warsmash.humanExpansionOpeningCache', cache.toString()
+    systemProperty 'warsmash.humanExpansionOpeningSecondObservatory', secondObservatory.toString()
+    systemProperty 'warsmash.humanExpansionOpeningAllObservatories', allObservatories.toString()
+    systemProperty 'warsmash.humanExpansionOpeningAuditTicksPerFrame',
+            (project.findProperty('humanExpansionOpeningAuditTicksPerFrame') ?: '0').toString()
+    args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog', '-loadfile',
+            'Maps\\FrozenThrone\\Campaign\\HumanX01.w3x'
+    ignoreExitValue = true
+    doFirst {
+        freezeAuditRuntime(delegate, auditHome, false)
+        def options = new File(auditHome, '.warsmash/options.properties')
+        options.parentFile.mkdirs()
+        options.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
+    }
+    doLast {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[HumanExpansionOpeningProbe] watched Kael\'s original introduction and received the Observatory quest')
+                || !output.contains('[HumanExpansionOpeningProbe] repaired the first original Observatory and triggered its reveal')
+                || boats && !output.contains('[HumanExpansionOpeningProbe] reached the original shore, watched Vashj\'s cinematic and received both transports')
+                || landing && !output.contains('[HumanExpansionOpeningProbe] landed Kael and the repair worker below the second Observatory')
+                || cache && !output.contains('[HumanExpansionOpeningProbe] collected the original Tiny Castle from the hidden cache')
+                || secondObservatory && !output.contains('[HumanExpansionOpeningProbe] repaired the second Observatory with harvested lumber')
+                || allObservatories && !output.contains('[HumanExpansionOpeningProbe] repaired all three original Observatories and reached the native victory')
+                || output.contains('GL ERROR:') || output.contains('JassException') || output.contains('Human expansion opening audit:')) {
+            throw new GradleException("Human expansion opening failed; see $report")
+        }
+        def milestone = allObservatories ? 'all three Observatory repairs and Misconceptions victory'
+                : secondObservatory ? 'second Observatory repair with harvested lumber'
+                : landing ? 'Naga transport crossing and landing below the second Observatory'
+                : boats ? 'first Observatory repair and Naga transport handoff' : 'Blood Elf introduction and first Observatory repair'
+        println "PASS: original $milestone; report: $report"
     }
 }
 
@@ -502,28 +1428,32 @@ task outcomeMenuRenderAudit(dependsOn: classes, type: JavaExec) {
     mainClass = project.mainClassName
     classpath = sourceSets.main.runtimeClasspath
     workingDir = project.assetsDir
-    timeout = java.time.Duration.ofMinutes(3)
+    def completeMovie = (project.findProperty('outcomeMenuCompleteMovie') ?: 'false').toString().toBoolean()
+    timeout = java.time.Duration.ofMinutes(completeMovie ? 7 : 3)
     def auditHome = file("$buildDir/outcome-menu-home-${System.currentTimeMillis()}")
     def captures = file("$buildDir/outcome-menu-captures")
     systemProperty 'user.home', auditHome.absolutePath
     systemProperty 'warsmash.outcomeMenuAudit', 'true'
+    systemProperty 'warsmash.outcomeMenuMovie', (project.findProperty('outcomeMenuMovie') ?: '').toString()
+    systemProperty 'warsmash.outcomeMenuCompleteMovie', completeMovie.toString()
     systemProperty 'warsmash.outcomeMenuCaptureDirectory', captures.absolutePath
     args '-profile', 'safe', '-window', '960', '540', '-fps', '30', '-nolog',
          '-loadfile', 'Maps\\Campaign\\Human01.w3m'
-    def auditOutput = new ByteArrayOutputStream()
-    standardOutput = auditOutput
-    errorOutput = auditOutput
+    def report = file("$buildDir/outcome-menu.log")
     ignoreExitValue = true
     doFirst {
         def optionsFile = new File(auditHome, '.warsmash/options.properties')
         optionsFile.parentFile.mkdirs()
         optionsFile.text = 'musicEnabled=false\nsoundEnabled=false\n'
+        standardOutput = new FileOutputStream(report)
+        errorOutput = standardOutput
     }
     doLast {
-        def output = auditOutput.toString('UTF-8')
-        def report = file("$buildDir/outcome-menu.log")
-        report.text = output
-        if (!output.contains('[OutcomeMenuProbe] complete') || output.contains('GL ERROR:') || output.contains('JassException')) {
+        standardOutput.close()
+        def output = report.getText('UTF-8')
+        if (!output.contains('[OutcomeMenuProbe] complete')
+                || completeMovie && !output.contains('[OutcomeMenuProbe] original movie reached its natural ending')
+                || output.contains('GL ERROR:') || output.contains('JassException')) {
             throw new GradleException("Outcome menu audit failed; see $report")
         }
         println "PASS: victory/defeat menus, retry, Quit, restart cancellation, modal input, and three-size layout; captures: $captures"

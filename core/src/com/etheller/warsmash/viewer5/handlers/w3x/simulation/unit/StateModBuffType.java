@@ -23,7 +23,8 @@ public enum StateModBuffType implements CHandle {
 	INVULNERABLE,
 	INVISIBLE,
 	DETECTOR,
-	DETECTED;
+	DETECTED,
+	WEBBED;
 
 	@Override
 	public int getHandleId() {

@@ -1,9 +1,11 @@
 package com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.behavior;
 
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.*;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.cargohold.CAbilityMeatWagonCargo;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilitybuilder.ability.AbilityBuilderActiveAbility;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityTargetCheckReceiver;
 
 public final class ABAbilityTargetStillTargetableVisitor implements AbilityTargetVisitor<Boolean> {
@@ -40,12 +42,15 @@ public final class ABAbilityTargetStillTargetableVisitor implements AbilityTarge
 
 	@Override
 	public Boolean accept(final CUnit target) {
+		final boolean storedCorpse = (this.orderId == OrderIds.raisedead || this.orderId == OrderIds.itemraisedead
+				|| this.orderId == OrderIds.cannibalize)
+				&& CAbilityMeatWagonCargo.canUseStoredCorpse(this.simulation, this.unit, target);
 		if (channeling) {
-			return !target.isHidden();
+			return !target.isHidden() || storedCorpse;
 		}
 		BooleanAbilityTargetCheckReceiver<CWidget> receiver = new BooleanAbilityTargetCheckReceiver<>();
 		ability.checkCanTarget(simulation, unit, this.orderId, target, receiver);
-		return !target.isHidden()
+		return (!target.isHidden() || storedCorpse)
 				&& receiver.isTargetable();
 	}
 

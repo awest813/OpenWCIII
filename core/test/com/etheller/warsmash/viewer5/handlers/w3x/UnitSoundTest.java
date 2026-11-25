@@ -69,6 +69,7 @@ class UnitSoundTest {
             loop.play(context, 0, 0, 0);
             loop.play(context, 0, 0, 0);
             assertEquals(2, active[0]);
+            loop.stop();
         }
         finally {
             Gdx.audio = previousAudio;

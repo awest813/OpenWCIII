@@ -7,6 +7,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.CAbilityCategory;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.skills.orc.CAbilityLiquidFire;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.autocast.AutocastType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.autocast.CAutocastAbility;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.generic.AbstractGenericSingleIconActiveAbility;
@@ -48,9 +49,19 @@ public class CAbilityHumanRepair extends AbstractGenericSingleIconActiveAbility 
 	@Override
 	protected void innerCheckCanTarget(final CSimulation game, final CUnit unit, final int orderId,
 			final CWidget target, final AbilityTargetCheckReceiver<CWidget> receiver) {
-		if(target.getLife() < target.getMaxLife()) {
+		if (target instanceof CUnit building && building.isUnsummoning()) {
+			if (orderId == OrderIds.smart) receiver.orderIdNotAccepted();
+			else receiver.targetCheckFailed(CommandStringErrorKeys.TARGET_IS_BEING_UNSUMMONED);
+			return;
+		}
+		if (CAbilityLiquidFire.blocksRepair(target)) {
+			if (orderId == OrderIds.smart) receiver.orderIdNotAccepted();
+			else receiver.targetCheckFailed(CommandStringErrorKeys.UNABLE_TO_TARGET_THIS_UNIT);
+			return;
+		}
+		final CUnit targetUnit = target.visit(AbilityTargetVisitor.UNIT);
+		if (target.getLife() < target.getMaxLife() || (targetUnit != null && targetUnit.isConstructing())) {
 			if (target.canBeTargetedBy(game, unit, this.targetsAllowed, receiver)) {
-				final CUnit targetUnit = target.visit(AbilityTargetVisitor.UNIT);
 				if ((targetUnit != null) && targetUnit.isConstructing() && (this.powerBuildTimeRatio == 0 || !targetUnit.isConstructingPaused())) {
 					if(orderId == OrderIds.smart) {
 						receiver.orderIdNotAccepted();

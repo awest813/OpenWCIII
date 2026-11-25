@@ -5,6 +5,7 @@ import java.util.EnumSet;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CSimulation;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CWidget;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.item.CAbilityItemOrb;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityTargetWidgetVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
@@ -33,6 +34,11 @@ public class CUnitAttackInstant extends CUnitAttack {
 				getCooldownTime(), getDamageBase(), getDamageDice(), getDamageSidesPerDie(), getDamageUpgradeAmount(),
 				getRange(), getRangeMotionBuffer(), isShowUI(), getTargetsAllowed(), getWeaponSound(), getWeaponType(),
 				this.projectileArt);
+	}
+
+	public String getProjectileArt(final CUnit source) {
+		final String equippedArt = this.attackReplacement == null ? CAbilityItemOrb.equippedProjectileArt(source) : null;
+		return equippedArt == null ? getProjectileArt() : equippedArt;
 	}
 
 	public String getProjectileArt() {

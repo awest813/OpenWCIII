@@ -228,6 +228,10 @@ public class CAbilityNeutralBuilding extends AbstractGenericAliasedAbility {
 		return showSelectUnitButton;
 	}
 
+	public boolean requiresInventory() {
+		return this.interactionType == INTERACTION_TYPE_ANY_UNIT_W_INVENTORY;
+	}
+
 	public boolean isShowUnitIndicator() {
 		return showUnitIndicator;
 	}

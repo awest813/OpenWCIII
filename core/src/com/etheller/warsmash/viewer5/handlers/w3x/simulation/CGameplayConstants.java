@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import com.etheller.warsmash.units.DataTable;
 import com.etheller.warsmash.units.Element;
+import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CAttackType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CDefenseType;
 
@@ -20,6 +21,9 @@ public class CGameplayConstants {
 	private final float dissipateTime;
 	private final float bulletDeathTime;
 	private final float closeEnoughRange;
+	private final float guardDistance;
+	private final float maxGuardDistance;
+	private final int guardReturnTicks;
 	private final float dawnTimeGameHours;
 	private final float duskTimeGameHours;
 	private final float gameDayHours;
@@ -33,6 +37,8 @@ public class CGameplayConstants {
 	private final float foggedAttackRevealRadius;
 
 	private final float defenseArmor;
+	private final float frostMoveSpeedDecrease;
+	private final float frostAttackSpeedDecrease;
 
 	private final float etherealDamageBonusSpells;
 	private final float etherealDamageBonusMagic;
@@ -144,6 +150,10 @@ public class CGameplayConstants {
 		this.structureDecayTime = miscData.getFieldFloatValue("StructureDecayTime");
 		this.bulletDeathTime = miscData.getFieldFloatValue("BulletDeathTime");
 		this.closeEnoughRange = miscData.getFieldFloatValue("CloseEnoughRange");
+		this.guardDistance = miscData.getFieldFloatValue("GuardDistance");
+		this.maxGuardDistance = miscData.getFieldFloatValue("MaxGuardDistance");
+		this.guardReturnTicks = (int) Math.ceil(miscData.getFieldFloatValue("GuardReturnTime")
+				/ WarsmashConstants.SIMULATION_STEP_TIME);
 
 		this.dawnTimeGameHours = miscData.getFieldFloatValue("Dawn");
 		this.duskTimeGameHours = miscData.getFieldFloatValue("Dusk");
@@ -184,6 +194,10 @@ public class CGameplayConstants {
 		}
 
 		this.defenseArmor = miscData.getFieldFloatValue("DefenseArmor");
+		this.frostMoveSpeedDecrease = miscData.hasField("FrostMoveSpeedDecrease")
+				? miscData.getFieldFloatValue("FrostMoveSpeedDecrease") : 0.5f;
+		this.frostAttackSpeedDecrease = miscData.hasField("FrostAttackSpeedDecrease")
+				? miscData.getFieldFloatValue("FrostAttackSpeedDecrease") : 0.25f;
 
 		final String damageBonus = miscData.getField("EtherealDamageBonus");
 		final String[] damageComponents = damageBonus.split(",");
@@ -360,6 +374,18 @@ public class CGameplayConstants {
 		return this.closeEnoughRange;
 	}
 
+	public float getGuardDistance() {
+		return this.guardDistance;
+	}
+
+	public float getMaxGuardDistance() {
+		return this.maxGuardDistance;
+	}
+
+	public int getGuardReturnTicks() {
+		return this.guardReturnTicks;
+	}
+
 	public float getGameDayHours() {
 		return this.gameDayHours;
 	}
@@ -402,6 +428,14 @@ public class CGameplayConstants {
 
 	public float getDefenseArmor() {
 		return this.defenseArmor;
+	}
+
+	public float getFrostMoveSpeedDecrease() {
+		return this.frostMoveSpeedDecrease;
+	}
+
+	public float getFrostAttackSpeedDecrease() {
+		return this.frostAttackSpeedDecrease;
 	}
 
 	public float getEtherealDamageBonusSpells() {

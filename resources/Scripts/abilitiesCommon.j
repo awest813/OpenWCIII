@@ -784,6 +784,7 @@ library AbilitiesCommonLegacy requires TargetTypesAPI, AnimationTokensAPI
 	// because it takes arbitrary targettypes filter object -- so it does not require
 	// ability type level data.
 	native GetUnitTargetError takes unit target, unit caster, targettypes whichTargetTypes, boolean targetedEffect returns string
+	native GetUnitRaiseDeadDurationBonus takes unit caster returns real
 	// the idea that all non-unit widgets are visible is trivially disproven by the counter example of fog of war,
 	// so I'm guessing we will end up wanting to replace both of these with one "is valid target" native that takes into account
 	// whether it's a targeted effect for both units and nonunits

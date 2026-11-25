@@ -4,12 +4,20 @@ import java.util.EnumSet;
 
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.*;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CTargetType;
-import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.BooleanAbilityTargetCheckReceiver;
 
 public final class AbilityTargetStillAliveAndTargetableVisitor implements AbilityTargetVisitor<Boolean> {
+	private final boolean attack;
 	private CSimulation simulation;
 	private CUnit unit;
 	private EnumSet<CTargetType> targetsAllowed;
+
+	public AbilityTargetStillAliveAndTargetableVisitor() {
+		this(false);
+	}
+
+	public AbilityTargetStillAliveAndTargetableVisitor(final boolean attack) {
+		this.attack = attack;
+	}
 
 	public AbilityTargetStillAliveAndTargetableVisitor reset(final CSimulation simulation, final CUnit unit,
 			final EnumSet<CTargetType> targetsAllowed) {
@@ -27,7 +35,8 @@ public final class AbilityTargetStillAliveAndTargetableVisitor implements Abilit
 	@Override
 	public Boolean accept(final CUnit target) {
 		return !target.isDead() && !target.isHidden()
-				&& target.canBeTargetedBy(this.simulation, this.unit, this.targetsAllowed);
+				&& (this.attack ? target.canBeAttackedBy(this.simulation, this.unit, this.targetsAllowed)
+						: target.canBeTargetedBy(this.simulation, this.unit, this.targetsAllowed));
 	}
 
 	@Override

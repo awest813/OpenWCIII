@@ -41,6 +41,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.LWJGLException;
 import org.lwjgl.openal.AL;
 import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.AL11;
 
 import com.badlogic.gdx.Audio;
 import com.badlogic.gdx.audio.AudioDevice;
@@ -328,6 +329,13 @@ public class OpenALAudio implements Audio {
 		}
 		final int sourceId = this.soundIdToSource.get(soundId);
 		AL10.alSourcef(sourceId, AL10.AL_GAIN, volume);
+	}
+
+	public boolean seekSound(final long soundId, final float seconds) {
+		final int sourceId = this.soundIdToSource.get(soundId, -1);
+		if (sourceId == -1 || alGetSourcei(sourceId, AL_SOURCE_STATE) != AL_PLAYING) return false;
+		AL10.alSourcef(sourceId, AL11.AL_SEC_OFFSET, seconds);
+		return true;
 	}
 
 	public void setSoundLooping(final long soundId, final boolean looping) {

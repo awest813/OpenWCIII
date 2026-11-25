@@ -18,6 +18,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.data.CUnitData;
 
 public class CAbilityTypeDefinitionAbilityBuilder
 		extends AbstractCAbilityTypeDefinition<CAbilityTypeAbilityBuilderLevelData> implements CAbilityTypeDefinition {
+	private static final War3ID REJUVENATION_BUFF = War3ID.fromString("Brej");
+	private static final War3ID SLOW_BUFF = War3ID.fromString("Bslo");
+
 
 	private AbilityBuilderConfiguration parser;
 
@@ -66,6 +69,13 @@ public class CAbilityTypeDefinitionAbilityBuilder
 				buffs.add(War3ID.fromString(buff));
 			}
 		}
+		if (buffs.isEmpty() && "Arej".equals(abilityEditorData.getField(CODE))) {
+			// Classic Rejuvenation can omit BuffID while still shipping its buff art and tooltip.
+			buffs.add(REJUVENATION_BUFF);
+		}
+		if (buffs.isEmpty() && "Aslo".equals(abilityEditorData.getField(CODE))) {
+			buffs.add(SLOW_BUFF);
+		}
 		for (String effect : effectStrings) {
 			if (effect != null && !effect.isEmpty()) {
 				effects.add(War3ID.fromString(effect));
@@ -76,7 +86,12 @@ public class CAbilityTypeDefinitionAbilityBuilder
 			data.add(abilityEditorData.readSLKTag("Data" + letter + level));
 		}
 		final int manaCost = abilityEditorData.readSLKTagInt(MANA_COST+level);
-		final EnumSet<CTargetType> targetsAllowedAtLevel = CTargetType.parseTargetTypeSet(targetsAllowedAtLevelString);
+		final var overrideFields = this.parser.getOverrideFields();
+		final String defaultTargets = overrideFields == null ? null : overrideFields.getDefaultTargetsAllowed();
+		final String fallbackTargets = defaultTargets == null ? abilityEditorData.readSLKTag(TARGETS_ALLOWED)
+				: defaultTargets;
+		final EnumSet<CTargetType> targetsAllowedAtLevel = CTargetType.parseTargetTypeSet(
+				targetsAllowedAtLevelString.isBlank() ? fallbackTargets : targetsAllowedAtLevelString);
 		
 		int checkDeps = abilityEditorData.readSLKTagInt(CHECK_DEPENDENCIES);
 		List<CUnitTypeRequirement> requirements = null;

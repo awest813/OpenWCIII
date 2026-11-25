@@ -563,6 +563,11 @@ public abstract class CAbilityAbilityBuilderGenericActive extends AbstractGeneri
 	@Override
 	public void checkCanAutoTarget(final CSimulation game, final CUnit unit, final int orderId, final CWidget target,
 			final AbilityTargetCheckReceiver<CWidget> receiver) {
+		final var overrideFields = this.config.getOverrideFields();
+		if (overrideFields != null && overrideFields.isDisableAutocastWhileHolding() && unit.isHoldingPosition()) {
+			receiver.orderIdNotAccepted();
+			return;
+		}
 		if (orderId == getBaseOrderId()) {
 			if (innerCheckCanTargetSpell(game, unit, orderId, target, receiver)) {
 				if (innerCheckTargetTargetable(game, unit, target, receiver)) {

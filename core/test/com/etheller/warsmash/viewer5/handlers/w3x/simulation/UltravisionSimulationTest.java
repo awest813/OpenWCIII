@@ -16,6 +16,7 @@ import com.etheller.warsmash.parsers.w3x.War3Map;
 import com.etheller.warsmash.parsers.w3x.objectdata.Warcraft3MapRuntimeObjectData;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WarsmashConstants;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CRaceManager;
 import mpq.MPQArchive;
 
@@ -126,12 +127,42 @@ class UltravisionSimulationTest {
                 game.update();
                 assertTrue(game.isDay());
                 assertTrue(visibleAtProbe(game, archer), "The same point is visible in daylight without research");
+                verifyUltravisionGlyph(game);
             }
         }
         finally {
             WarsmashConstants.RACE_MANAGER = previous;
             for (MpqDataSource archive : archives) archive.close();
         }
+    }
+
+    private static void verifyUltravisionGlyph(final CSimulation game) {
+        game.setGameTimeOfDay(0);
+        game.update();
+        final War3ID glyphResearch = War3ID.fromString("Rguv");
+        final War3ID glyph = War3ID.fromString("guvi");
+        final CUnit footman = game.createUnitSimple(War3ID.fromString("hfoo"), 0, -640, 256, 0);
+        final CUnit hero = game.createUnitSimple(War3ID.fromString("Hpal"), 0, -128, -384, 0);
+        final CItem powerup = game.createItem(glyph, -60, -384);
+        final var inventory = hero.getInventoryData();
+        assertNotNull(inventory);
+        assertTrue(footman.getUnitType().getUpgradesUsed().contains(glyphResearch));
+        assertFalse(visibleAtProbe(game, footman));
+        game.getDefaultPlayerUnitOrderExecutor(0).issueTargetOrder(hero.getHandleId(), inventory.getHandleId(),
+                OrderIds.smart, powerup.getHandleId(), false);
+        for (int tick = 0; tick < 30; tick++) game.update();
+        assertTrue(powerup.isDead(), "The ordinary pickup consumes the glyph");
+        assertEquals(1, game.getPlayer(0).getTechtreeUnlocked(glyphResearch));
+        assertEquals(0, game.getPlayer(1).getTechtreeUnlocked(glyphResearch));
+        assertTrue(visibleAtProbe(game, footman));
+        inventory.giveItem(game, hero, game.createItem(glyph, -60, -384), false);
+        assertEquals(1, game.getPlayer(0).getTechtreeUnlocked(glyphResearch));
+        footman.setPlayerIndex(game, 1, false);
+        assertFalse(visibleAtProbe(game, footman));
+        footman.setPlayerIndex(game, 0, false);
+        assertTrue(visibleAtProbe(game, footman));
+        game.getPlayer(0).setTechResearched(game, glyphResearch, 0);
+        assertFalse(visibleAtProbe(game, footman));
     }
 
     private static boolean visibleAtProbe(CSimulation game, CUnit unit) {

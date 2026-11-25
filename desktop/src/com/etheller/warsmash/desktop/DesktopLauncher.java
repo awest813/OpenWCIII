@@ -529,6 +529,11 @@ public class DesktopLauncher {
 			}
 
 			@Override
+			public boolean seek(final Sound sound, final long id, final float seconds) {
+				return ((OpenALSound) sound).seek(id, seconds);
+			}
+
+			@Override
 			public AudioContext createContext(final boolean world) {
 				Listener listener;
 				if (world && AL.isCreated()) {

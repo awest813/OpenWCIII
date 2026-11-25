@@ -13,6 +13,7 @@ import com.etheller.interpreter.ast.util.JassProgram;
 import com.etheller.interpreter.ast.value.visitor.BooleanJassValueVisitor;
 import com.etheller.interpreter.ast.value.visitor.IntegerJassValueVisitor;
 import com.etheller.interpreter.ast.value.visitor.ObjectJassValueVisitor;
+import com.etheller.interpreter.ast.value.visitor.StringJassValueVisitor;
 import com.etheller.warsmash.viewer5.handlers.w3x.War3MapViewer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CGameSave;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnit;
@@ -49,6 +50,7 @@ globals
     button cpButton = null
     integer cpDialogClicks = 0
     integer cpSaveEvents = 0
+    string cpSaveSlots = ""
     integer cpLoadEvents = 0
     unit cpBattleTarget = null
     unit cpArcher = null
@@ -70,6 +72,7 @@ function CheckpointAudit_DialogClick takes nothing returns nothing
 endfunction
 function CheckpointAudit_SaveEvent takes nothing returns nothing
     set cpSaveEvents = cpSaveEvents + 1
+    set cpSaveSlots = cpSaveSlots + GetSaveBasicFilename() + ";"
 endfunction
 function CheckpointAudit_LoadEvent takes nothing returns nothing
     set cpLoadEvents = cpLoadEvents + 1
@@ -104,6 +107,7 @@ function CheckpointAudit_Broader takes nothing returns nothing
     call EnableUserUI(false)
     call PanCameraToTimed(x + 800, y + 400, 6.0)
     call SetCameraField(CAMERA_FIELD_ZOFFSET, 350, 6.0)
+    call SetCameraField(CAMERA_FIELD_ROLL, 18, 6.0)
     call SetCineFilterTexture("Textures\\\\Black32.blp")
     call SetCineFilterBlendMode(BLEND_MODE_BLEND)
     call SetCineFilterStartUV(0, 0, 1, 1)
@@ -127,12 +131,15 @@ function CheckpointAudit_Start takes nothing returns nothing
     local trigger saved = CreateTrigger()
     local trigger loaded = CreateTrigger()
     local trigger choice = CreateTrigger()
+    call StopMusic(false)
+    call ResumeMusic()
     set cpButton = DialogAddButton(cpDialog, "Continue checkpoint audit", 67)
     call TriggerRegisterDialogButtonEvent(choice, cpButton)
     call TriggerAddAction(choice, function CheckpointAudit_DialogClick)
     call DialogDisplay(Player(1), cpDialog, true)
     call TriggerRegisterGameEvent(saved, EVENT_GAME_SAVE)
     call TriggerAddAction(saved, function CheckpointAudit_SaveEvent)
+    call SaveGameCache(InitGameCache("CheckpointAudit.w3v"))
     call TriggerRegisterGameEvent(loaded, EVENT_GAME_LOADED)
     call TriggerAddAction(loaded, function CheckpointAudit_LoadEvent)
     set cpUnit = CreateUnit(Player(1), 'hfoo', GetUnitX(udg_Arthas) + 128, GetUnitY(udg_Arthas) + 128, 0)
@@ -283,8 +290,7 @@ endfunction
 		if (PHASE.equals("write") && stage == 2 && (BROADER ? tick >= saveTick && viewer.simulation.getActiveProjectileCount() > 0
 				: MissionEconomyProbe.ENABLED ? tick >= saveTick && MissionEconomyProbe.ready(viewer)
                 : MissionBattleProbe.ENABLED ? tick >= saveTick && MissionBattleProbe.ready(viewer) : tick == saveTick)) {
-			((com.etheller.warsmash.parsers.fdf.frames.SimpleButtonFrame) viewer.getGameUI().getFrameByName("UpperButtonBarMenuButton", 0)).onClick(Input.Buttons.LEFT);
-            ((com.etheller.warsmash.parsers.fdf.frames.GlueTextButtonFrame) viewer.getGameUI().getFrameByName("SaveGameButton", 0)).onClick(Input.Buttons.LEFT);
+			ui.quickSaveGame();
 			if (BROADER) {
 				saveTick = tick; futureTick = tick + 240;
 				check(ui.getCameraManager().getPanDestination() != null, "Checkpoint must be taken during the pan");
@@ -300,12 +306,12 @@ endfunction
             }
 			final CGameSave saved = CGameSave.tryLoad(new File(directory(), "QuickSave.w3s"));
 			check(saved != null && saved.checkpoint != null && saved.checkpoint.targetTick == saveTick, "Quick Save did not capture the completed tick");
-			check(CGameSave.tryLoad(new File(directory(), "NativeCheckpoint.w3s")) != null, "Deferred native SaveGame failed");
+			check(CGameSave.tryLoad(new File(directory(), "NativeCheckpoint.w3s")) != null, "Deferred native SaveGame failed after "
+					+ viewer.simulation.getGlobalScope().getGlobal("cpPulseCount").visit(IntegerJassValueVisitor.getInstance()) + " timer callbacks");
 			// The reference branch receives the same load notification as the resumed branch.
 			viewer.simulation.fireGameEvent(com.etheller.warsmash.viewer5.handlers.w3x.simulation.trigger.JassGameEventsWar3.EVENT_GAME_LOADED);
 			stage = 3;
 			if (BROADER || MissionBattleProbe.ENABLED) {
-				((com.etheller.warsmash.parsers.fdf.frames.GlueTextButtonFrame) viewer.getGameUI().getFrameByName("ReturnButton", 0)).onClick(Input.Buttons.LEFT);
 				captureFrames = 1; sceneCaptureUI = ui;
 			}
 			System.out.println("[MissionResumeProbe] saved tick=" + tick + " state=" + saved.checkpoint.stateFingerprint);
@@ -316,6 +322,8 @@ endfunction
 			check(globals.getGlobal("cpLocalResult").visit(IntegerJassValueVisitor.getInstance()) == 731, "Sleeping script lost its local variable");
 			check(globals.getGlobal("cpDialogClicks").visit(IntegerJassValueVisitor.getInstance()) == 1, "Dialog input lost or duplicated");
 			check(globals.getGlobal("cpSaveEvents").visit(IntegerJassValueVisitor.getInstance()) == 2, "Save notification lost or duplicated");
+			check("NativeCheckpoint;QuickSave;".equals(globals.getGlobal("cpSaveSlots").visit(StringJassValueVisitor.getInstance())),
+					"Save events did not expose their own slot names");
 			check(globals.getGlobal("cpLoadEvents").visit(IntegerJassValueVisitor.getInstance()) == 1, "Load notification lost or duplicated");
 			final CUnit unit = object(globals, "cpUnit");
 			check(unit.getTriggerEditorCustomValue() == 731, "Sleeping local unit handle no longer identifies the live unit");

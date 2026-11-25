@@ -29,6 +29,7 @@ public class CItem extends CWidget {
 	private boolean pawnable;
 	private int userData;
 	private War3ID dropId;
+	private War3ID dropSourceUnitType;
 
 	public CItem(final int handleId, final float x, final float y, final float life, final War3ID typeId,
 			final CItemType itemTypeInstance) {
@@ -59,14 +60,15 @@ public class CItem extends CWidget {
 			return 0;
 		}
 		final boolean wasDead = isDead();
-		this.life -= damage;
+		final float applied = source != null && isAttack ? damage * source.attackDamageDealtMultiplier() : damage;
+		this.life -= applied;
 		simulation.itemDamageEvent(this, weaponSoundType, this.itemType.getArmorType());
 		if (isDead() && !wasDead) {
 			fireDeathEvents(simulation);
 			forceDropIfHeld(simulation);
 			simulation.getWorldCollision().removeItem(this);
 		}
-		return damage;
+		return applied;
 	}
 
 	@Override
@@ -120,6 +122,14 @@ public class CItem extends CWidget {
 		return this.typeId;
 	}
 
+	public War3ID getDropSourceUnitType() {
+		return this.dropSourceUnitType;
+	}
+
+	public void setDropSourceUnitType(final War3ID typeId) {
+		this.dropSourceUnitType = typeId;
+	}
+
 	public CItemType getItemType() {
 		return this.itemType;
 	}
@@ -130,6 +140,15 @@ public class CItem extends CWidget {
 
 	public boolean isHidden() {
 		return this.hidden;
+	}
+
+	public void setScriptedPosition(final CSimulation game, final float x, final float y) {
+		if (this.containedInventory != null && this.containedUnit != null) {
+			this.containedInventory.dropItem(game, this.containedUnit, this, x, y, false);
+		}
+		else {
+			setPointAndCheckUnstuck(x, y, game);
+		}
 	}
 
 	@Override
@@ -162,11 +181,12 @@ public class CItem extends CWidget {
 		setX(outputX);
 		setY(outputY);
 		if (this.registeredEnumRectangle != null) {
-			this.registeredEnumRectangle.set(outputX - COLLISION_SIZE, outputY - COLLISION_SIZE,
-					COLLISION_SIZE * 2, COLLISION_SIZE * 2);
-		}
-		if ((this.containedInventory == null) && !isDead() && !isHidden()) {
-			game.getWorldCollision().translate(this, outputX - oldX, outputY - oldY);
+			if (this.containedInventory == null && !isDead()) {
+				game.getWorldCollision().translate(this, outputX - oldX, outputY - oldY);
+			}
+			else {
+				this.registeredEnumRectangle.setPosition(outputX - COLLISION_SIZE, outputY - COLLISION_SIZE);
+			}
 		}
 	}
 

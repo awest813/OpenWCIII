@@ -31,6 +31,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.queue.CAb
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.abilities.targeting.AbilityPointTarget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorCategory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.CampaignProgressStore;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.COrderTargetWidget;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CAllianceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerUnitOrderExecutor;
@@ -46,6 +47,10 @@ public final class Human02PlaythroughProbe {
     private static final String PHASE = System.getProperty("warsmash.human02PlaythroughPhase", "");
     private static final float[][] ROUTE = { {-2000, -2400}, {-896, -1376}, {384, -512},
             {1536, 512}, {2400, 1344}, {3104, 2112} };
+    private static final float[][] SEARINOX_APPROACH = {
+            {800, -3600}, {2800, -3600}, {3800, -4300}, {3500, -5500}, {2672, -5808}
+    };
+    private static final War3ID RIFLEMAN = War3ID.fromString("hrif");
     private static int stage = INTERLUDE_ONLY ? 3 : 0;
     private static int project, waypoint, orderTick, reportTick, optionalStep, optionalWaypoint;
     private static long started;
@@ -215,6 +220,12 @@ public final class Human02PlaythroughProbe {
 
     private static void micro(final War3MapViewer viewer, final CPlayerUnitOrderExecutor orders, final CUnit arthas) {
         final var game = viewer.simulation;
+        final var army = army(viewer);
+        final float[] optionalDestination = stage == 2 && FULL && optionalStep < 4 ? optionalDestination(arthas) : null;
+        if (optionalStep == 1 && optionalWaypoint >= SEARINOX_APPROACH.length - 1) {
+            fightSearinox(viewer, orders, army);
+            return;
+        }
         for (final String skill : new String[] { "AHds", "AHhb", "AHad" }) {
             final int id = War3ID.fromString(skill).getValue();
             final var activation = new BooleanAbilityActivationReceiver();
@@ -230,11 +241,9 @@ public final class Human02PlaythroughProbe {
                 if (activation.isOk()) { orders.issueImmediateOrder(arthas.getHandleId(), ability.getHandleId(), OrderIds.divineshield, false); casting = true; }
             }
         }
-        final var army = army(viewer);
         final var injured = army.stream().filter(u -> u != arthas && u.getMaximumLife() - u.getLife() > CampaignPlaythroughProbe.healingThreshold(arthas)
                 && arthas.distanceSquaredNoCollision(u) < 600 * 600).max(Comparator.comparingDouble(u -> u.getMaximumLife() - u.getLife())).orElse(null);
         if (!casting && injured != null) casting = CampaignPlaythroughProbe.targetOrder(viewer, orders, arthas, OrderIds.holybolt, injured);
-        final float[] optionalDestination = stage == 2 && FULL && optionalStep < 4 ? optionalDestination(viewer, arthas) : null;
         if (stage == 2 && optionalDestination == null && waypoint < ROUTE.length && arthas.distanceSquaredNoCollision(ROUTE[waypoint][0], ROUTE[waypoint][1]) < 220 * 220) waypoint++;
         for (final var unit : army) {
             if (unit.isPaused() || (unit == arthas && casting)) continue;
@@ -255,6 +264,30 @@ public final class Human02PlaythroughProbe {
         }
     }
 
+    private static void fightSearinox(final War3MapViewer viewer, final CPlayerUnitOrderExecutor orders,
+            final List<CUnit> army) {
+        final var game = viewer.simulation;
+        final CUnit searinox = object(game.getGlobalScope(), "udg_Searinox");
+        final int end = SEARINOX_APPROACH.length - 1;
+        final float[] staging = SEARINOX_APPROACH[end - 1];
+        final float[] firingPosition = SEARINOX_APPROACH[end];
+        final boolean canEngage = searinox.isVisible(game, viewer.getLocalPlayerIndex()) && !searinox.isInvulnerable();
+        check(army.stream().anyMatch(unit -> RIFLEMAN.equals(unit.getTypeId())), "No riflemen survived to face Searinox");
+        for (final CUnit unit : army) {
+            if (unit.isPaused()) continue;
+            if (!RIFLEMAN.equals(unit.getTypeId())) {
+                CampaignPlaythroughProbe.pointOrder(viewer, orders, unit, staging[0], staging[1]);
+            }
+            else if (unit.getCurrentOrder() instanceof COrderTargetWidget attack
+                    && attack.getOrderId() == OrderIds.attack && attack.getTarget(game) == searinox) {
+                continue;
+            }
+            else if (!canEngage || !CampaignPlaythroughProbe.targetOrder(viewer, orders, unit, OrderIds.attack, searinox)) {
+                CampaignPlaythroughProbe.pointOrder(viewer, orders, unit, firingPosition[0], firingPosition[1]);
+            }
+        }
+    }
+
     private static boolean optional(final War3MapViewer viewer, final MeleeUI ui, final CPlayerUnitOrderExecutor orders, final CUnit arthas) {
         final var globals=viewer.simulation.getGlobalScope();
         final CQuest quest=object(globals,"udg_QuestSearinox");
@@ -266,9 +299,7 @@ public final class Human02PlaythroughProbe {
             if (CampaignPlaythroughProbe.hasItem(arthas,"sehr")) {
                 optionalStep=3; optionalWaypoint=0;
                 if (PHASE.equals("write") && !checkpointSaved) {
-                    ((com.etheller.warsmash.parsers.fdf.frames.SimpleButtonFrame)viewer.getGameUI().getFrameByName("UpperButtonBarMenuButton",0)).onClick(Input.Buttons.LEFT);
-                    ((com.etheller.warsmash.parsers.fdf.frames.GlueTextButtonFrame)viewer.getGameUI().getFrameByName("SaveGameButton",0)).onClick(Input.Buttons.LEFT);
-                    ((com.etheller.warsmash.parsers.fdf.frames.GlueTextButtonFrame)viewer.getGameUI().getFrameByName("ReturnButton",0)).onClick(Input.Buttons.LEFT);
+                    check(ui.keyDown(Input.Keys.F6), "F6 did not invoke Quick Save");
                     final CGameSave save=CGameSave.tryLoad(new File(com.etheller.warsmash.viewer5.handlers.w3x.simulation.save.MissionSaveStore.currentDirectory(),"QuickSave.w3s"));
                     check(save!=null && save.checkpoint!=null && save.checkpoint.targetTick==viewer.simulation.getGameTurnTick(),"Quest checkpoint not saved");
                     final Properties driver=new Properties(); driver.setProperty("tick",Integer.toString(viewer.simulation.getGameTurnTick())); driver.setProperty("orderTick",Integer.toString(orderTick));
@@ -277,7 +308,16 @@ public final class Human02PlaythroughProbe {
                     System.out.println("[Human02PlaythroughProbe] actual Searinox Quick Save tick="+save.checkpoint.targetTick+" state="+save.checkpoint.stateFingerprint);
                     return true;
                 }
-            } else { CampaignPlaythroughProbe.targetOrder(viewer,orders,arthas,OrderIds.smart,heart); return true; }
+            } else {
+                final float[] pullback = SEARINOX_APPROACH[SEARINOX_APPROACH.length - 3];
+                for (final CUnit unit : army(viewer)) {
+                    if (unit != arthas) {
+                        CampaignPlaythroughProbe.pointOrder(viewer, orders, unit, pullback[0], pullback[1]);
+                    }
+                }
+                CampaignPlaythroughProbe.targetOrder(viewer, orders, arthas, OrderIds.smart, heart);
+                return true;
+            }
         }
         if (optionalStep == 3 && quest.isCompleted()) {
             check(CampaignPlaythroughProbe.hasItem(arthas,"ofir") && !CampaignPlaythroughProbe.hasItem(arthas,"sehr"),"Searinox reward not exchanged");
@@ -285,9 +325,9 @@ public final class Human02PlaythroughProbe {
         }
         return false;
     }
-    private static float[] optionalDestination(final War3MapViewer viewer, final CUnit arthas) {
+    private static float[] optionalDestination(final CUnit arthas) {
         final float[][] route = optionalStep == 0 ? new float[][]{{-2000,-3800},{-600,-3500},{0,-2700}}
-            : optionalStep == 1 ? new float[][]{{800,-3600},{2800,-3600},{3800,-4300},{3500,-5500},{2672,-5808}}
+            : optionalStep == 1 ? SEARINOX_APPROACH
             : new float[][]{{3500,-5500},{3800,-4300},{2800,-3600},{800,-3600},{0,-2700}};
         if (optionalWaypoint < route.length && arthas.distanceSquaredNoCollision(route[optionalWaypoint][0],route[optionalWaypoint][1])<220*220) optionalWaypoint++;
         return route[Math.min(optionalWaypoint,route.length-1)];

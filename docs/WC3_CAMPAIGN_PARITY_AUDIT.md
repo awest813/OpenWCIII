@@ -130,8 +130,8 @@ exposed 32 legacy-aura loading failures, now fixed. Strict parsing exposed unary
 plus in `u08x02.ai`, now supported. The latest strict run contains no reported AI
 parse or path-cycle exceptions.
 
-**Remaining warnings:** unsupported upgrade effects and skipped legacy
-destructable modifications still occur. The audit can pass despite them.
+**Warnings in that run:** unsupported upgrade effects and skipped legacy doodad
+overrides. The audit can pass despite data-loading warnings.
 Retail-dependent tests also use local paths and may skip or return early when
 data is missing. Zero reported skips alone does not prove every fixture ran.
 
@@ -140,14 +140,14 @@ data is missing. Zero reported skips alone does not prove every fixture ran.
 | Area | Present / bounded evidence | Remaining gap |
 |---|---|---|
 | Campaign menus | Profile-specific persistent availability, default seeding, selection, guarded loading | Verify fresh profiles, unlock order, cinematic availability, and returns in real campaigns |
-| Chapter transitions | ChangeLevel routing, score Continue flow, failure recovery, archive lifetime fixes; ordinary-order Human01 main/optional objectives and a resumed branch, plus Human02 main objectives, interlude and Human03 carryover | Execute Human02's optional quest, later objectives, other victory/defeat/retry branches and full campaigns |
+| Chapter transitions | ChangeLevel routing, score Continue flow, failure recovery, archive lifetime fixes; ordinary-order Human01 and Human02 main and optional objectives with quest-item checkpoints, interludes, and hero carryover | Verify later objectives, other victory/defeat/retry branches, and full campaigns |
 | Hero gamecache | Stats, skills, name, inventory, profile-scoped disk persistence; Human01/Human02 scripts restore two profiles' distinct heroes after process relaunch and preserve the ordinary-play hero's earned XP/skills | Verify other heroes/items/campaigns, bonus transitions, and subsequent normal playthroughs |
 | Saved games | v7 deterministic reconstruction with handle/VM identity, gamecache/progress baselines, input/host observations, state validation and atomic writes; Human01 separate-process continuation and chapter transition fixture, active projectiles, AI captain/guard/worker state, timed RTS camera/filter/subtitles, four-race economies and a 96-unit ranged battle in a cleared arena | Larger or combined-arms battles, multi-town expansion, long missions and model/video/audio coverage unverified; older partial saves cannot resume |
 | Entity save scaffold | Legacy collection/serialization helpers remain readable and unit-tested | Gameplay resume uses replay, avoiding entity replacement and disconnected script references |
 | Campaign AI | Script environment, expansion/guard/assault code and focused tests; controlled four-race harvest/build/train/research continuation, separate worker jobs, boarded wisps, mine placement, queued targets and producer validation; two 48-unit captain assault groups across save/resume | Verify normal campaign AI, expansion/reallocation, combined-arms attacks, terrain navigation, defense, targeting and timing |
 | Abilities/pathing | Human skill fallbacks, legacy aura defaults, corrected equipment bonuses, isolated search state | Missing ability and upgrade behavior; broader combat/movement verification |
-| Mission UI | Quests, dialogs, leaderboard/multiboard, victory/defeat interfaces | Several basic overlays; verify layout, input, hotkeys, and timing |
-| Cinematics/audio | External ffmpeg movies, sky/camera support, music state/fade-in, stacked sound registry | Model playback, camera roll, fade-out, non-music volume effects, rendered/audio review |
+| Mission UI | Quests, dialogs, leaderboard/multiboard, victory/defeat interfaces, and tested offset conversion for scripted game messages | Several basic overlays and rendered verification of layout, input, hotkeys, and timing |
+| Cinematics/audio | External ffmpeg movies, sky/camera support, timed camera roll across mission save and resume, music state and fades, and a stacked sound registry | Authored cinematic review, model playback, precise stop-fade timing, non-music volume effects, and playback on the target system |
 | Options/custom campaigns | Options persistence and custom-campaign format parser | Some options lack live effects; parsing does not establish a complete launch flow |
 
 Focused tests include `StoredUnitDataSimulationTest`, `CampaignHeroCarryoverTest`,
@@ -230,6 +230,30 @@ separate `Rguv` campaign glyph. The `AIuv` item alias also inherits a `Reuv`
 requirement in the loaded data; its intended retail item behavior needs separate
 verification and is excluded from this pass's acceptance claims.
 
+Subsequent installed-data tests verified Flying Machine Bombs enabling the
+ground weapon, Vorpal Blades selecting the tree-capable weapon, and Corrosive
+Breath enabling the Chimaera's building attack. Picking up the Glyph of
+Ultravision grants its configured research and changes actual nighttime fog
+for eligible units. Raise Dead creates separate timed life buffs for both
+Skeleton Warriors and extends their lifetime from 40 to 55 seconds after
+Skeletal Longevity. Skeletal Mastery replaces one Warrior with a Mage.
+Both resulting units use the researched lifetime. The three Spiked
+Barricades levels return 4, 10, and 16
+damage to enemy melee attackers. War Drums research updates damage for allied
+melee and ranged attacks, while overlapping Kodos use the strongest aura.
+Vorpal Blades damages units behind the impact in the line of fire. Storm
+Hammers damages the next eligible ground unit in the line. Targeted
+attacks and Attack Ground were checked separately.
+[Blizzard's Necromancer guide](https://classic.battle.net/war3/undead/units/necromancer.shtml)
+[Blizzard's War Mill guide](https://classic.battle.net/war3/orc/buildings/warmill.shtml)
+[Blizzard's Kodo Beast guide](https://classic.battle.net/war3/orc/units/kodobeast.shtml)
+[Blizzard's Glaive Thrower guide](https://classic.battle.net/war3/nightelf/units/glaivethrower.shtml)
+[Blizzard's Gryphon Rider guide](https://classic.battle.net/war3/human/units/gryphonrider.shtml)
+
+After these changes, the 85-map retail startup run reported zero unsupported
+upgrade effect warnings. This confirms the known effect IDs load. Campaign
+combat and timing still require mission-level verification.
+
 ### Ownership and ability lifecycle follow-up
 
 The previous ownership check moved a researched archer to an unresearched player
@@ -293,7 +317,9 @@ next chapter with no unexplained script errors. Retain idle checks as smoke test
 
 - [ ] Inventory unsupported upgrade effects; implement required effects and
   verify the resulting unit behavior.
-- [ ] Handle the legacy destructable modifications currently discarded.
+- [x] Load classic version 1 doodad overrides. All 32 affected campaign tables
+  and all 28 existing destructible tables in the tested archives parsed to the
+  end of the file. All 85 discovered maps passed the 300-tick smoke run.
 - [ ] Identify behaviorless ability/native fallbacks reached by missions and
   implement the required effects with outcome-based tests.
 - [x] Verify controlled harvesting, construction, training and research for all
@@ -360,12 +386,44 @@ full campaign parity.
 
 ## Mission result record
 
-No completed start-to-finish campaign matrix is established by this review.
-Create a row per actual scenario; never prefill success from the idle audit.
+The desktop replays use locally installed classic archives. The entries below
+cover runs on Normal difficulty, including one fresh-profile Human run
+from Human01 through the native Human09 victory and Undead unlock.
 
-| Map / scenario | Revision + assets | Difficulty / seed | Objectives + AI | Save/resume | Exit + next chapter | Visual/audio | Evidence / defects |
-|---|---|---|---|---|---|---|---|
-| Not yet recorded | — | — | Unverified | Unverified | Unverified | Unverified | Add reproducible actions and logs |
+| Scenario | Verified in play | Still open |
+|---|---|---|
+| Human01 | Main and both optional objectives, victory, and Human02 carryover in checkpoint, standalone, and continuous campaign runs | Other difficulties |
+| Human02 | Main objectives, Searinox reward, fresh-process checkpoint and exact Human03 carryover, including in the continuous run | Other difficulties |
+| Human03 to Human05 | Main and optional objectives, victory screens, and exact hero restoration into Human05 in staged and continuous runs | Other difficulties |
+| Human05 to Human06 | Full defense, victory, interlude and Arthas carryover in the continuous run. The grain caravan passed separately | Other difficulties |
+| Human06 to Human07 | Contested victory after 100 denials, story interlude and Arthas carryover in staged and continuous runs | Other difficulties |
+| Human07 to Human08 | Town hall, dwarf rescue, enemy citadel, and both heroes' carryover in staged and continuous runs | Other difficulties |
+| Human08 to Human09 | Earned Human07 cache, canyon cleared through Sapper orders, all five ships destroyed, and both heroes' exact carryover in staged and continuous runs | Other difficulties |
+| Human09 | Earned Human08 carryover, Frostmourne, defeat of Mal'Ganis, native victory and Undead unlock in the continuous run | Other difficulties |
+| Orc01 | Original ship rescues, Cairne escort and defense, unskipped ending, native victory, and Orc02 Thrall carryover including the second ship's healing potion | Full Orc campaign sequence |
+| Orc02 | Earned Thrall from Orc01, merchant Raider reinforcements, all four wagons delivered, native victory, original interlude, and exact Thrall carryover into Orc03 | Full Orc campaign sequence |
+| Orc03 | Earned Orc02 carryover, original settlement, Harpies defeated, both Zeppelins bought and returned, native victory, and Orc04 transition | Full Orc campaign sequence |
+| Orc04 | Native Pillage research, western mine expansion, five original groves, 15,000 lumber, story interlude, and earned Grom carryover into Orc05 | Full Orc campaign sequence |
+| Orc05 | Earned Grom, original mine income, Sentry Ward, Satyr waygate, Fountain of Blood transformation, Cenarius defeated, verified Chaos Grom save for Orc08, and Orc06 transition | Full Orc campaign sequence |
+| Orc06 | Earned Thrall with the original opening XP award, Cairne recruited, six Wyverns freed, and both heroes and siege unloaded on the summit by Zeppelin | Summit victory, defiled Fountain, and Orc07 carryover |
+| Orc07 | Original cave-in, Blade Key recovered through normal play, and King's Door opened with the key consumed | Dragon, Cairne's route, native victory, and Orc08 carryover |
+| Undead01 | Bridge rescue, initial roster of 19 regular acolyte candidates, invisible Shade, Find the Graveyard, authored healing crate drop and pickup, and 16 of 20 rescues | Remaining Acolytes, native victory, and Undead02 carryover |
+| NightElf01 | Original base quest, optional Furbolg rescue and reinforcements, Paladin defeated, and exact Tyrande carryover into NightElf02 | Full Night Elf campaign sequence |
+| NightElf02 | Opening and manual Hide, original waygate, Sentinel reveal, reinforcements, escape, and exact Tyrande carryover into NightElf03 | Full Night Elf campaign sequence |
+| NightElf03 | Original mine income, all Keepers defeated, Horn of Cenarius used, Furion awakened, and Tyrande carryover into NightElf04 | Optional dragon and full campaign sequence |
+| NightElf04 | Native mine construction, second mine reopened, Dryad gate opened, Satyr base destroyed, Druids awakened, victory, and exact Tyrande and Furion carryover into NightElf05 | Full Night Elf campaign sequence |
+| NightElf05 | Earned heroes, original intro, spider eggs, dungeon split, lava bridge, native Cyclone, Furion's completed quest, both pressure plates, prison waygate, Illidan's release, hero saves, and the native NightElf06 transition | Optional pickups and alternate routes |
+| NightElf06 | Earned Barrow Deeps cache, original introduction, gold income from the native mine, Demon Gate destroyed, Illidan transformed by the Skull of Gul'dan, Tichondrius defeated in combat, and native handoff through the interlude | Optional paths |
+| NightElf07 | Native interlude-to-mission transition, earned Tyrande and Furion, authored XP bonuses, mining and recruitment, full 45-minute defence, native victory, and original credits | One uninterrupted NightElf01–NightElf07 replay |
+| Frozen Throne NightElfX01 | Pursuit, harbor checkpoint restoration in a fresh process, original ship defense, native victory, and Maiev carryover into NightElfX02 | Full Frozen Throne Night Elf campaign sequence |
+| Frozen Throne NightElfX02 | Earned Maiev, settlement gold, shipyard purchase, northern landing, Ruins Gate, second Archer landing, all eight Tomb Guardians, native victory, and exact Maiev carryover into NightElfX03 | Full Frozen Throne Night Elf campaign sequence |
+| Frozen Throne NightElfX03 | Unskipped introduction, earned Maiev, Blink to the Rune of Mana, the Demonic Gate, floor switch, river bridge, and all three rock barriers and rescues | Illidan pursuit, tomb escape, and NightElfX04 carryover |
+| Founding of Durotar Act One | Unskipped introduction, Misha's original summon, Mogrin's Report delivered to Thrall, Rokhan recruited, all three initial assignments discovered, Sappers rescued, first support columns collapsed, native Quick Save, and a Goblin Tunnels round trip with both heroes and Durotar quest state restored | Remaining support columns, other assignments and zones, and Acts Two and Three |
+
+The latest headless smoke run passed 85 maps across 25,500 simulation ticks.
+The transition inventory resolved all 70 literal map targets. The rendered
+replay commands and chapter-specific results are in the flow audit.
+[Campaign flow audit](CAMPAIGN_FLOW_AUDIT.md)
 
 Use **passed**, **failed**, **blocked**, **not run**, or **not applicable with
 reason**. Attach reproduction steps to failures. Distinguish automated assertions

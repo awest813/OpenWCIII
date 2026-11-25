@@ -11,17 +11,22 @@ import com.etheller.warsmash.units.ObjectData;
 import com.etheller.warsmash.util.War3ID;
 import com.etheller.warsmash.util.WarsmashConstants;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CGameplayConstants;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUnitTypeRequirement;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.CUpgradeType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.combat.CUpgradeClass;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffect;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttacksEnabled;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackTargetCount;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectDefenseType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectLumberHarvest;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackDamage;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackDice;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackRange;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackSpillDistance;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAttackSpeed;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectAuraDamage;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectDefenseUpgradeBonus;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectHitPointRegen;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectHitPoints;
@@ -31,7 +36,9 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEff
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectManaRegen;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectMovementSpeed;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectMovementSpeedPcnt;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectRaiseDeadDuration;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectSpellLevel;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectSpikedBarricades;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.upgrade.CUpgradeEffectTechMaxAllowed;
 
 public class CUpgradeData {
@@ -63,6 +70,7 @@ public class CUpgradeData {
 	private final ObjectData upgradeData;
 	private final DataTable standardUpgradeEffectMeta;
 	private final Map<War3ID, CUpgradeType> idToType = new HashMap<>();
+	private final Map<CUnitType, List<War3ID>> nightVisionUpgrades = new HashMap<>();
 
 	public CUpgradeData(final CGameplayConstants gameplayConstants, final ObjectData upgradeData,
 			final DataTable standardUpgradeEffectMeta) {
@@ -77,6 +85,109 @@ public class CUpgradeData {
 			return null;
 		}
 		return getUpgradeTypeInstance(typeId, upgradeType);
+	}
+
+	public int getAttackMask(final CUnitType type, final CPlayer owner) {
+		int mask = type.getAttacksEnabled();
+		for (final War3ID id : type.getUpgradesUsed()) {
+			if (owner.getTechtreeUnlocked(id) <= 0) continue;
+			final CUpgradeType upgrade = getType(id);
+			if (upgrade == null) continue;
+			for (final CUpgradeEffect effect : upgrade.getUpgradeEffects()) {
+				if (effect instanceof CUpgradeEffectAttacksEnabled attackUpgrade) {
+					mask = attackUpgrade.getMask();
+				}
+			}
+		}
+		return mask;
+	}
+
+	public boolean hasUltravision(final CUnitType type, final CPlayer owner) {
+		final var candidates = this.nightVisionUpgrades.computeIfAbsent(type, unitType -> unitType.getUpgradesUsed()
+				.stream().filter(this::isUltravisionUpgrade).toList());
+		for (final War3ID id : candidates) {
+			if (owner.getTechtreeUnlocked(id) > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public float getRaiseDeadDurationBonus(final CUnitType type, final CPlayer owner) {
+		float bonus = 0;
+		for (final War3ID id : type.getUpgradesUsed()) {
+			final int level = owner.getTechtreeUnlocked(id);
+			if (level <= 0) continue;
+			final CUpgradeType upgrade = getType(id);
+			if (upgrade == null) continue;
+			for (final CUpgradeEffect effect : upgrade.getUpgradeEffects()) {
+				if (effect instanceof CUpgradeEffectRaiseDeadDuration duration) {
+					bonus += duration.getBonus(level);
+				}
+			}
+		}
+		return bonus;
+	}
+
+	public float getSpikedBarricadesDamage(final CUnitType type, final CPlayer owner) {
+		float damage = 0;
+		for (final War3ID id : type.getUpgradesUsed()) {
+			final int level = owner.getTechtreeUnlocked(id);
+			if (level <= 0) continue;
+			final CUpgradeType upgrade = getType(id);
+			if (upgrade == null) continue;
+			for (final CUpgradeEffect effect : upgrade.getUpgradeEffects()) {
+				if (effect instanceof CUpgradeEffectSpikedBarricades barricades) {
+					damage += barricades.getDamage(level);
+				}
+			}
+		}
+		return damage;
+	}
+
+	public float getAuraDamageBonus(final CUnitType type, final CPlayer owner, final War3ID alias, final War3ID code) {
+		float bonus = 0;
+		for (final War3ID id : type.getUpgradesUsed()) {
+			final int level = owner.getTechtreeUnlocked(id);
+			if (level <= 0) continue;
+			final CUpgradeType upgrade = getType(id);
+			if (upgrade == null) continue;
+			for (final CUpgradeEffect effect : upgrade.getUpgradeEffects()) {
+				if (effect instanceof CUpgradeEffectAuraDamage aura
+						&& (alias.equals(aura.ability()) || code.equals(aura.ability()))) {
+					bonus += aura.getBonus(level);
+				}
+			}
+		}
+		return bonus;
+	}
+
+	public float getAttackSpillDistanceBonus(final CUnitType type, final CPlayer owner) {
+		float bonus = 0;
+		for (final War3ID id : type.getUpgradesUsed()) {
+			final int level = owner.getTechtreeUnlocked(id);
+			if (level <= 0) continue;
+			final CUpgradeType upgrade = getType(id);
+			if (upgrade == null) continue;
+			for (final CUpgradeEffect effect : upgrade.getUpgradeEffects()) {
+				if (effect instanceof CUpgradeEffectAttackSpillDistance spill) {
+					bonus += spill.getBonus(level);
+				}
+			}
+		}
+		return bonus;
+	}
+
+	private boolean isUltravisionUpgrade(final War3ID id) {
+		final GameObject upgrade = this.upgradeData.get(id);
+		if (upgrade != null) {
+			for (final String field : EFFECT) {
+				if ("rauv".equals(upgrade.getFieldAsString(field, 0))) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private CUpgradeType getUpgradeTypeInstance(final War3ID typeId, final GameObject upgradeType) {
@@ -97,6 +208,37 @@ public class CUpgradeData {
 					// it later but the syntax is pretty nice and the calculation is cached and only
 					// runs once per upgrade
 					switch (effectId.toString()) {
+					case "renw":
+						upgradeEffects.add(new CUpgradeEffectAttacksEnabled(
+								upgradeType.getFieldAsInteger(effectBaseMetaKey, 0)));
+						break;
+					case "rasd":
+						upgradeEffects.add(new CUpgradeEffectAttackSpillDistance(
+								upgradeType.getFieldAsFloat(effectBaseMetaKey, 0),
+								upgradeType.getFieldAsFloat(effectModMetaKey, 0)));
+						break;
+					case "rauv":
+						// Fog queries the current owner's research in hasUltravision.
+						break;
+					case "rrai":
+						upgradeEffects.add(new CUpgradeEffectRaiseDeadDuration(
+								upgradeType.getFieldAsFloat(effectBaseMetaKey, 0),
+								upgradeType.getFieldAsFloat(effectModMetaKey, 0)));
+						break;
+					case "rspi":
+						upgradeEffects.add(new CUpgradeEffectSpikedBarricades(
+								upgradeType.getFieldAsFloat(effectBaseMetaKey, 0),
+								upgradeType.getFieldAsFloat(effectModMetaKey, 0)));
+						break;
+					case "raud": {
+						final String ability = upgradeType.getFieldAsString(effectCodeMetaKey, 0).trim();
+						if (ability.length() == 4) {
+							upgradeEffects.add(new CUpgradeEffectAuraDamage(War3ID.fromString(ability),
+									upgradeType.getFieldAsFloat(effectBaseMetaKey, 0),
+									upgradeType.getFieldAsFloat(effectModMetaKey, 0)));
+						}
+						break;
+					}
 					case "ratc":
 						upgradeEffects.add(new CUpgradeEffectAttackTargetCount(
 								upgradeType.getFieldAsInteger(effectBaseMetaKey, 0),

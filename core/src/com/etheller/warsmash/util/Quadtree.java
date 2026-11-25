@@ -1,5 +1,6 @@
 package com.etheller.warsmash.util;
 
+import java.util.IdentityHashMap;
 import java.util.function.Consumer;
 
 import com.badlogic.gdx.math.Rectangle;
@@ -10,38 +11,56 @@ public class Quadtree<T> {
 	private static final int SPLIT_THRESHOLD = 6;
 
 	private final Rectangle bounds;
+	private final IdentityHashMap<T, Node<T>> registered;
 	private Quadtree<T> northeast;
 	private Quadtree<T> northwest;
 	private Quadtree<T> southwest;
 	private Quadtree<T> southeast;
 	private final Array<Node<T>> nodes = new Array<>();
+	private Array<Node<T>> outsideNodes;
 	private boolean leaf = true;
 	private final NodeAdder nodeAdder = new NodeAdder();
 	private final UniqueNodeAdder uniqueNodeAdder = new UniqueNodeAdder();
 
 	public Quadtree(final Rectangle bounds) {
+		this(bounds, true);
+	}
+
+	private Quadtree(final Rectangle bounds, final boolean root) {
 		this.bounds = bounds;
+		this.registered = root ? new IdentityHashMap<>() : null;
 	}
 
 	public void add(final T object, final Rectangle bounds) {
-		final Node<T> node = new Node<T>(object, bounds);
-		add(node, 0);
+		final Node<T> replacement = new Node<>(object, new Rectangle(bounds));
+		final Node<T> previous = this.registered.put(object, replacement);
+		if (previous != null) removeFromIndex(previous);
+		addAtRoot(replacement);
 	}
 
 	public void remove(final T object, final Rectangle bounds) {
-		remove(object, bounds, null);
+		final Node<T> node = this.registered.remove(object);
+		if (node != null) removeFromIndex(node);
 	}
 
 	public void translate(final T object, final Rectangle prevBoundsToUpdate, final float xShift, final float yShift) {
-		final Node<T> node = remove(object, prevBoundsToUpdate, null);
+		final Node<T> node = this.registered.get(object);
 		prevBoundsToUpdate.x += xShift;
 		prevBoundsToUpdate.y += yShift;
 		if (node != null) {
-			add(node, 0);
+			removeFromIndex(node);
+			node.bounds.set(prevBoundsToUpdate);
+			addAtRoot(node);
 		}
 	}
 
 	public boolean intersect(final Rectangle bounds, final QuadtreeIntersector<T> intersector) {
+		if (this.outsideNodes != null) {
+			for (int index = 0; index < this.outsideNodes.size; index++) {
+				final Node<T> node = this.outsideNodes.get(index);
+				if (node.bounds.overlaps(bounds) && intersector.onIntersect(node.object)) return true;
+			}
+		}
 		if (this.leaf) {
 			for (int i = 0; i < this.nodes.size; i++) {
 				final Node<T> node = this.nodes.get(i);
@@ -79,6 +98,12 @@ public class Quadtree<T> {
 	}
 
 	public boolean intersect(final float x, final float y, final QuadtreeIntersector<T> intersector) {
+		if (this.outsideNodes != null) {
+			for (int index = 0; index < this.outsideNodes.size; index++) {
+				final Node<T> node = this.outsideNodes.get(index);
+				if (node.bounds.contains(x, y) && intersector.onIntersect(node.object)) return true;
+			}
+		}
 		if (this.leaf) {
 			for (int i = 0; i < this.nodes.size; i++) {
 				final Node<T> node = this.nodes.get(i);
@@ -113,6 +138,30 @@ public class Quadtree<T> {
 			}
 			return false;
 		}
+	}
+
+	private void addAtRoot(final Node<T> node) {
+		// JASS may place objects beyond the playable rectangle, where no child can contain them.
+		if (canIndex(node.bounds)) {
+			add(node, 0);
+		}
+		else {
+			if (this.outsideNodes == null) this.outsideNodes = new Array<>();
+			this.outsideNodes.add(node);
+		}
+	}
+
+	private void removeFromIndex(final Node<T> node) {
+		if (canIndex(node.bounds)) {
+			removeInside(node);
+		}
+		else if (this.outsideNodes != null) {
+			this.outsideNodes.removeValue(node, true);
+		}
+	}
+
+	private boolean canIndex(final Rectangle rectangle) {
+		return rectangle.width > 0 && rectangle.height > 0 && this.bounds.contains(rectangle);
 	}
 
 	private void add(final Node<T> node, final int depth) {
@@ -159,42 +208,34 @@ public class Quadtree<T> {
 		final float halfHeight = this.bounds.height / 2;
 		final float y = this.bounds.y;
 		final float yMidpoint = y + halfHeight;
-		this.northeast = new Quadtree<>(new Rectangle(xMidpoint, yMidpoint, halfWidth, halfHeight));
-		this.northwest = new Quadtree<>(new Rectangle(x, yMidpoint, halfWidth, halfHeight));
-		this.southwest = new Quadtree<>(new Rectangle(x, y, halfWidth, halfHeight));
-		this.southeast = new Quadtree<>(new Rectangle(xMidpoint, y, halfWidth, halfHeight));
+		this.northeast = new Quadtree<>(new Rectangle(xMidpoint, yMidpoint, halfWidth, halfHeight), false);
+		this.northwest = new Quadtree<>(new Rectangle(x, yMidpoint, halfWidth, halfHeight), false);
+		this.southwest = new Quadtree<>(new Rectangle(x, y, halfWidth, halfHeight), false);
+		this.southeast = new Quadtree<>(new Rectangle(xMidpoint, y, halfWidth, halfHeight), false);
 		this.leaf = false;
 		this.nodes.forEach(this.nodeAdder.reset(splitDepth));
 		this.nodes.clear();
 	}
 
-	private Node<T> remove(final T object, final Rectangle bounds, final Quadtree<T> parent) {
-		Node<T> returnValue = null;
+	private void removeInside(final Node<T> node) {
 		if (this.leaf) {
-			for (int i = 0; i < this.nodes.size; i++) {
-				final Node<T> node = this.nodes.get(i);
-				if ((node != null) && (node.object == object)) {
-					returnValue = this.nodes.removeIndex(i);
-					break;
-				}
-			}
+			this.nodes.removeValue(node, true);
 		}
 		else {
-			if (this.northeast.bounds.overlaps(bounds)) {
-				returnValue = this.northeast.remove(object, bounds, this);
+			if (this.northeast.bounds.overlaps(node.bounds)) {
+				this.northeast.removeInside(node);
 			}
-			if (this.northwest.bounds.overlaps(bounds)) {
-				returnValue = this.northwest.remove(object, bounds, this);
+			if (this.northwest.bounds.overlaps(node.bounds)) {
+				this.northwest.removeInside(node);
 			}
-			if (this.southwest.bounds.overlaps(bounds)) {
-				returnValue = this.southwest.remove(object, bounds, this);
+			if (this.southwest.bounds.overlaps(node.bounds)) {
+				this.southwest.removeInside(node);
 			}
-			if (this.southeast.bounds.overlaps(bounds)) {
-				returnValue = this.southeast.remove(object, bounds, this);
+			if (this.southeast.bounds.overlaps(node.bounds)) {
+				this.southeast.removeInside(node);
 			}
 			mergeIfNecessary();
 		}
-		return returnValue;
 	}
 
 	private void mergeIfNecessary() {

@@ -524,6 +524,7 @@ public abstract class AbilityBuilderGsonBuilder {
 				.registerSubtype(ABConditionIsFlexAbilityNonPointTarget.class, "isFlexAbilityNonPointTarget")
 				.registerSubtype(ABConditionIsToggleAbilityActive.class, "isToggleAbilityActive")
 				.registerSubtype(ABConditionIsTransformingToAlternate.class, "isTransformingToAlternate")
+				.registerSubtype(ABConditionCanSubmerge.class, "canSubmerge")
 				
 
 				.registerSubtype(ABConditionDoesUnitHaveBuff.class, "doesUnitHaveBuff")

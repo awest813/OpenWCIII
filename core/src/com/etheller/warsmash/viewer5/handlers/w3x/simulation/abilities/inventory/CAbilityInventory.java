@@ -140,6 +140,14 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 				}
 			}
 		}
+		caster.fireUseItemEvents(game, cItem);
+	}
+
+	public boolean consumeItemCharge(final CSimulation game, final CUnit caster, final CItem item) {
+		final int slot = getSlot(item);
+		if (slot == -1 || item.getCharges() <= 0) return false;
+		consumePerishableCharge(game, caster, slot, item);
+		return true;
 	}
 
 	@Override
@@ -151,11 +159,25 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 		return this.itemsHeld.length;
 	}
 
+	public <T extends CAbility> T getFirstEquippedAbility(final Class<T> abilityType) {
+		for (final List<CAbility> slot : this.itemsHeldAbilities) {
+			for (final CAbility ability : slot) {
+				if (!ability.isDisabled() && abilityType.isInstance(ability)) return abilityType.cast(ability);
+			}
+		}
+		return null;
+	}
+
 	public CItem getItemInSlot(final int slotIndex) {
 		if ((slotIndex < 0) || (slotIndex >= this.itemsHeld.length)) {
 			return null;
 		}
 		return this.itemsHeld[slotIndex];
+	}
+
+	public CAbility getItemUseAbility(final int slot) {
+		if (slot < 0 || slot >= this.itemsHeldAbilities.length || this.itemsHeldAbilities[slot].isEmpty()) return null;
+		return this.itemsHeldAbilities[slot].get(0);
 	}
 
 	public int getCapacity() {
@@ -179,7 +201,7 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 				}
 				final CBehavior behavior = ability.begin(game, caster, forwardedOrderId, target);
 				final CItem cItem = this.itemsHeld[slot];
-				consumePerishableCharge(game, caster, slot, cItem);
+				if (!ability.consumesItemChargeOnEffect()) consumePerishableCharge(game, caster, slot, cItem);
 				return behavior;
 			}
 		}
@@ -214,7 +236,7 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 				}
 				final CBehavior behavior = ability.begin(game, caster, forwardedOrderId, point);
 				final CItem cItem = this.itemsHeld[slot];
-				consumePerishableCharge(game, caster, slot, cItem);
+				if (!ability.consumesItemChargeOnEffect()) consumePerishableCharge(game, caster, slot, cItem);
 				return behavior;
 			}
 		}
@@ -324,6 +346,7 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 	}
 
 	public int getSlot(final CItem target) {
+		if (target == null) return -1;
 		int slot = -1;
 		for (int i = 0; i < this.itemsHeld.length; i++) {
 			if (this.itemsHeld[i] == target) {
@@ -388,7 +411,7 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 	protected void innerCheckCanUse(final CSimulation game, final CUnit unit, final int orderId,
 			final AbilityActivationReceiver receiver) {
 		if ((orderId >= OrderIds.itemuse00) && (orderId <= OrderIds.itemuse05)) {
-			if (this.canUseItems) {
+			if (this.canUseItems && !unit.hasCritterForm()) {
 				final int slot = orderId - OrderIds.itemuse00;
 				if (this.itemsHeldAbilities[slot].size() < 1) {
 					receiver.notAnActiveAbility();
@@ -490,9 +513,13 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 		if ((item != null) && !item.isDead() && !item.isHidden()) {
 			final CItemType itemType = item.getItemType();
 			if (this.canUseItems && itemType.isUseAutomaticallyWhenAcquired()) {
-				if (itemType.isActivelyUsed()) {
-					item.setLife(simulation, 0);
-					// TODO when we give unit ability here, then use ability
+				item.setLife(simulation, 0);
+				if (!itemType.isActivelyUsed()) {
+					// Scripted quest pickups can have no castable item ability.
+					hero.onPickUpItem(simulation, item, playUserUISounds);
+				}
+				else {
+					// Cast the item abilities while they are attached to the hero.
 					final List<CAbility> addedAbilities = new ArrayList<>();
 					for (final War3ID abilityId : item.getItemType().getAbilityList()) {
 						final CAbilityType<?> abilityType = simulation.getAbilityData().getAbilityType(abilityId);
@@ -584,16 +611,9 @@ public class CAbilityInventory extends AbstractGenericNoIconAbility {
 
 	public void dropItem(final CSimulation simulation, final CUnit hero, final CItem itemToDrop, final float x,
 			final float y, final boolean playUserUISounds) {
-		boolean foundItem = false;
-		int index = -1;
-		for (int i = 0; i < this.itemsHeld.length; i++) {
-			if (this.itemsHeld[i] == itemToDrop) {
-				this.itemsHeld[i] = null;
-				index = i;
-				foundItem = true;
-			}
-		}
-		if (foundItem) {
+		final int index = getSlot(itemToDrop);
+		if (index >= 0) {
+			this.itemsHeld[index] = null;
 			hero.onDropItem(simulation, itemToDrop, playUserUISounds);
 			itemToDrop.setHidden(false);
 			itemToDrop.setContainedInventory(null, null);

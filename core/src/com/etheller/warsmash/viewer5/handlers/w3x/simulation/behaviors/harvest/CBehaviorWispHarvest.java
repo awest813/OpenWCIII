@@ -12,6 +12,7 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehavior
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.behaviors.CBehaviorCategory;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.orders.OrderIds;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayer;
+import com.etheller.warsmash.viewer5.handlers.w3x.simulation.players.CPlayerScore;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.ResourceType;
 import com.etheller.warsmash.viewer5.handlers.w3x.simulation.util.SimulationRenderComponent;
 
@@ -42,6 +43,7 @@ public class CBehaviorWispHarvest extends CAbstractRangedBehavior {
 			this.lastIncomeTick = gameTurnTick;
 			final CPlayer player = simulation.getPlayer(this.unit.getPlayerIndex());
 			player.setLumber(player.getLumber() + this.abilityWispHarvest.getLumberPerInterval());
+			player.recordMissionScore(CPlayerScore.LUMBER_TOTAL, this.abilityWispHarvest.getLumberPerInterval());
 			simulation.unitGainResourceEvent(this.unit, player.getId(), ResourceType.LUMBER,
 					this.abilityWispHarvest.getLumberPerInterval());
 		}

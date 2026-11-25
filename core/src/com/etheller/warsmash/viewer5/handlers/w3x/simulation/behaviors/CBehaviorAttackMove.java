@@ -10,7 +10,7 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 
 	private final CUnit unit;
 	private AbilityPointTarget target;
-	private boolean justAutoAttacked = false;
+	private boolean acquiredTarget;
 
 	public CBehaviorAttackMove(final CUnit unit) {
 		this.unit = unit;
@@ -18,7 +18,7 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 
 	public CBehavior reset(final AbilityPointTarget target) {
 		this.target = target;
-		this.justAutoAttacked = false;
+		this.acquiredTarget = false;
 		return this;
 	}
 
@@ -29,8 +29,9 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 
 	@Override
 	public boolean isWithinRange(final CSimulation simulation) {
-		if (this.justAutoAttacked = this.unit.autoAcquireAttackTargets(simulation, false)) {
-			// kind of a hack
+		this.acquiredTarget = this.unit.autoAcquireAutocastTargets(simulation, false)
+				|| this.unit.autoAcquireAttackTargets(simulation, false);
+		if (this.acquiredTarget) {
 			return true;
 		}
 		return innerIsWithinRange(); // TODO this is not how it was meant to be used
@@ -42,8 +43,8 @@ public class CBehaviorAttackMove implements CRangedBehavior {
 
 	@Override
 	public CBehavior update(final CSimulation simulation) {
-		if (this.justAutoAttacked) {
-			this.justAutoAttacked = false;
+		if (this.acquiredTarget) {
+			this.acquiredTarget = false;
 			return this.unit.getCurrentBehavior();
 		}
 		if (innerIsWithinRange()) {

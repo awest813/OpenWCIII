@@ -3,6 +3,7 @@
 		"ids": [{"id":"Arai", "castId": "raisedead", "autoCastOnId": "raisedeadon", "autoCastOffId": "raisedeadoff", "autoCastType": "NOTARGET"},
 				{"id":"AIrd", "castId": "itemraisedead"}],
 		"type": "NORMAL_AUTOTARGET",
+		"overrideFields": { "defaultTargetsAllowed": "dead,ground" },
 		"extraCastConditions": [{
 			"type": "setCantUseReasonOnFailure",
 			"condition": {
@@ -59,18 +60,6 @@
 			}]
 		},
 		"onEndCasting": [{
-				"type": "createTimedLifeBuff",
-				"buffId": {
-					"type": "getFirstBuffId"
-				},
-				"duration": {
-					"type": "getAbilityDuration"
-				},
-				"explode": {
-					"type": "rawBoolean",
-					"value": "false"
-				}
-			},{
 				"type": "for",
 				"times": {
 					"type": "getAbilityDataAsInteger",
@@ -106,6 +95,11 @@
 							"type": "getAlias"
 						},
 						"effectType": "EFFECT"
+					},{
+						"type": "createTimedLifeBuff",
+						"buffId": { "type": "getFirstBuffId" },
+						"duration": { "type": "getAbilityDuration", "includeSkeletalLongevity": true },
+						"explode": { "type": "rawBoolean", "value": "false" }
 					},{
 						"type": "addBuff",
 						"target": {
@@ -151,6 +145,11 @@
 							"type": "getAlias"
 						},
 						"effectType": "EFFECT"
+					},{
+						"type": "createTimedLifeBuff",
+						"buffId": { "type": "getFirstBuffId" },
+						"duration": { "type": "getAbilityDuration", "includeSkeletalLongevity": true },
+						"explode": { "type": "rawBoolean", "value": "false" }
 					},{
 						"type": "addBuff",
 						"target": {

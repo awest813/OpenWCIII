@@ -295,8 +295,10 @@ public abstract class ModelViewer {
 	}
 
 	public void update() {
-		final float dt = Gdx.graphics.getDeltaTime();// this.frameTime * 0.001f;
+		update(Gdx.graphics.getDeltaTime());
+	}
 
+	protected void update(final float dt) {
 		this.frame += 1;
 
 		this.visibleCells = 0;

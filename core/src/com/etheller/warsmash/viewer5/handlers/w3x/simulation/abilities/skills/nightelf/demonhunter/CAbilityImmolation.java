@@ -98,7 +98,7 @@ public class CAbilityImmolation extends AbstractGenericSingleIconNoSmartActiveAb
 			return false;
 		}
 		else if (!this.active && (orderId == OrderIds.immolation)) {
-			if (caster.chargeMana(this.manaCost)) {
+			if (caster.chargeManaForSpell(game, this.manaCost)) {
 				activate(game, caster);
 			}
 			return false;

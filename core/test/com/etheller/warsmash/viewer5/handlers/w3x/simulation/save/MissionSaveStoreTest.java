@@ -13,6 +13,16 @@ import com.etheller.warsmash.viewer5.handlers.w3x.simulation.campaign.ProfileGam
 
 class MissionSaveStoreTest {
 	@TempDir File root;
+	@Test void namedSlotsStayInTheActiveProfileDirectory() {
+		final File slot = MissionSaveStore.namedSlot("  Frostmourne.W3S  ");
+		assertEquals(MissionSaveStore.currentDirectory(), slot.getParentFile());
+		assertEquals("Frostmourne.w3s", slot.getName());
+		for (final String invalid : java.util.List.of("", "../escape", "..\\escape", "C:alternate", "NUL",
+				"Chapter\u0000", "Chapter.", " .w3s")) {
+			assertThrows(IllegalArgumentException.class, () -> MissionSaveStore.namedSlot(invalid));
+		}
+	}
+
 	@Test void identicalSlotsAndCaseOnlyProfileNamesRemainIndependent() throws IOException {
 		final File first = ProfileGameCacheStore.profileDirectory(this.root, "Player");
 		final File second = ProfileGameCacheStore.profileDirectory(this.root, "player");
@@ -23,6 +33,30 @@ class MissionSaveStoreTest {
 		assertEquals("first mission", Files.readString(new File(first, "QuickSave.w3s").toPath()));
 		assertEquals("second mission", Files.readString(new File(second, "QuickSave.w3s").toPath()));
 		assertEquals(first, ProfileGameCacheStore.profileDirectory(this.root, "Player"));
+	}
+
+	@Test void campaignZoneArchivesKeepTheirFoldersAndReadLegacyFlatSlots() throws IOException {
+		final String zones = "Blizzard\\Zones\\OrcX01.w3z";
+		final String manual = "Blizzard\\Durotar\\OrcX01.w3z";
+		final File zoneSlot = MissionSaveStore.scriptFile(this.root, zones);
+		final File manualSlot = MissionSaveStore.scriptFile(this.root, manual);
+		assertEquals(new File(this.root, "Blizzard/Zones/OrcX01.w3z.w3s"), zoneSlot);
+		assertNotEquals(zoneSlot, manualSlot);
+		final File legacy = new File(this.root, new File(zones).getName() + ".w3s");
+		Files.writeString(legacy.toPath(), "previous archive");
+		assertEquals(legacy, MissionSaveStore.findScriptFile(this.root, zones));
+		Files.createDirectories(zoneSlot.toPath().getParent());
+		Files.createDirectories(manualSlot.toPath().getParent());
+		Files.writeString(zoneSlot.toPath(), "first zone");
+		Files.writeString(manualSlot.toPath(), "manual mission archive");
+		assertEquals(zoneSlot, MissionSaveStore.findScriptFile(this.root, zones));
+		assertTrue(MissionSaveStore.removeScriptDirectory(this.root, "Blizzard\\Zones"));
+		assertFalse(zoneSlot.exists());
+		assertEquals("manual mission archive", Files.readString(manualSlot.toPath()));
+		for (final String invalid : java.util.List.of("..\\outside", "Blizzard\\..\\outside", "/outside",
+				"C:\\outside", "\\\\remote\\outside")) {
+			assertThrows(IOException.class, () -> MissionSaveStore.scriptFile(this.root, invalid));
+		}
 	}
 	@Test void deletionRetiresSaveSlotsAndRecreationStartsEmpty() throws IOException {
 		final File profile = ProfileGameCacheStore.profileDirectory(this.root, "../../profile");
